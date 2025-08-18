@@ -11,6 +11,7 @@ All notable changes to this project will be documented here.
 ### Fixed
 
 - Load Duration Curve now correctly scales y-axis for negative values and draws a zero baseline instead of clipping lines outside chart area.
+- Chart tooltips now flip position horizontally/vertically to remain within viewport when hovering near right or top edges.
 
 ## [0.1.1] - 2025-08-18
 

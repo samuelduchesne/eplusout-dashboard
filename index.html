@@ -2112,8 +2112,6 @@
               const d = allPts[i];
               tooltip
                 .style('display', 'block')
-                .style('left', ev.offsetX + 12 + 'px')
-                .style('top', ev.offsetY - 24 + 'px')
                 .html(
                   `<div><strong>${d.label}</strong></div><div><span style='color:${d.color}'>${
                     d.name
@@ -2123,6 +2121,17 @@
                       : ''
                   }</div>`,
                 );
+              const cw = container.clientWidth;
+              const ch = container.clientHeight;
+              const tw = tooltip.node().offsetWidth || 0;
+              const th = tooltip.node().offsetHeight || 0;
+              let left = ev.offsetX + 12;
+              if (left + tw > cw - 4) left = ev.offsetX - 12 - tw;
+              if (left < 4) left = 4;
+              let top = ev.offsetY - 24;
+              if (top < 4) top = ev.offsetY + 12;
+              if (top + th > ch - 4) top = ch - th - 4;
+              tooltip.style('left', left + 'px').style('top', top + 'px');
             })
             .on('mouseleave', () => tooltip.style('display', 'none'));
         } else {
@@ -2450,9 +2459,18 @@
           .on('mousemove', (ev, p) => {
             tooltip
               .style('display', 'block')
-              .style('left', ev.offsetX + 12 + 'px')
-              .style('top', ev.offsetY - 24 + 'px')
               .html(`<div><strong>${fmt(p.xVal)}, ${fmt(p.yVal)}</strong></div>`);
+            const cw = container.clientWidth;
+            const ch = container.clientHeight;
+            const tw = tooltip.node().offsetWidth || 0;
+            const th = tooltip.node().offsetHeight || 0;
+            let left = ev.offsetX + 12;
+            if (left + tw > cw - 4) left = ev.offsetX - 12 - tw;
+            if (left < 4) left = 4;
+            let top = ev.offsetY - 24;
+            if (top < 4) top = ev.offsetY + 12;
+            if (top + th > ch - 4) top = ch - th - 4;
+            tooltip.style('left', left + 'px').style('top', top + 'px');
           })
           .on('mouseleave', () => tooltip.style('display', 'none'));
         // axis labels
@@ -2690,8 +2708,6 @@
             const unitLabel = normalize ? '%' : convertUnitLabel(curves[0].meta.Units);
             tooltip
               .style('display', 'block')
-              .style('left', event.offsetX + 12 + 'px')
-              .style('top', event.offsetY - 24 + 'px')
               .html(
                 `<div><strong>P${px.toFixed(0)}</strong></div>` +
                   rows
@@ -2703,6 +2719,17 @@
                     )
                     .join(''),
               );
+            const cw = container.clientWidth;
+            const ch = container.clientHeight;
+            const tw = tooltip.node().offsetWidth || 0;
+            const th = tooltip.node().offsetHeight || 0;
+            let left = event.offsetX + 12;
+            if (left + tw > cw - 4) left = event.offsetX - 12 - tw;
+            if (left < 4) left = 4;
+            let top = event.offsetY - 24;
+            if (top < 4) top = event.offsetY + 12;
+            if (top + th > ch - 4) top = ch - th - 4;
+            tooltip.style('left', left + 'px').style('top', top + 'px');
           })
           .on('mouseleave', () => tooltip.style('display', 'none'));
 
