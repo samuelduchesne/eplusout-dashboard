@@ -743,6 +743,70 @@
         }
       }
 
+      // Helper: label for opposite unit system (only energy/power for now)
+      function convertUnitLabelOpposite(units) {
+        if (!units) return "";
+        const kind = unitKind(units);
+        if (isIP) {
+          // left IP, right SI
+          if (kind === "energy") return prefEnergySI;
+          if (kind === "power") return "W";
+        } else {
+          // left SI, right IP
+          if (kind === "energy") return prefEnergyIP;
+          if (kind === "power")
+            return prefPowerIP === "Tons" ? "tons" : "Btu/h";
+        }
+        return "";
+      }
+      // Convert a displayed tick value (already in current system) to opposite system.
+      function convertDisplayedToOpposite(v, origUnits) {
+        if (!isFinite(v)) return v;
+        const kind = unitKind(origUnits);
+        if (kind === "energy") {
+          if (isIP) {
+            // IP -> SI
+            let J; // build J from current displayed IP unit
+            if (prefEnergyIP === "BTU") J = v * 1055.06;
+            else if (prefEnergyIP === "kBTU") J = v * 1000 * 1055.06;
+            else if (prefEnergyIP === "MMBTU") J = v * 1e6 * 1055.06;
+            else J = v * 1055.06; // fallback
+            if (prefEnergySI === "J") return J;
+            if (prefEnergySI === "kWh") return J / 3.6e6;
+            if (prefEnergySI === "MWh") return J / 3.6e9;
+            return J;
+          } else {
+            // SI -> IP
+            let J;
+            if (prefEnergySI === "J") J = v;
+            else if (prefEnergySI === "kWh") J = v * 3.6e6;
+            else if (prefEnergySI === "MWh") J = v * 3.6e9;
+            else J = v;
+            const BTU = J / 1055.06;
+            if (prefEnergyIP === "BTU") return BTU;
+            if (prefEnergyIP === "kBTU") return BTU / 1000;
+            if (prefEnergyIP === "MMBTU") return BTU / 1e6;
+            return BTU;
+          }
+        }
+        if (kind === "power") {
+          if (isIP) {
+            // IP -> SI (W)
+            let Btuh;
+            if (prefPowerIP === "Tons") Btuh = v * 12000;
+            else Btuh = v; // v is in Btu/h already
+            const W = Btuh * 0.29307107; // 1 Btu/h =0.29307107 W
+            return W;
+          } else {
+            // SI -> IP
+            const W = v;
+            if (prefPowerIP === "Tons") return W / 0.29307107 / 12000; // W -> Btu/h -> tons
+            return W / 0.29307107; // Btu/h
+          }
+        }
+        return v; // other kinds not converted
+      }
+
       function refreshChartTheme() {
         if (selected.size === 0) return;
         renderAll();
@@ -1461,9 +1525,19 @@
         const rect = container.getBoundingClientRect();
         const width = rect.width,
           height = rect.height;
+        // Determine if we should show a secondary (opposite units) axis.
+        const metas = [...selected.values()].map((v) => v.meta);
+        const consistentUnits =
+          metas.length && metas.every((m) => m.Units === metas[0].Units);
+        const primaryMeta = consistentUnits ? metas[0] : null;
+        const normalize = opts.normalize === true;
+        const showSecondary =
+          !normalize &&
+          primaryMeta &&
+          ["energy", "power"].includes(unitKind(primaryMeta.Units));
         const m = {
           top: 16,
-          right: 24,
+          right: showSecondary ? 68 : 24,
           bottom: baseFreq === "Hourly" ? 56 : 36,
           left: 56,
         };
@@ -1474,7 +1548,6 @@
           tooltipBg = cssVar("--chart-tooltip-bg"),
           textColor = cssVar("--text"),
           borderColor = cssVar("--border");
-        const normalize = opts.normalize === true;
         const svg = d3
           .select(container)
           .append("svg")
@@ -1526,6 +1599,32 @@
             .attr("transform", `translate(0,${h})`)
             .call(d3.axisBottom(x).ticks(6));
           const gy = g.append("g").call(d3.axisLeft(y).ticks(6));
+          if (showSecondary) {
+            const ticks = y.ticks(6);
+            const oppLabel = convertUnitLabelOpposite(primaryMeta.Units);
+            const axisR = d3
+              .axisRight(y)
+              .ticks(6)
+              .tickFormat((t) =>
+                fmt(convertDisplayedToOpposite(t, primaryMeta.Units))
+              );
+            g.append("g")
+              .attr("transform", `translate(${w},0)`)
+              .call(axisR)
+              .selectAll("text")
+              .attr("fill", axisColor);
+            g.selectAll("g.axisR path,line").attr("stroke", axisColor);
+            // Add unit label at top-right
+            if (oppLabel) {
+              g.append("text")
+                .attr("x", w)
+                .attr("y", -4)
+                .attr("text-anchor", "end")
+                .attr("fill", axisColor)
+                .attr("font-size", "10px")
+                .text(oppLabel);
+            }
+          }
           gx.selectAll("path,line").attr("stroke", axisColor);
           gy.selectAll("path,line").attr("stroke", axisColor);
           gx.selectAll("text").attr("fill", axisColor);
@@ -1664,6 +1763,28 @@
             .attr("transform", `translate(0,${h})`)
             .call(d3.axisBottom(x));
           const gy = g.append("g").call(d3.axisLeft(y).ticks(6));
+          if (showSecondary) {
+            const axisR = d3
+              .axisRight(y)
+              .ticks(6)
+              .tickFormat((t) =>
+                fmt(convertDisplayedToOpposite(t, primaryMeta.Units))
+              );
+            g.append("g")
+              .attr("transform", `translate(${w},0)`)
+              .call(axisR)
+              .selectAll("text")
+              .attr("fill", axisColor);
+            if (convertUnitLabelOpposite(primaryMeta.Units)) {
+              g.append("text")
+                .attr("x", w)
+                .attr("y", -4)
+                .attr("text-anchor", "end")
+                .attr("fill", axisColor)
+                .attr("font-size", "10px")
+                .text(convertUnitLabelOpposite(primaryMeta.Units));
+            }
+          }
           gx.selectAll("path,line").attr("stroke", axisColor);
           gy.selectAll("path,line").attr("stroke", axisColor);
           gx.selectAll("text")
