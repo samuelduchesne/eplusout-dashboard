@@ -284,9 +284,7 @@
               class="flex items-center gap-2 ml-auto text-sm text-[var(--muted)]"
               id="toolbar-actions"
             >
-              <button id="view-zoom" class="px-2 py-1 text-xs border rounded bg-[var(--panel-2)]">
-                Enable Zoom
-              </button>
+              <!-- Zoom always enabled (button removed) -->
               <!-- tariff button will be injected here if present -->
             </div>
           </div>
@@ -551,7 +549,7 @@
         dict = [],
         selected = new Map();
       let favs = new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'));
-      let zoomEnabled = false;
+      let zoomEnabled = true; // always on
       let baseFreq = null;
       let viewMode = 'time';
       // Preserve current hourly x-domain across redraws (zoom + resize)
@@ -1802,7 +1800,7 @@
             const brush = d3
               .brushX()
               .extent([
-                [0, h - 24],
+                [0, 0],
                 [w, h],
               ])
               .on('end', (ev) => {
@@ -1816,7 +1814,11 @@
                 }
                 redraw();
               });
-            g.append('g').attr('class', 'brush').call(brush);
+            const bG = g.append('g').attr('class', 'brush').call(brush);
+            bG.selectAll('.selection')
+              .attr('fill', cssVar('--accent'))
+              .attr('fill-opacity', 0.15)
+              .attr('stroke', cssVar('--accent-strong'));
             $('zoom-hint').classList.remove('hidden');
           } else {
             $('zoom-hint').classList.add('hidden');
@@ -1979,6 +1981,55 @@
               .attr('height', (d) => h - y(convertUnits(d.y, s.meta.Units)))
               .attr('fill', s.color);
           });
+          if (zoomEnabled) {
+            // Implement simple band zoom: click-drag creates selection over bands
+            const drag = d3
+              .brushX()
+              .extent([
+                [0, 0],
+                [w, h],
+              ])
+              .on('end', (ev) => {
+                const sel = ev.selection;
+                if (!sel) return;
+                const [x0, x1px] = sel;
+                const chosen = monthLabels.filter((ml) => {
+                  const cx = (x(ml) || 0) + x.bandwidth() / 2;
+                  return cx >= x0 && cx <= x1px;
+                });
+                if (chosen.length && chosen.length < monthLabels.length) {
+                  const newDomain = monthLabels.slice(
+                    monthLabels.indexOf(chosen[0]),
+                    monthLabels.indexOf(chosen[chosen.length - 1]) + 1,
+                  );
+                  x.domain(newDomain);
+                  gx.call(d3.axisBottom(x).tickValues(shown).tickFormat(monthLabelFmt));
+                  gx.selectAll('path,line').attr('stroke', axisColor);
+                  gx.selectAll('text')
+                    .attr('fill', axisColor)
+                    .style('text-anchor', 'end')
+                    .attr('transform', 'rotate(-30)');
+                  g.selectAll('rect').remove();
+                  series.forEach((s) => {
+                    g.selectAll(`rect.bar-${s.id}`)
+                      .data(s.points.filter((p) => x.domain().includes(p.xLabel)))
+                      .enter()
+                      .append('rect')
+                      .attr('x', (d) => x(d.xLabel) + x1(String(s.id)))
+                      .attr('y', (d) => y(convertUnits(d.y, s.meta.Units)))
+                      .attr('width', x1.bandwidth())
+                      .attr('height', (d) => h - y(convertUnits(d.y, s.meta.Units)))
+                      .attr('fill', s.color);
+                  });
+                }
+                g.select('.band-zoom').call(drag.move, null);
+              });
+            const bz = g.append('g').attr('class', 'band-zoom').call(drag);
+            bz.selectAll('.selection')
+              .attr('fill', cssVar('--accent'))
+              .attr('fill-opacity', 0.15)
+              .attr('stroke', cssVar('--accent-strong'));
+          }
         }
         const leg = $('legend');
         leg.innerHTML = '';
@@ -2337,13 +2388,7 @@
         if (selected.size === 0) return;
         downloadFile('series.csv', exportCSV(selected));
       });
-      $('view-zoom').addEventListener('click', () => {
-        zoomEnabled = !zoomEnabled;
-        $('view-zoom').textContent = zoomEnabled ? 'Disable Zoom' : 'Enable Zoom';
-        if (!zoomEnabled) currentXDomain = null;
-        renderAll();
-      });
-      $('view-zoom').textContent = zoomEnabled ? 'Disable Zoom' : 'Enable Zoom';
+      // Zoom button removed; zoom always enabled
 
       const btnTime = $('view-time'),
         btnLdc = $('view-ldc'),
@@ -2352,7 +2397,7 @@
         viewMode = 'time';
         btnTime.classList.add('bg-[var(--panel-2)]');
         btnLdc?.classList.remove('bg-[var(--panel-2)]');
-        $('zoom-hint').classList.add('hidden');
+        $('zoom-hint').classList.add('hidden'); // LDC view (no time zoom)
         renderAll();
       });
       btnLdc?.addEventListener('click', () => {
