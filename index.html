@@ -555,20 +555,31 @@
         return n.toPrecision(3);
       }
       // KPI specific formatting: thousands separators; no decimals for large numbers
-      function kpiFmt(n, opts={}) {
-        if (n == null || !isFinite(n)) return '—';
-        const abs=Math.abs(n);
+      function kpiFmt(n, opts = {}) {
+        if (n == null || !isFinite(n)) return "—";
+        const abs = Math.abs(n);
         // Allow explicit decimals override
-        if (opts.decimals!=null){
-          return new Intl.NumberFormat('en-US',{minimumFractionDigits:opts.decimals,maximumFractionDigits:opts.decimals}).format(n);
+        if (opts.decimals != null) {
+          return new Intl.NumberFormat("en-US", {
+            minimumFractionDigits: opts.decimals,
+            maximumFractionDigits: opts.decimals,
+          }).format(n);
         }
         if (abs >= 1000) {
-          return new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(Math.round(n));
+          return new Intl.NumberFormat("en-US", {
+            maximumFractionDigits: 0,
+          }).format(Math.round(n));
         }
         if (abs >= 100) {
-          return new Intl.NumberFormat('en-US',{minimumFractionDigits:1,maximumFractionDigits:1}).format(n);
+          return new Intl.NumberFormat("en-US", {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          }).format(n);
         }
-        return new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+        return new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(n);
       }
       function downloadFile(name, text) {
         const blob = new Blob([text], { type: "text/plain" });
@@ -1011,7 +1022,7 @@
         if (!series.length) return;
         const primary = series[0];
         const isMeter = primary.meta.IsMeter == 1;
-        const kpiItems = [];
+        const kpiItems = []; // {title,value,desc}
         if (isMeter) {
           const annual = annualEnergyFromPoints(
             primary.points,
@@ -1035,7 +1046,11 @@
                 unitLbl = convertUnitLabel("J");
                 displayVal = `${kpiFmt(val)} ${unitLbl}`;
               }
-              kpiItems.push({ title: label, value: displayVal });
+              kpiItems.push({
+                title: label,
+                value: displayVal,
+                desc: "Total annual energy summed over all intervals for the selected meter.",
+              });
               // EUI if area available
               const area = await getBuildingArea();
               if (area) {
@@ -1073,14 +1088,20 @@
                 kpiItems.push({
                   title: "EUI",
                   value: `${kpiFmt(euiVal)} ${euiUnits}`,
+                  desc: "Energy Use Intensity: annual energy divided by building floor area.",
                 });
               } else {
-                kpiItems.push({ title: "EUI", value: "Area?" });
+                kpiItems.push({
+                  title: "EUI",
+                  value: "Area?",
+                  desc: "Energy Use Intensity. Floor area not found in tabular output.",
+                });
               }
             } else if (annual.value != null) {
               kpiItems.push({
                 title: label,
                 value: `${kpiFmt(annual.value)} ${annual.units || ""}`,
+                desc: "Total annual energy summed over all intervals for the selected meter.",
               });
             }
           }
@@ -1100,6 +1121,7 @@
 <span class='block text-[10px] text-[var(--muted)] truncate'>${escapeHtml(
               whenTxt
             )}</span>`,
+            desc: "Maximum interval value and when it occurred.",
           });
         }
         const lf = loadFactor(primary.points, primary.meta.Units);
@@ -1107,6 +1129,7 @@
           kpiItems.push({
             title: "Load Factor",
             value: (lf * 100).toFixed(1) + "%",
+            desc: "Average / peak over the Weather Run Period (Hourly data only).",
           });
         }
         // Tariff cost (energy + demand) if annual energy computed and hourly
@@ -1120,6 +1143,7 @@
               )}<span class='block text-[10px] text-[var(--muted)]'>E:$${kpiFmt(
                 cost.energy
               )} D:$${kpiFmt(cost.demand)}</span>`,
+              desc: "Simple cost estimate: flat $/kWh energy plus monthly peak demand charges.",
             });
           }
         }
@@ -1133,7 +1157,10 @@
                 : "text-[var(--muted)]";
             kpiItems.push({
               title: "Elec Balance",
-              value: `<span class='${cls}'>${kpiFmt(eb.residualPct,{decimals:1})}%</span>`,
+              value: `<span class='${cls}'>${kpiFmt(eb.residualPct, {
+                decimals: 1,
+              })}%</span>`,
+              desc: "Residual between Electricity:Facility and the sum of end-use electricity meters.",
             });
           }
         }
@@ -1142,14 +1169,96 @@
           .map(
             (
               k
-            ) => `<div class="p-2 rounded-md border border-[var(--border)] bg-[var(--panel-2)] flex flex-col min-w-[110px]">
-          <span class="text-[10px] uppercase tracking-wide text-[var(--muted)]">${escapeHtml(
-            k.title
-          )}</span>
-          <span class="text-sm leading-tight mt-0.5">${k.value}</span>
-        </div>`
+            ) => `<div class="relative group p-2 rounded-md border border-[var(--border)] bg-[var(--panel-2)] flex flex-col min-w-[110px]" data-tip="${escapeHtml(
+              k.desc || ""
+            )}">
+            <span class="flex items-center justify-between gap-1">
+              <span class="text-[10px] uppercase tracking-wide text-[var(--muted)]">${escapeHtml(
+                k.title
+              )}</span>
+              <button type="button" class="kpi-help text-[10px] w-4 h-4 leading-none inline-flex items-center justify-center border border-[var(--border)] rounded cursor-help" aria-label="Info" tabindex="0">?</button>
+            </span>
+            <span class="text-sm leading-tight mt-0.5">${k.value}</span>
+          </div>`
           )
           .join("");
+        attachKpiTooltips();
+      }
+
+      // Tooltip logic for KPI cards (hover + tap)
+      let kpiTooltipEl = null;
+      let kpiActiveBtn = null;
+      function ensureKpiTooltip() {
+        if (!kpiTooltipEl) {
+          kpiTooltipEl = document.createElement("div");
+          kpiTooltipEl.id = "kpi-tooltip";
+          kpiTooltipEl.className =
+            "pointer-events-none text-xs max-w-[200px] z-40";
+          kpiTooltipEl.style.position = "fixed";
+          kpiTooltipEl.style.background = "var(--panel)";
+          kpiTooltipEl.style.border = "1px solid var(--border)";
+          kpiTooltipEl.style.padding = "6px 8px";
+          kpiTooltipEl.style.borderRadius = "6px";
+          kpiTooltipEl.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+          kpiTooltipEl.style.display = "none";
+          document.body.appendChild(kpiTooltipEl);
+        }
+        return kpiTooltipEl;
+      }
+      function showKpiTooltip(target, text) {
+        const tip = ensureKpiTooltip();
+        tip.innerHTML = escapeHtml(text);
+        const rect = target.getBoundingClientRect();
+        const top = rect.top - 8;
+        const left = Math.min(window.innerWidth - 220, rect.left);
+        tip.style.top = (top < 8 ? rect.bottom + 8 : top) + "px";
+        tip.style.left = left + "px";
+        tip.style.display = "block";
+      }
+      function hideKpiTooltip() {
+        if (kpiTooltipEl) kpiTooltipEl.style.display = "none";
+        kpiActiveBtn = null;
+      }
+      function attachKpiTooltips() {
+        const helps = document.querySelectorAll("#kpis .kpi-help");
+        helps.forEach((btn) => {
+          const parent = btn.closest("[data-tip]");
+          const text = parent?.getAttribute("data-tip") || "";
+          const enter = () => {
+            if (!text) return;
+            showKpiTooltip(btn, text);
+          };
+          const leave = (e) => {
+            if (e.type === "mouseleave" && kpiActiveBtn === btn) return;
+            if (!kpiActiveBtn) hideKpiTooltip();
+          };
+          btn.addEventListener("mouseenter", enter);
+          btn.addEventListener("focus", enter);
+          btn.addEventListener("mouseleave", leave);
+          btn.addEventListener("blur", () => {
+            if (kpiActiveBtn !== btn) hideKpiTooltip();
+          });
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (kpiActiveBtn === btn) {
+              kpiActiveBtn = null;
+              hideKpiTooltip();
+            } else {
+              kpiActiveBtn = btn;
+              showKpiTooltip(btn, text);
+            }
+          });
+        });
+        document.addEventListener("click", (e) => {
+          if (kpiActiveBtn && !e.target.closest("#kpis")) hideKpiTooltip();
+        });
+        window.addEventListener(
+          "scroll",
+          () => {
+            if (kpiActiveBtn) hideKpiTooltip();
+          },
+          true
+        );
       }
 
       function renderStats(series) {
