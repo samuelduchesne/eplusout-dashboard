@@ -8,6 +8,10 @@ All notable changes to this project will be documented here.
 
 - Scatter plot view (select two or more series then choose Scatter: shows correlation, regression line (dashed & toggleable), slope, intercept, R²; supports pair switching and overlapping point filtering for Hourly or Monthly data).
 
+### Fixed
+
+- Load Duration Curve now correctly scales y-axis for negative values and draws a zero baseline instead of clipping lines outside chart area.
+
 ## [0.1.1] - 2025-08-18
 
 _No user-facing changes (deployment-only adjustments)._ 

@@ -2576,9 +2576,25 @@
           return;
         }
 
-        const yMax = d3.max(curves.flatMap((c) => c.points.map((p) => p.y)));
+        const allY = curves.flatMap((c) => c.points.map((p) => p.y));
+        const rawMin = d3.min(allY);
+        const rawMax = d3.max(allY);
+        // Ensure domain includes 0 if values cross it, or if all values are on one side keep that side + 0 for reference when all negative
+        let domMin = rawMin;
+        let domMax = rawMax;
+        if (rawMin < 0 && rawMax > 0) {
+          domMin = rawMin;
+          domMax = rawMax;
+        } else if (rawMax <= 0) {
+          // all negative
+          domMin = rawMin;
+          domMax = 0; // include zero baseline for context
+        } else if (rawMin >= 0) {
+          domMin = 0; // start at zero for all positive
+          domMax = rawMax;
+        }
         const x = d3.scaleLinear().domain([0, 100]).range([0, w]);
-        const y = d3.scaleLinear().domain([0, yMax]).nice().range([h, 0]);
+        const y = d3.scaleLinear().domain([domMin, domMax]).nice().range([h, 0]);
 
         const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
         const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
@@ -2618,6 +2634,18 @@
             .attr('stroke-width', 1.8)
             .attr('d', line);
         });
+
+        // Zero baseline if needed (negative values present)
+        if (domMin < 0) {
+          g.append('line')
+            .attr('x1', 0)
+            .attr('x2', w)
+            .attr('y1', y(0))
+            .attr('y2', y(0))
+            .attr('stroke', axisColor)
+            .attr('stroke-width', 1)
+            .attr('opacity', 0.6);
+        }
 
         [10, 50, 90].forEach((p) => {
           const xx = x(p);
