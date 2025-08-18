@@ -416,6 +416,17 @@
       }
       document.getElementById('btn-theme').addEventListener('click', toggleTheme);
       applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());
+      // Auto-sync with system preference; if user wants to lock a theme they can toggle twice quickly (we'll honor lock if we add a sentinel later)
+      try {
+        const media = matchMedia('(prefers-color-scheme: dark)');
+        const systemListener = (ev) => {
+          // If stored value is 'light' or 'dark', still update to keep in sync per user request
+          applyTheme(ev.matches ? 'dark' : 'light');
+          refreshChartTheme();
+        };
+        if (media.addEventListener) media.addEventListener('change', systemListener);
+        else if (media.addListener) media.addListener(systemListener); // Safari <14 fallback
+      } catch {}
 
       function loadExternalScript(url) {
         return new Promise((res, rej) => {
