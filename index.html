@@ -285,11 +285,11 @@
           ><span id="units" class="text-[var(--muted)]"></span>
         </div>
         <div class="p-3 flex flex-col gap-3 overflow-auto">
-          <div
-            id="series-meta"
-            class="relative text-xs text-[var(--muted)]"
-          >
-            <div id="series-meta-entries" class="grid grid-cols-[auto_1fr] gap-x-2 pr-10"></div>
+          <div id="series-meta" class="relative text-xs text-[var(--muted)]">
+            <div
+              id="series-meta-entries"
+              class="grid grid-cols-[auto_1fr] gap-x-2 pr-10"
+            ></div>
           </div>
           <div class="flex items-center justify-between flex-wrap gap-2">
             <div class="flex items-center gap-3 flex-wrap">
@@ -315,8 +315,16 @@
                 Normalize to peak
               </label>
             </div>
-            <div class="flex items-center gap-2 ml-auto text-sm text-[var(--muted)]" id="toolbar-actions">
-              <button id="view-zoom" class="px-2 py-1 text-xs border rounded bg-[var(--panel-2)]">Enable Zoom</button>
+            <div
+              class="flex items-center gap-2 ml-auto text-sm text-[var(--muted)]"
+              id="toolbar-actions"
+            >
+              <button
+                id="view-zoom"
+                class="px-2 py-1 text-xs border rounded bg-[var(--panel-2)]"
+              >
+                Enable Zoom
+              </button>
               <!-- tariff button will be injected here if present -->
             </div>
           </div>
@@ -908,7 +916,7 @@
       ];
 
       function renderAll() {
-  const metaEl = $("series-meta-entries");
+        const metaEl = $("series-meta-entries");
         const unitsEl = $("units");
         const titleEl = $("series-title");
         const metas = [...selected.values()].map((v) => v.meta);
@@ -1295,7 +1303,9 @@
         kpiActiveBtn = null;
       }
       function attachKpiTooltips() {
-        const helps = document.querySelectorAll("#kpis .kpi-help");
+        const helps = document.querySelectorAll(
+          "#kpis .kpi-help, #tariff-pop .kpi-help"
+        );
         helps.forEach((btn) => {
           const parent = btn.closest("[data-tip]");
           const text = parent?.getAttribute("data-tip") || "";
@@ -1325,7 +1335,12 @@
           });
         });
         document.addEventListener("click", (e) => {
-          if (kpiActiveBtn && !e.target.closest("#kpis")) hideKpiTooltip();
+          if (
+            kpiActiveBtn &&
+            !e.target.closest("#kpis") &&
+            !e.target.closest("#tariff-pop")
+          )
+            hideKpiTooltip();
         });
         window.addEventListener(
           "scroll",
@@ -1438,19 +1453,50 @@
       }
 
       // Tariff simple cost model
-      const TARIFF_ENERGY_KEY = "eplus_tariff_energy_rate";
+      const TARIFF_ENERGY_KEY = "eplus_tariff_energy_rate"; // legacy single
+      const TARIFF_ENERGY_KEY_ELEC = "eplus_tariff_energy_rate_elec";
+      const TARIFF_ENERGY_KEY_DH = "eplus_tariff_energy_rate_dh";
+      const TARIFF_ENERGY_KEY_DC = "eplus_tariff_energy_rate_dc";
       const TARIFF_DEMAND_KEY = "eplus_tariff_demand_rate";
-      let tariffEnergyRate = parseFloat(
-        localStorage.getItem(TARIFF_ENERGY_KEY) || "0.10"
-      ); // $/kWh
+      let rateElec = parseFloat(
+        localStorage.getItem(TARIFF_ENERGY_KEY_ELEC) ||
+          localStorage.getItem(TARIFF_ENERGY_KEY) ||
+          "0.10"
+      );
+      let rateDH = parseFloat(
+        localStorage.getItem(TARIFF_ENERGY_KEY_DH) || "0.06"
+      );
+      let rateDC = parseFloat(
+        localStorage.getItem(TARIFF_ENERGY_KEY_DC) || "0.08"
+      );
       let tariffDemandRate = parseFloat(
         localStorage.getItem(TARIFF_DEMAND_KEY) || "12"
-      ); // $/kW-month
+      ); // $/kW-month (electricity only)
+      // Backwards compatibility variable
+      let tariffEnergyRate = rateElec;
+
+      function getFuelKind(meta) {
+        if (!meta || meta.IsMeter != 1) return "other";
+        const name = (meta.Name || "").toLowerCase();
+        if (name.includes("electric")) return "electricity";
+        if (
+          name.includes("districtheating") ||
+          name.includes("district heating")
+        )
+          return "districtheating";
+        if (
+          name.includes("districtcooling") ||
+          name.includes("district cooling")
+        )
+          return "districtcooling";
+        return "other";
+      }
       function computeTariffCost(seriesObj) {
         try {
           const pts = seriesObj.points;
           if (!pts.length || baseFreq !== "Hourly") return null; // annual energy J sum to kWh
           const unit = seriesObj.meta.Units;
+          const kind = getFuelKind(seriesObj.meta);
           let totalJ = 0;
           for (const p of pts) {
             const J = toJoules(p.y, unit);
@@ -1458,7 +1504,11 @@
             totalJ += J;
           }
           const totalKWh = totalJ / 3.6e6;
-          const energyCost = totalKWh * tariffEnergyRate;
+          let energyRate = tariffEnergyRate;
+          if (kind === "electricity") energyRate = rateElec;
+          else if (kind === "districtheating") energyRate = rateDH;
+          else if (kind === "districtcooling") energyRate = rateDC;
+          const energyCost = totalKWh * energyRate;
           // Demand: compute kW per hour (kWh for that hour) => kW
           const byMonth = new Map();
           pts.forEach((p) => {
@@ -1470,13 +1520,16 @@
             byMonth.set(m, cur);
           });
           let demandCost = 0;
-          byMonth.forEach((v) => {
-            demandCost += v.peak * tariffDemandRate;
-          });
+          if (kind === "electricity") {
+            byMonth.forEach((v) => {
+              demandCost += v.peak * tariffDemandRate;
+            });
+          }
           return {
             energy: energyCost,
             demand: demandCost,
             total: energyCost + demandCost,
+            kind,
           };
         } catch (e) {
           return null;
@@ -1486,37 +1539,107 @@
       // Tariff popover UI
       function injectTariffUI() {
         if (document.getElementById("tariff-btn")) return;
-  const container = document.querySelector("#toolbar-actions") || document.querySelector("#series-meta");
+        const container =
+          document.querySelector("#toolbar-actions") ||
+          document.querySelector("#series-meta");
         if (!container) return;
         const btn = document.createElement("button");
         btn.id = "tariff-btn";
-        btn.className =
-          "px-2 py-1 text-xs border rounded bg-[var(--panel-2)]";
+        btn.className = "px-2 py-1 text-xs border rounded bg-[var(--panel-2)]";
         btn.textContent = "$";
         btn.title = "Tariff settings";
         container.appendChild(btn);
         const pop = document.createElement("div");
         pop.id = "tariff-pop";
         pop.className =
-          "hidden absolute z-20 mt-2 right-0 w-56 border border-[var(--border)] rounded-md bg-[var(--panel)] shadow-lg p-3 text-xs";
+          "hidden z-50 w-64 border border-[var(--border)] rounded-md bg-[var(--panel)] shadow-lg p-3 text-xs";
+        pop.style.position = "fixed";
         pop.innerHTML = `<div class='flex justify-between items-center mb-1'><strong class='text-xs'>Tariff</strong><button id='tariff-close' class='px-1 rounded hover:bg-[var(--panel-2)]' aria-label='Close'>✕</button></div>
-        <label class='block mb-2'>Energy Rate ($/kWh)<input id='tariff-energy' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-[var(--panel-2)] border-[var(--border)]' value='${tariffEnergyRate}'></label>
-        <label class='block mb-2'>Demand Rate ($/kW-mo)<input id='tariff-demand' type='number' step='0.01' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-[var(--panel-2)] border-[var(--border)]' value='${tariffDemandRate}'></label>
-        <div class='flex justify-end gap-2'><button id='tariff-save' class='px-2 py-1 rounded bg-[var(--accent-strong)] text-white text-xs'>Save</button></div>`;
-  container.style.position = "relative";
-        container.appendChild(pop);
+        <div class='space-y-2'>
+        <label class='block' data-tip='Electricity volumetric charge ($/kWh). Applied to total annual electric kWh.'>
+          <span class='flex items-center justify-between'>
+            <span>Electricity ($/kWh)</span>
+            <button type='button' class='kpi-help ml-2 cursor-help select-none text-[var(--muted)] px-1 rounded hover:bg-[var(--panel-2)]'>?</button>
+          </span>
+          <input id='tariff-energy-elec' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-[var(--panel-2)] border-[var(--border)]' value='${rateElec}'>
+        </label>
+        <label class='block' data-tip='District heating volumetric charge ($/kWh equivalent). Applied to total annual DistrictHeating kWh.'>
+          <span class='flex items-center justify-between'>
+            <span>District Heating ($/kWh)</span>
+            <button type='button' class='kpi-help ml-2 cursor-help select-none text-[var(--muted)] px-1 rounded hover:bg-[var(--panel-2)]'>?</button>
+          </span>
+          <input id='tariff-energy-dh' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-[var(--panel-2)] border-[var(--border)]' value='${rateDH}'>
+        </label>
+        <label class='block' data-tip='District cooling volumetric charge ($/kWh equivalent). Applied to total annual DistrictCooling kWh.'>
+          <span class='flex items-center justify-between'>
+            <span>District Cooling ($/kWh)</span>
+            <button type='button' class='kpi-help ml-2 cursor-help select-none text-[var(--muted)] px-1 rounded hover:bg-[var(--panel-2)]'>?</button>
+          </span>
+          <input id='tariff-energy-dc' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-[var(--panel-2)] border-[var(--border)]' value='${rateDC}'>
+        </label>
+        <label class='block' data-tip="Monthly demand charge for electricity: each month's highest hourly kW times this rate, summed over all months.">
+          <span class='flex items-center justify-between'>
+            <span>Demand Rate ($/kW-mo)</span>
+            <button type='button' class='kpi-help ml-2 cursor-help select-none text-[var(--muted)] px-1 rounded hover:bg-[var(--panel-2)]'>?</button>
+          </span>
+          <input id='tariff-demand' type='number' step='0.01' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-[var(--panel-2)] border-[var(--border)]' value='${tariffDemandRate}'>
+        </label>
+        </div>
+  <div class='flex justify-end gap-2 mt-3'><button id='tariff-save' class='px-3 py-1.5 rounded bg-[var(--accent-strong)] text-white text-xs'>Save</button></div>`;
+        // attach KPI-style tooltips for tariff help buttons
+        setTimeout(() => {
+          attachKpiTooltips();
+        }, 0);
+        document.body.appendChild(pop);
         btn.addEventListener("click", () => {
-          pop.classList.toggle("hidden");
+          if (pop.classList.contains("hidden")) {
+            const r = btn.getBoundingClientRect();
+            const margin = 6;
+            const w = 260;
+            let left = Math.min(
+              window.innerWidth - w - 8,
+              Math.max(8, r.right - w)
+            );
+            let top = r.bottom + margin;
+            if (top + pop.offsetHeight > window.innerHeight) {
+              top = r.top - pop.offsetHeight - margin;
+            }
+            pop.style.left = left + "px";
+            pop.style.top = top + "px";
+            pop.classList.remove("hidden");
+          } else {
+            pop.classList.add("hidden");
+          }
         });
         pop
           .querySelector("#tariff-close")
           .addEventListener("click", () => pop.classList.add("hidden"));
+        document.addEventListener("click", (e) => {
+          if (
+            !pop.classList.contains("hidden") &&
+            !e.target.closest("#tariff-pop") &&
+            e.target !== btn
+          ) {
+            pop.classList.add("hidden");
+          }
+        });
         pop.querySelector("#tariff-save").addEventListener("click", () => {
-          const er = parseFloat(pop.querySelector("#tariff-energy").value);
+          const erElec = parseFloat(
+            pop.querySelector("#tariff-energy-elec").value
+          );
+          const erDH = parseFloat(pop.querySelector("#tariff-energy-dh").value);
+          const erDC = parseFloat(pop.querySelector("#tariff-energy-dc").value);
           const dr = parseFloat(pop.querySelector("#tariff-demand").value);
-          if (isFinite(er)) tariffEnergyRate = er;
+          if (isFinite(erElec)) rateElec = erElec;
+          if (isFinite(erDH)) rateDH = erDH;
+          if (isFinite(erDC)) rateDC = erDC;
           if (isFinite(dr)) tariffDemandRate = dr;
-          localStorage.setItem(TARIFF_ENERGY_KEY, tariffEnergyRate);
+          // keep backwards compatibility single key for electricity
+          tariffEnergyRate = rateElec;
+          localStorage.setItem(TARIFF_ENERGY_KEY_ELEC, rateElec);
+          localStorage.setItem(TARIFF_ENERGY_KEY_DH, rateDH);
+          localStorage.setItem(TARIFF_ENERGY_KEY_DC, rateDC);
+          localStorage.setItem(TARIFF_ENERGY_KEY, rateElec);
           localStorage.setItem(TARIFF_DEMAND_KEY, tariffDemandRate);
           pop.classList.add("hidden");
           renderAll();
@@ -1529,75 +1652,229 @@
         const container = $("chart");
         container.innerHTML = "";
         const rect = container.getBoundingClientRect();
-        const width = rect.width, height = rect.height;
+        const width = rect.width,
+          height = rect.height;
         const metas = [...selected.values()].map((v) => v.meta);
-        const consistentUnits = metas.length && metas.every((m) => m.Units === metas[0].Units);
+        const consistentUnits =
+          metas.length && metas.every((m) => m.Units === metas[0].Units);
         const primaryMeta = consistentUnits ? metas[0] : null;
         const normalize = opts.normalize === true;
-        const showSecondary = !normalize && primaryMeta && ["energy","power"].includes(unitKind(primaryMeta.Units));
-        const m = { top:16, right: showSecondary?68:24, bottom: baseFreq === "Hourly" ? 56 : 36, left:56 };
-        const w = width - m.left - m.right, h = height - m.top - m.bottom;
-        const axisColor = cssVar("--chart-axis"), gridColor = cssVar("--chart-grid"), tooltipBg = cssVar("--chart-tooltip-bg"), textColor = cssVar("--text"), borderColor = cssVar("--border");
-        const svg = d3.select(container).append("svg").attr("width", width).attr("height", height);
-        const g = svg.append("g").attr("transform", `translate(${m.left},${m.top})`);
+        const showSecondary =
+          !normalize &&
+          primaryMeta &&
+          ["energy", "power"].includes(unitKind(primaryMeta.Units));
+        const m = {
+          top: 16,
+          right: showSecondary ? 68 : 24,
+          bottom: baseFreq === "Hourly" ? 56 : 36,
+          left: 56,
+        };
+        const w = width - m.left - m.right,
+          h = height - m.top - m.bottom;
+        const axisColor = cssVar("--chart-axis"),
+          gridColor = cssVar("--chart-grid"),
+          tooltipBg = cssVar("--chart-tooltip-bg"),
+          textColor = cssVar("--text"),
+          borderColor = cssVar("--border");
+        const svg = d3
+          .select(container)
+          .append("svg")
+          .attr("width", width)
+          .attr("height", height);
+        const g = svg
+          .append("g")
+          .attr("transform", `translate(${m.left},${m.top})`);
         const peaks = new Map();
         if (normalize) {
-          series.forEach(s => {
-            const vals = s.points.map(p => convertUnits(p.y, s.meta.Units)).filter(v=>isFinite(v));
-            const pk = Math.max(...vals,0); peaks.set(s.id, pk>0?pk:1);
+          series.forEach((s) => {
+            const vals = s.points
+              .map((p) => convertUnits(p.y, s.meta.Units))
+              .filter((v) => isFinite(v));
+            const pk = Math.max(...vals, 0);
+            peaks.set(s.id, pk > 0 ? pk : 1);
           });
         }
-        function normVal(val,s){ if(!normalize) return val; const pk = peaks.get(s.id)||1; return (val/pk)*100; }
-        const allY = series.flatMap(s => s.points.map(p => normVal(convertUnits(p.y,s.meta.Units), s)));
-        const y = d3.scaleLinear().domain([Math.min(0,d3.min(allY)), d3.max(allY)]).nice().range([h,0]);
-        g.append("g").attr("class","grid").call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat("")).selectAll("line").attr("stroke",gridColor).attr("stroke-opacity",0.35);
+        function normVal(val, s) {
+          if (!normalize) return val;
+          const pk = peaks.get(s.id) || 1;
+          return (val / pk) * 100;
+        }
+        const allY = series.flatMap((s) =>
+          s.points.map((p) => normVal(convertUnits(p.y, s.meta.Units), s))
+        );
+        const y = d3
+          .scaleLinear()
+          .domain([Math.min(0, d3.min(allY)), d3.max(allY)])
+          .nice()
+          .range([h, 0]);
+        g.append("g")
+          .attr("class", "grid")
+          .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(""))
+          .selectAll("line")
+          .attr("stroke", gridColor)
+          .attr("stroke-opacity", 0.35);
         g.select(".grid").select(".domain").remove();
-        if(baseFreq === "Hourly"){
-          const fullDomain = d3.extent(series.flatMap(s=>s.points.map(p=>p.x)));
-          const x = d3.scaleUtc().domain(fullDomain).range([0,w]);
-          if(currentXDomain && currentXDomain[0] >= fullDomain[0] && currentXDomain[1] <= fullDomain[1]) x.domain(currentXDomain); else currentXDomain=null;
-          const gx = g.append("g").attr("transform",`translate(0,${h})`).call(d3.axisBottom(x).ticks(6));
+        if (baseFreq === "Hourly") {
+          const fullDomain = d3.extent(
+            series.flatMap((s) => s.points.map((p) => p.x))
+          );
+          const x = d3.scaleUtc().domain(fullDomain).range([0, w]);
+          if (
+            currentXDomain &&
+            currentXDomain[0] >= fullDomain[0] &&
+            currentXDomain[1] <= fullDomain[1]
+          )
+            x.domain(currentXDomain);
+          else currentXDomain = null;
+          const gx = g
+            .append("g")
+            .attr("transform", `translate(0,${h})`)
+            .call(d3.axisBottom(x).ticks(6));
           const gy = g.append("g").call(d3.axisLeft(y).ticks(6));
-          if(showSecondary){
+          if (showSecondary) {
             const oppLabel = convertUnitLabelOpposite(primaryMeta.Units);
-            const axisR = d3.axisRight(y).ticks(6).tickFormat(t=>fmt(convertDisplayedToOpposite(t, primaryMeta.Units)));
-            g.append("g").attr("transform",`translate(${w},0)`).call(axisR).selectAll("text").attr("fill",axisColor);
-            if(oppLabel){ g.append("text").attr("x",w).attr("y",-4).attr("text-anchor","end").attr("fill",axisColor).attr("font-size","10px").text(oppLabel); }
+            const axisR = d3
+              .axisRight(y)
+              .ticks(6)
+              .tickFormat((t) =>
+                fmt(convertDisplayedToOpposite(t, primaryMeta.Units))
+              );
+            g.append("g")
+              .attr("transform", `translate(${w},0)`)
+              .call(axisR)
+              .selectAll("text")
+              .attr("fill", axisColor);
+            if (oppLabel) {
+              g.append("text")
+                .attr("x", w)
+                .attr("y", -4)
+                .attr("text-anchor", "end")
+                .attr("fill", axisColor)
+                .attr("font-size", "10px")
+                .text(oppLabel);
+            }
           }
-          gx.selectAll("path,line").attr("stroke",axisColor); gy.selectAll("path,line").attr("stroke",axisColor);
-          gx.selectAll("text").attr("fill",axisColor); gy.selectAll("text").attr("fill",axisColor);
-          for(const s of series){ const line = d3.line().x(d=>x(d.x)).y(d=>y(normVal(convertUnits(d.y,s.meta.Units),s))); g.append("path").datum(s.points).attr("fill","none").attr("stroke-width",1.8).attr("stroke",s.color).attr("class","series").attr("d",line); }
-          if(zoomEnabled){
-            const brush = d3.brushX().extent([[0,h-24],[w,h]]).on("end", ev => {
-              const sel = ev.selection; if(!sel){ x.domain(fullDomain); currentXDomain=null; } else { x.domain(sel.map(x.invert)); currentXDomain = x.domain().slice(); } redraw();
-            });
-            g.append("g").attr("class","brush").call(brush); $("zoom-hint").classList.remove("hidden");
-          } else { $("zoom-hint").classList.add("hidden"); }
-          function redraw(){
+          gx.selectAll("path,line").attr("stroke", axisColor);
+          gy.selectAll("path,line").attr("stroke", axisColor);
+          gx.selectAll("text").attr("fill", axisColor);
+          gy.selectAll("text").attr("fill", axisColor);
+          for (const s of series) {
+            const line = d3
+              .line()
+              .x((d) => x(d.x))
+              .y((d) => y(normVal(convertUnits(d.y, s.meta.Units), s)));
+            g.append("path")
+              .datum(s.points)
+              .attr("fill", "none")
+              .attr("stroke-width", 1.8)
+              .attr("stroke", s.color)
+              .attr("class", "series")
+              .attr("d", line);
+          }
+          if (zoomEnabled) {
+            const brush = d3
+              .brushX()
+              .extent([
+                [0, h - 24],
+                [w, h],
+              ])
+              .on("end", (ev) => {
+                const sel = ev.selection;
+                if (!sel) {
+                  x.domain(fullDomain);
+                  currentXDomain = null;
+                } else {
+                  x.domain(sel.map(x.invert));
+                  currentXDomain = x.domain().slice();
+                }
+                redraw();
+              });
+            g.append("g").attr("class", "brush").call(brush);
+            $("zoom-hint").classList.remove("hidden");
+          } else {
+            $("zoom-hint").classList.add("hidden");
+          }
+          function redraw() {
             gx.call(d3.axisBottom(x).ticks(6));
-            gx.selectAll("path,line").attr("stroke",axisColor);
-            gx.selectAll("text").attr("fill",axisColor);
+            gx.selectAll("path,line").attr("stroke", axisColor);
+            gx.selectAll("text").attr("fill", axisColor);
             g.selectAll("path.series").remove();
-            for(const s of series){
+            for (const s of series) {
               g.append("path")
                 .datum(s.points)
-                .attr("class","series")
-                .attr("fill","none")
-                .attr("stroke-width",1.8)
-                .attr("stroke",s.color)
-                .attr("d",
-                  d3.line()
-                    .x(p=>x(p.x))
-                    .y(p=>y(normVal(convertUnits(p.y,s.meta.Units),s)))
+                .attr("class", "series")
+                .attr("fill", "none")
+                .attr("stroke-width", 1.8)
+                .attr("stroke", s.color)
+                .attr(
+                  "d",
+                  d3
+                    .line()
+                    .x((p) => x(p.x))
+                    .y((p) => y(normVal(convertUnits(p.y, s.meta.Units), s)))
                 );
             }
           }
           redraw();
-          svg.on("dblclick", () => { x.domain(fullDomain); currentXDomain=null; redraw(); });
-          const tooltip = d3.select(container).append("div").style("position","absolute").style("pointer-events","none").style("background",tooltipBg).style("border","1px solid "+borderColor).style("color",textColor).style("padding","6px 8px").style("border-radius","6px").style("font-size","12px").style("display","none");
-          const allPts = series.flatMap(s=> s.points.map(p=>({ x:p.x, y:normVal(convertUnits(p.y,s.meta.Units),s), raw:convertUnits(p.y,s.meta.Units), label:p.label, color:s.color, name:s.meta.Name, units: normalize?"%":convertUnitLabel(s.meta.Units) }))).sort((a,b)=>a.x-b.x);
-          const bisect = d3.bisector(d=>d.x).left;
-          svg.on("mousemove", ev => { const [mx] = d3.pointer(ev,g.node()); const x0 = x.invert(mx); const i = Math.min(allPts.length-1, Math.max(0, bisect(allPts,x0))); const d = allPts[i]; tooltip.style("display","block").style("left", ev.offsetX+12+"px").style("top", ev.offsetY-24+"px").html(`<div><strong>${d.label}</strong></div><div><span style='color:${d.color}'>${d.name}</span> — ${fmt(d.y)} ${d.units||""}${normalize?` <span class='text-[var(--muted)]'>(raw ${fmt(d.raw)})</span>`:""}</div>`); }).on("mouseleave",()=>tooltip.style("display","none"));
+          svg.on("dblclick", () => {
+            x.domain(fullDomain);
+            currentXDomain = null;
+            redraw();
+          });
+          const tooltip = d3
+            .select(container)
+            .append("div")
+            .style("position", "absolute")
+            .style("pointer-events", "none")
+            .style("background", tooltipBg)
+            .style("border", "1px solid " + borderColor)
+            .style("color", textColor)
+            .style("padding", "6px 8px")
+            .style("border-radius", "6px")
+            .style("font-size", "12px")
+            .style("display", "none");
+          const allPts = series
+            .flatMap((s) =>
+              s.points.map((p) => ({
+                x: p.x,
+                y: normVal(convertUnits(p.y, s.meta.Units), s),
+                raw: convertUnits(p.y, s.meta.Units),
+                label: p.label,
+                color: s.color,
+                name: s.meta.Name,
+                units: normalize ? "%" : convertUnitLabel(s.meta.Units),
+              }))
+            )
+            .sort((a, b) => a.x - b.x);
+          const bisect = d3.bisector((d) => d.x).left;
+          svg
+            .on("mousemove", (ev) => {
+              const [mx] = d3.pointer(ev, g.node());
+              const x0 = x.invert(mx);
+              const i = Math.min(
+                allPts.length - 1,
+                Math.max(0, bisect(allPts, x0))
+              );
+              const d = allPts[i];
+              tooltip
+                .style("display", "block")
+                .style("left", ev.offsetX + 12 + "px")
+                .style("top", ev.offsetY - 24 + "px")
+                .html(
+                  `<div><strong>${
+                    d.label
+                  }</strong></div><div><span style='color:${d.color}'>${
+                    d.name
+                  }</span> — ${fmt(d.y)} ${d.units || ""}${
+                    normalize
+                      ? ` <span class='text-[var(--muted)]'>(raw ${fmt(
+                          d.raw
+                        )})</span>`
+                      : ""
+                  }</div>`
+                );
+            })
+            .on("mouseleave", () => tooltip.style("display", "none"));
         } else {
           const x = d3
             .scaleBand()
@@ -2024,7 +2301,9 @@
       });
       $("view-zoom").addEventListener("click", () => {
         zoomEnabled = !zoomEnabled;
-        $("view-zoom").textContent = zoomEnabled ? "Disable Zoom" : "Enable Zoom";
+        $("view-zoom").textContent = zoomEnabled
+          ? "Disable Zoom"
+          : "Enable Zoom";
         if (!zoomEnabled) currentXDomain = null;
         renderAll();
       });
@@ -2065,20 +2344,37 @@
         } catch {}
       }
       // Responsive resize: observe chart container; throttle with rAF for smooth live resizing
-      (function(){
-        const chartEl = document.getElementById('chart');
-        if(!chartEl || typeof ResizeObserver==='undefined') return;
-        let frame = null; let lastW=0,lastH=0;
-        const ro = new ResizeObserver(entries=>{
+      (function () {
+        const chartEl = document.getElementById("chart");
+        if (!chartEl || typeof ResizeObserver === "undefined") return;
+        let frame = null;
+        let lastW = 0,
+          lastH = 0;
+        const ro = new ResizeObserver((entries) => {
           const cr = entries[0].contentRect;
-            if(Math.abs(cr.width-lastW)<1 && Math.abs(cr.height-lastH)<1) return;
-            lastW=cr.width; lastH=cr.height;
-            if(frame) return; // already scheduled
-            frame = requestAnimationFrame(()=>{ frame=null; if(selected.size){ renderAll(); } });
+          if (Math.abs(cr.width - lastW) < 1 && Math.abs(cr.height - lastH) < 1)
+            return;
+          lastW = cr.width;
+          lastH = cr.height;
+          if (frame) return; // already scheduled
+          frame = requestAnimationFrame(() => {
+            frame = null;
+            if (selected.size) {
+              renderAll();
+            }
+          });
         });
         ro.observe(chartEl);
         // also listen to window resize for layout shifts affecting chart width indirectly (e.g., sidebar collapse)
-        window.addEventListener('resize', ()=>{ if(frame) return; frame=requestAnimationFrame(()=>{ frame=null; if(selected.size){ renderAll(); } }); });
+        window.addEventListener("resize", () => {
+          if (frame) return;
+          frame = requestAnimationFrame(() => {
+            frame = null;
+            if (selected.size) {
+              renderAll();
+            }
+          });
+        });
       })();
 
       (function () {
