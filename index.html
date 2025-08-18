@@ -601,6 +601,8 @@
       let zoomEnabled = false;
       let baseFreq = null;
       let viewMode = "time";
+      // Preserve current hourly x-domain across redraws (zoom + resize)
+      let currentXDomain = null;
 
       let isIP = localStorage.getItem(UNITS_KEY) === "IP" ? true : false;
       const btnUnits = $("btn-units");
@@ -971,11 +973,14 @@
         if (chosen.length === 0) {
           selected.clear();
           baseFreq = null;
+          currentXDomain = null;
           renderAll();
           return;
         }
         const first = dict.find((d) => d.id === chosen[0]);
-        baseFreq = first?.freq || "Hourly";
+        const newFreq = first?.freq || "Hourly";
+        if (newFreq !== baseFreq) currentXDomain = null;
+        baseFreq = newFreq;
         for (const id of chosen) {
           const meta = dict.find((d) => d.id === id);
           if (!meta || meta.freq !== baseFreq) continue;
@@ -1523,230 +1528,75 @@
         const container = $("chart");
         container.innerHTML = "";
         const rect = container.getBoundingClientRect();
-        const width = rect.width,
-          height = rect.height;
-        // Determine if we should show a secondary (opposite units) axis.
+        const width = rect.width, height = rect.height;
         const metas = [...selected.values()].map((v) => v.meta);
-        const consistentUnits =
-          metas.length && metas.every((m) => m.Units === metas[0].Units);
+        const consistentUnits = metas.length && metas.every((m) => m.Units === metas[0].Units);
         const primaryMeta = consistentUnits ? metas[0] : null;
         const normalize = opts.normalize === true;
-        const showSecondary =
-          !normalize &&
-          primaryMeta &&
-          ["energy", "power"].includes(unitKind(primaryMeta.Units));
-        const m = {
-          top: 16,
-          right: showSecondary ? 68 : 24,
-          bottom: baseFreq === "Hourly" ? 56 : 36,
-          left: 56,
-        };
-        const w = width - m.left - m.right,
-          h = height - m.top - m.bottom;
-        const axisColor = cssVar("--chart-axis"),
-          gridColor = cssVar("--chart-grid"),
-          tooltipBg = cssVar("--chart-tooltip-bg"),
-          textColor = cssVar("--text"),
-          borderColor = cssVar("--border");
-        const svg = d3
-          .select(container)
-          .append("svg")
-          .attr("width", width)
-          .attr("height", height);
-        const g = svg
-          .append("g")
-          .attr("transform", `translate(${m.left},${m.top})`);
-
-        // If normalizing, compute peak per series
+        const showSecondary = !normalize && primaryMeta && ["energy","power"].includes(unitKind(primaryMeta.Units));
+        const m = { top:16, right: showSecondary?68:24, bottom: baseFreq === "Hourly" ? 56 : 36, left:56 };
+        const w = width - m.left - m.right, h = height - m.top - m.bottom;
+        const axisColor = cssVar("--chart-axis"), gridColor = cssVar("--chart-grid"), tooltipBg = cssVar("--chart-tooltip-bg"), textColor = cssVar("--text"), borderColor = cssVar("--border");
+        const svg = d3.select(container).append("svg").attr("width", width).attr("height", height);
+        const g = svg.append("g").attr("transform", `translate(${m.left},${m.top})`);
         const peaks = new Map();
         if (normalize) {
-          series.forEach((s) => {
-            const vals = s.points
-              .map((p) => convertUnits(p.y, s.meta.Units))
-              .filter((v) => isFinite(v));
-            const pk = Math.max(...vals, 0);
-            peaks.set(s.id, pk > 0 ? pk : 1);
+          series.forEach(s => {
+            const vals = s.points.map(p => convertUnits(p.y, s.meta.Units)).filter(v=>isFinite(v));
+            const pk = Math.max(...vals,0); peaks.set(s.id, pk>0?pk:1);
           });
         }
-        function normVal(val, s) {
-          if (!normalize) return val;
-          const pk = peaks.get(s.id) || 1;
-          return (val / pk) * 100;
-        }
-        const allY = series.flatMap((s) =>
-          s.points.map((p) => normVal(convertUnits(p.y, s.meta.Units), s))
-        );
-        const y = d3
-          .scaleLinear()
-          .domain([Math.min(0, d3.min(allY)), d3.max(allY)])
-          .nice()
-          .range([h, 0]);
-        g.append("g")
-          .attr("class", "grid")
-          .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(""))
-          .selectAll("line")
-          .attr("stroke", gridColor)
-          .attr("stroke-opacity", 0.35);
+        function normVal(val,s){ if(!normalize) return val; const pk = peaks.get(s.id)||1; return (val/pk)*100; }
+        const allY = series.flatMap(s => s.points.map(p => normVal(convertUnits(p.y,s.meta.Units), s)));
+        const y = d3.scaleLinear().domain([Math.min(0,d3.min(allY)), d3.max(allY)]).nice().range([h,0]);
+        g.append("g").attr("class","grid").call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat("")).selectAll("line").attr("stroke",gridColor).attr("stroke-opacity",0.35);
         g.select(".grid").select(".domain").remove();
-
-        if (baseFreq === "Hourly") {
-          const x = d3
-            .scaleUtc()
-            .domain(d3.extent(series.flatMap((s) => s.points.map((p) => p.x))))
-            .range([0, w]);
-          const gx = g
-            .append("g")
-            .attr("transform", `translate(0,${h})`)
-            .call(d3.axisBottom(x).ticks(6));
+        if(baseFreq === "Hourly"){
+          const fullDomain = d3.extent(series.flatMap(s=>s.points.map(p=>p.x)));
+          const x = d3.scaleUtc().domain(fullDomain).range([0,w]);
+          if(currentXDomain && currentXDomain[0] >= fullDomain[0] && currentXDomain[1] <= fullDomain[1]) x.domain(currentXDomain); else currentXDomain=null;
+          const gx = g.append("g").attr("transform",`translate(0,${h})`).call(d3.axisBottom(x).ticks(6));
           const gy = g.append("g").call(d3.axisLeft(y).ticks(6));
-          if (showSecondary) {
-            const ticks = y.ticks(6);
+          if(showSecondary){
             const oppLabel = convertUnitLabelOpposite(primaryMeta.Units);
-            const axisR = d3
-              .axisRight(y)
-              .ticks(6)
-              .tickFormat((t) =>
-                fmt(convertDisplayedToOpposite(t, primaryMeta.Units))
-              );
-            g.append("g")
-              .attr("transform", `translate(${w},0)`)
-              .call(axisR)
-              .selectAll("text")
-              .attr("fill", axisColor);
-            g.selectAll("g.axisR path,line").attr("stroke", axisColor);
-            // Add unit label at top-right
-            if (oppLabel) {
-              g.append("text")
-                .attr("x", w)
-                .attr("y", -4)
-                .attr("text-anchor", "end")
-                .attr("fill", axisColor)
-                .attr("font-size", "10px")
-                .text(oppLabel);
-            }
+            const axisR = d3.axisRight(y).ticks(6).tickFormat(t=>fmt(convertDisplayedToOpposite(t, primaryMeta.Units)));
+            g.append("g").attr("transform",`translate(${w},0)`).call(axisR).selectAll("text").attr("fill",axisColor);
+            if(oppLabel){ g.append("text").attr("x",w).attr("y",-4).attr("text-anchor","end").attr("fill",axisColor).attr("font-size","10px").text(oppLabel); }
           }
-          gx.selectAll("path,line").attr("stroke", axisColor);
-          gy.selectAll("path,line").attr("stroke", axisColor);
-          gx.selectAll("text").attr("fill", axisColor);
-          gy.selectAll("text").attr("fill", axisColor);
-          for (const s of series) {
-            const line = d3
-              .line()
-              .x((d) => x(d.x))
-              .y((d) => y(normVal(convertUnits(d.y, s.meta.Units), s)));
-            g.append("path")
-              .datum(s.points)
-              .attr("fill", "none")
-              .attr("stroke-width", 1.8)
-              .attr("stroke", s.color)
-              .attr("class", "series")
-              .attr("d", line);
-          }
-          if (zoomEnabled) {
-            const brush = d3
-              .brushX()
-              .extent([
-                [0, h - 24],
-                [w, h],
-              ])
-              .on("end", (event) => {
-                const sel = event.selection;
-                if (!sel) {
-                  x.domain(
-                    d3.extent(series.flatMap((s) => s.points.map((p) => p.x)))
-                  );
-                } else {
-                  x.domain(sel.map(x.invert));
-                }
-                redraw();
-              });
-            g.append("g").attr("class", "brush").call(brush);
-            $("zoom-hint").classList.remove("hidden");
-          } else {
-            $("zoom-hint").classList.add("hidden");
-          }
-          function redraw() {
+          gx.selectAll("path,line").attr("stroke",axisColor); gy.selectAll("path,line").attr("stroke",axisColor);
+          gx.selectAll("text").attr("fill",axisColor); gy.selectAll("text").attr("fill",axisColor);
+          for(const s of series){ const line = d3.line().x(d=>x(d.x)).y(d=>y(normVal(convertUnits(d.y,s.meta.Units),s))); g.append("path").datum(s.points).attr("fill","none").attr("stroke-width",1.8).attr("stroke",s.color).attr("class","series").attr("d",line); }
+          if(zoomEnabled){
+            const brush = d3.brushX().extent([[0,h-24],[w,h]]).on("end", ev => {
+              const sel = ev.selection; if(!sel){ x.domain(fullDomain); currentXDomain=null; } else { x.domain(sel.map(x.invert)); currentXDomain = x.domain().slice(); } redraw();
+            });
+            g.append("g").attr("class","brush").call(brush); $("zoom-hint").classList.remove("hidden");
+          } else { $("zoom-hint").classList.add("hidden"); }
+          function redraw(){
             gx.call(d3.axisBottom(x).ticks(6));
-            gx.selectAll("path,line").attr("stroke", axisColor);
-            gx.selectAll("text").attr("fill", axisColor);
+            gx.selectAll("path,line").attr("stroke",axisColor);
+            gx.selectAll("text").attr("fill",axisColor);
             g.selectAll("path.series").remove();
-            for (const s of series) {
+            for(const s of series){
               g.append("path")
                 .datum(s.points)
-                .attr("class", "series")
-                .attr("fill", "none")
-                .attr("stroke-width", 1.8)
-                .attr("stroke", s.color)
-                .attr(
-                  "d",
-                  d3
-                    .line()
-                    .x((p) => x(p.x))
-                    .y((p) => y(normVal(convertUnits(p.y, s.meta.Units), s)))
+                .attr("class","series")
+                .attr("fill","none")
+                .attr("stroke-width",1.8)
+                .attr("stroke",s.color)
+                .attr("d",
+                  d3.line()
+                    .x(p=>x(p.x))
+                    .y(p=>y(normVal(convertUnits(p.y,s.meta.Units),s)))
                 );
             }
           }
           redraw();
-          svg.on("dblclick", () => {
-            x.domain(
-              d3.extent(series.flatMap((s) => s.points.map((p) => p.x)))
-            );
-            redraw();
-          });
-          const tooltip = d3
-            .select(container)
-            .append("div")
-            .style("position", "absolute")
-            .style("pointer-events", "none")
-            .style("background", tooltipBg)
-            .style("border", "1px solid " + borderColor)
-            .style("color", textColor)
-            .style("padding", "6px 8px")
-            .style("border-radius", "6px")
-            .style("font-size", "12px")
-            .style("display", "none");
-          const allPts = series
-            .flatMap((s) =>
-              s.points.map((p) => ({
-                x: p.x,
-                y: normVal(convertUnits(p.y, s.meta.Units), s),
-                raw: convertUnits(p.y, s.meta.Units),
-                label: p.label,
-                color: s.color,
-                name: s.meta.Name,
-                units: normalize ? "%" : convertUnitLabel(s.meta.Units),
-              }))
-            )
-            .sort((a, b) => a.x - b.x);
-          const bisect = d3.bisector((d) => d.x).left;
-          svg
-            .on("mousemove", (event) => {
-              const [mx] = d3.pointer(event, g.node());
-              const x0 = x.invert(mx);
-              const i = Math.min(
-                allPts.length - 1,
-                Math.max(0, bisect(allPts, x0))
-              );
-              const d = allPts[i];
-              tooltip
-                .style("display", "block")
-                .style("left", event.offsetX + 12 + "px")
-                .style("top", event.offsetY - 24 + "px")
-                .html(
-                  `<div><strong>${
-                    d.label
-                  }</strong></div><div><span style='color:${d.color}'>${
-                    d.name
-                  }</span> — ${fmt(d.y)} ${d.units || ""}${
-                    normalize
-                      ? ` <span class='text-[var(--muted)]'>(raw ${fmt(
-                          d.raw
-                        )})</span>`
-                      : ""
-                  }</div>`
-                );
-            })
-            .on("mouseleave", () => tooltip.style("display", "none"));
+          svg.on("dblclick", () => { x.domain(fullDomain); currentXDomain=null; redraw(); });
+          const tooltip = d3.select(container).append("div").style("position","absolute").style("pointer-events","none").style("background",tooltipBg).style("border","1px solid "+borderColor).style("color",textColor).style("padding","6px 8px").style("border-radius","6px").style("font-size","12px").style("display","none");
+          const allPts = series.flatMap(s=> s.points.map(p=>({ x:p.x, y:normVal(convertUnits(p.y,s.meta.Units),s), raw:convertUnits(p.y,s.meta.Units), label:p.label, color:s.color, name:s.meta.Name, units: normalize?"%":convertUnitLabel(s.meta.Units) }))).sort((a,b)=>a.x-b.x);
+          const bisect = d3.bisector(d=>d.x).left;
+          svg.on("mousemove", ev => { const [mx] = d3.pointer(ev,g.node()); const x0 = x.invert(mx); const i = Math.min(allPts.length-1, Math.max(0, bisect(allPts,x0))); const d = allPts[i]; tooltip.style("display","block").style("left", ev.offsetX+12+"px").style("top", ev.offsetY-24+"px").html(`<div><strong>${d.label}</strong></div><div><span style='color:${d.color}'>${d.name}</span> — ${fmt(d.y)} ${d.units||""}${normalize?` <span class='text-[var(--muted)]'>(raw ${fmt(d.raw)})</span>`:""}</div>`); }).on("mouseleave",()=>tooltip.style("display","none"));
         } else {
           const x = d3
             .scaleBand()
@@ -2173,9 +2023,8 @@
       });
       $("view-zoom").addEventListener("click", () => {
         zoomEnabled = !zoomEnabled;
-        $("view-zoom").textContent = zoomEnabled
-          ? "Disable Zoom"
-          : "Enable Zoom";
+        $("view-zoom").textContent = zoomEnabled ? "Disable Zoom" : "Enable Zoom";
+        if (!zoomEnabled) currentXDomain = null;
         renderAll();
       });
       $("view-zoom").textContent = zoomEnabled ? "Disable Zoom" : "Enable Zoom";
@@ -2214,6 +2063,22 @@
           handleSelectionChange();
         } catch {}
       }
+      // Responsive resize: observe chart container; throttle with rAF for smooth live resizing
+      (function(){
+        const chartEl = document.getElementById('chart');
+        if(!chartEl || typeof ResizeObserver==='undefined') return;
+        let frame = null; let lastW=0,lastH=0;
+        const ro = new ResizeObserver(entries=>{
+          const cr = entries[0].contentRect;
+            if(Math.abs(cr.width-lastW)<1 && Math.abs(cr.height-lastH)<1) return;
+            lastW=cr.width; lastH=cr.height;
+            if(frame) return; // already scheduled
+            frame = requestAnimationFrame(()=>{ frame=null; if(selected.size){ renderAll(); } });
+        });
+        ro.observe(chartEl);
+        // also listen to window resize for layout shifts affecting chart width indirectly (e.g., sidebar collapse)
+        window.addEventListener('resize', ()=>{ if(frame) return; frame=requestAnimationFrame(()=>{ frame=null; if(selected.size){ renderAll(); } }); });
+      })();
 
       (function () {
         try {
