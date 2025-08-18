@@ -845,6 +845,8 @@
         const unitsEl = $("units");
         const titleEl = $("series-title");
         const metas = [...selected.values()].map((v) => v.meta);
+        const normalizeFlag =
+          viewMode === "time" && $("ldc-normalize")?.checked === true;
         titleEl.textContent = metas.length
           ? `${baseFreq} • ${metas.length} series`
           : "Series";
@@ -885,9 +887,12 @@
             renderLDC(series);
           }
         } else {
-          renderChart(series);
+          renderChart(series, { normalize: normalizeFlag });
           renderInsights(series);
           renderKPIs(series);
+          if (normalizeFlag && metas.length) {
+            unitsEl.textContent = "%";
+          }
         }
         renderStats(series); // always refresh stats (even if empty)
         const has = selected.size > 0;
@@ -1449,7 +1454,7 @@
       }
       injectTariffUI();
 
-      async function renderChart(series) {
+      async function renderChart(series, opts = {}) {
         await ensureD3();
         const container = $("chart");
         container.innerHTML = "";
@@ -1469,6 +1474,7 @@
           tooltipBg = cssVar("--chart-tooltip-bg"),
           textColor = cssVar("--text"),
           borderColor = cssVar("--border");
+        const normalize = opts.normalize === true;
         const svg = d3
           .select(container)
           .append("svg")
@@ -1478,8 +1484,24 @@
           .append("g")
           .attr("transform", `translate(${m.left},${m.top})`);
 
+        // If normalizing, compute peak per series
+        const peaks = new Map();
+        if (normalize) {
+          series.forEach((s) => {
+            const vals = s.points
+              .map((p) => convertUnits(p.y, s.meta.Units))
+              .filter((v) => isFinite(v));
+            const pk = Math.max(...vals, 0);
+            peaks.set(s.id, pk > 0 ? pk : 1);
+          });
+        }
+        function normVal(val, s) {
+          if (!normalize) return val;
+          const pk = peaks.get(s.id) || 1;
+          return (val / pk) * 100;
+        }
         const allY = series.flatMap((s) =>
-          s.points.map((p) => convertUnits(p.y, s.meta.Units))
+          s.points.map((p) => normVal(convertUnits(p.y, s.meta.Units), s))
         );
         const y = d3
           .scaleLinear()
@@ -1512,7 +1534,7 @@
             const line = d3
               .line()
               .x((d) => x(d.x))
-              .y((d) => y(convertUnits(d.y, s.meta.Units)));
+              .y((d) => y(normVal(convertUnits(d.y, s.meta.Units), s)));
             g.append("path")
               .datum(s.points)
               .attr("fill", "none")
@@ -1561,7 +1583,7 @@
                   d3
                     .line()
                     .x((p) => x(p.x))
-                    .y((p) => y(convertUnits(p.y, s.meta.Units)))
+                    .y((p) => y(normVal(convertUnits(p.y, s.meta.Units), s)))
                 );
             }
           }
@@ -1588,11 +1610,12 @@
             .flatMap((s) =>
               s.points.map((p) => ({
                 x: p.x,
-                y: convertUnits(p.y, s.meta.Units),
+                y: normVal(convertUnits(p.y, s.meta.Units), s),
+                raw: convertUnits(p.y, s.meta.Units),
                 label: p.label,
                 color: s.color,
                 name: s.meta.Name,
-                units: convertUnitLabel(s.meta.Units),
+                units: normalize ? "%" : convertUnitLabel(s.meta.Units),
               }))
             )
             .sort((a, b) => a.x - b.x);
@@ -1615,7 +1638,13 @@
                     d.label
                   }</strong></div><div><span style='color:${d.color}'>${
                     d.name
-                  }</span> — ${fmt(d.y)} ${d.units || ""}</div>`
+                  }</span> — ${fmt(d.y)} ${d.units || ""}${
+                    normalize
+                      ? ` <span class='text-[var(--muted)]'>(raw ${fmt(
+                          d.raw
+                        )})</span>`
+                      : ""
+                  }</div>`
                 );
             })
             .on("mouseleave", () => tooltip.style("display", "none"));
@@ -2048,7 +2077,8 @@
         renderAll();
       });
       chkNorm?.addEventListener("change", () => {
-        if (viewMode === "ldc") renderAll();
+        // Always re-render; normalization now applies to both time & LDC views
+        renderAll();
       });
 
       function restoreSelection() {
