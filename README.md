@@ -8,6 +8,7 @@ This project is a standalone HTML dashboard that works entirely offline. It incl
 - Embedded CSS and JavaScript
 - Interactive chart (using d3.js, included locally)
 - Responsive and modern design (tailwind.css)
+- Multiple visualization modes: Time Series, Load Duration Curve, Load Balance, and Scatter (correlation between two selected series with regression stats)
 
 ## Usage
 

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here.
 
+## [Unreleased]
+
+### Added
+
+- Scatter plot view (select two or more series then choose Scatter: shows correlation, regression line (dashed & toggleable), slope, intercept, R²; supports pair switching and overlapping point filtering for Hourly or Monthly data).
+
 ## [0.1.1] - 2025-08-18
 
 _No user-facing changes (deployment-only adjustments)._ 

@@ -247,6 +247,7 @@
                 </button>
                 <button id="view-ldc" class="px-2 py-1 text-xs">Load Duration</button>
                 <button id="view-balance" class="px-2 py-1 text-xs">Load Balance</button>
+                <button id="view-scatter" class="px-2 py-1 text-xs">Scatter</button>
               </div>
               <label class="ml-1 text-xs inline-flex items-center gap-1">
                 <input id="ldc-normalize" type="checkbox" class="align-middle" />
@@ -744,6 +745,9 @@
       let zoomEnabled = true; // always on
       let baseFreq = null;
       let viewMode = 'time';
+      // scatter pairing state: store chosen x and y series ids (from currently selected list order)
+      let scatterPair = null; // {x:id,y:id}
+      let scatterShowRegression = true;
       // Preserve current hourly x-domain across redraws (zoom + resize)
       let currentXDomain = null;
 
@@ -1177,11 +1181,15 @@
               }, 0),
             );
           } else {
-            renderChart(series, { normalize: normalizeFlag });
-            renderInsights(series);
-            renderKPIs(series);
-            if (normalizeFlag && metas.length) {
-              unitsEl.textContent = '%';
+            if (viewMode === 'scatter') {
+              renderScatter(series);
+            } else {
+              renderChart(series, { normalize: normalizeFlag });
+              renderInsights(series);
+              renderKPIs(series);
+              if (normalizeFlag && metas.length) {
+                unitsEl.textContent = '%';
+              }
             }
           }
           renderStats(series); // always refresh stats (even if empty)
@@ -2271,6 +2279,259 @@
         });
       }
 
+      function renderScatter(series) {
+        // Expect at least 2 visible series; use first two as X/Y or user-chosen pair
+        const container = $('chart');
+        container.innerHTML = '';
+        if (series.length < 2) {
+          container.innerHTML =
+            '<div class="text-xs text-muted dark:text-muted-dark p-3">Select at least two series for Scatter plot.</div>';
+          $('legend').innerHTML = '';
+          $('insights').textContent = '';
+          return;
+        }
+        const ordered = series.filter((s) => s.visible !== false);
+        if (ordered.length < 2) {
+          container.innerHTML =
+            '<div class="text-xs text-muted dark:text-muted-dark p-3">At least two visible series required (toggle legends).</div>';
+          return;
+        }
+        // Use scatterPair if valid; else first two
+        let sx, sy;
+        if (
+          scatterPair &&
+          ordered.some((s) => s.id === scatterPair.x) &&
+          ordered.some((s) => s.id === scatterPair.y)
+        ) {
+          sx = ordered.find((s) => s.id === scatterPair.x);
+          sy = ordered.find((s) => s.id === scatterPair.y);
+        } else {
+          sx = ordered[0];
+          sy = ordered[1];
+          scatterPair = { x: sx.id, y: sy.id };
+        }
+        // Only compare overlapping timestamps/labels; require same length/time indexes
+        const isHourly = baseFreq === 'Hourly';
+        let points = [];
+        if (isHourly) {
+          // build map from time index (x) -> value for sx, then join for sy
+          const mapX = new Map();
+          sx.points.forEach((p) => mapX.set(p.x, convertUnits(p.y, sx.meta.Units)));
+          sy.points.forEach((p) => {
+            const vx = mapX.get(p.x);
+            if (vx != null)
+              points.push({ xVal: vx, yVal: convertUnits(p.y, sy.meta.Units), t: p.x });
+          });
+        } else {
+          // monthly label join
+          const mapX = new Map();
+          sx.points.forEach((p) => mapX.set(p.xLabel, convertUnits(p.y, sx.meta.Units)));
+          sy.points.forEach((p) => {
+            const vx = mapX.get(p.xLabel);
+            if (vx != null)
+              points.push({ xVal: vx, yVal: convertUnits(p.y, sy.meta.Units), lbl: p.xLabel });
+          });
+        }
+        if (!points.length) {
+          container.innerHTML =
+            '<div class="text-xs text-muted dark:text-muted-dark p-3">No overlapping points between selected series.</div>';
+          return;
+        }
+        // Stats & regression (ordinary least squares)
+        const n = points.length;
+        const sumX = points.reduce((a, p) => a + p.xVal, 0);
+        const sumY = points.reduce((a, p) => a + p.yVal, 0);
+        const sumXY = points.reduce((a, p) => a + p.xVal * p.yVal, 0);
+        const sumX2 = points.reduce((a, p) => a + p.xVal * p.xVal, 0);
+        const meanX = sumX / n,
+          meanY = sumY / n;
+        const denom = n * sumX2 - sumX * sumX;
+        let slope = null,
+          intercept = null,
+          r2 = null;
+        if (denom !== 0) {
+          slope = (n * sumXY - sumX * sumY) / denom;
+          intercept = meanY - slope * meanX;
+          // r^2
+          const ssTot = points.reduce((a, p) => a + Math.pow(p.yVal - meanY, 2), 0);
+          const ssRes = points.reduce(
+            (a, p) => a + Math.pow(p.yVal - (slope * p.xVal + intercept), 2),
+            0,
+          );
+          r2 = ssTot ? 1 - ssRes / ssTot : 0;
+        }
+        const {
+          axis: axisColor,
+          grid: gridColor,
+          text: textColor,
+          tooltipBg,
+          border: borderColor,
+        } = chartColors();
+        // Layout
+        const rect = container.getBoundingClientRect();
+        const width = rect.width,
+          height = rect.height;
+        const m = { top: 16, right: 32, bottom: 52, left: 60 };
+        const w = width - m.left - m.right,
+          h = height - m.top - m.bottom;
+        const xScale = d3
+          .scaleLinear()
+          .domain(d3.extent(points, (d) => d.xVal))
+          .nice()
+          .range([0, w]);
+        const yScale = d3
+          .scaleLinear()
+          .domain(d3.extent(points, (d) => d.yVal))
+          .nice()
+          .range([h, 0]);
+        const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
+        const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+        // grid
+        g.append('g')
+          .attr('class', 'grid')
+          .call(d3.axisLeft(yScale).ticks(6).tickSize(-w).tickFormat(''))
+          .selectAll('line')
+          .attr('stroke', gridColor)
+          .attr('stroke-opacity', 0.35);
+        g.select('.grid').select('.domain').remove();
+        const gx = g
+          .append('g')
+          .attr('transform', `translate(0,${h})`)
+          .call(d3.axisBottom(xScale).ticks(6));
+        const gy = g.append('g').call(d3.axisLeft(yScale).ticks(6));
+        gx.selectAll('path,line').attr('stroke', axisColor);
+        gy.selectAll('path,line').attr('stroke', axisColor);
+        gx.selectAll('text').attr('fill', axisColor);
+        gy.selectAll('text').attr('fill', axisColor);
+        let regLineEl = null;
+        function drawRegression() {
+          if (regLineEl) regLineEl.remove();
+          if (!scatterShowRegression || slope == null) return;
+          const linePts = xScale.domain().map((x) => ({ x, y: slope * x + intercept }));
+          regLineEl = g
+            .append('path')
+            .datum(linePts)
+            .attr('fill', 'none')
+            .attr('stroke', palette[0])
+            .attr('stroke-width', 1.2)
+            .attr('stroke-dasharray', '4,4')
+            .attr('opacity', 0.9)
+            .attr(
+              'd',
+              d3
+                .line()
+                .x((d) => xScale(d.x))
+                .y((d) => yScale(d.y)),
+            );
+        }
+        drawRegression();
+        const tooltip = d3
+          .select(container)
+          .append('div')
+          .style('position', 'absolute')
+          .style('pointer-events', 'none')
+          .style('background', tooltipBg)
+          .style('border', '1px solid ' + borderColor)
+          .style('color', textColor)
+          .style('padding', '6px 8px')
+          .style('border-radius', '6px')
+          .style('font-size', '12px')
+          .style('display', 'none');
+        g.selectAll('circle.pt')
+          .data(points)
+          .enter()
+          .append('circle')
+          .attr('class', 'pt')
+          .attr('cx', (p) => xScale(p.xVal))
+          .attr('cy', (p) => yScale(p.yVal))
+          .attr('r', 3)
+          .attr('fill', palette[1])
+          .attr('opacity', 0.85)
+          .on('mousemove', (ev, p) => {
+            tooltip
+              .style('display', 'block')
+              .style('left', ev.offsetX + 12 + 'px')
+              .style('top', ev.offsetY - 24 + 'px')
+              .html(`<div><strong>${fmt(p.xVal)}, ${fmt(p.yVal)}</strong></div>`);
+          })
+          .on('mouseleave', () => tooltip.style('display', 'none'));
+        // axis labels
+        g.append('text')
+          .attr('x', w / 2)
+          .attr('y', h + 40)
+          .attr('text-anchor', 'middle')
+          .attr('fill', axisColor)
+          .attr('font-size', '12px')
+          .text(`${sx.meta.Name} (${convertUnitLabel(sx.meta.Units)})`);
+        g.append('text')
+          .attr('transform', 'rotate(-90)')
+          .attr('x', -h / 2)
+          .attr('y', -44)
+          .attr('text-anchor', 'middle')
+          .attr('fill', axisColor)
+          .attr('font-size', '12px')
+          .text(`${sy.meta.Name} (${convertUnitLabel(sy.meta.Units)})`);
+        // summary / insights
+        const statsHtml =
+          slope != null
+            ? `Slope: ${fmt(slope)} | Intercept: ${fmt(intercept)} | R²: ${r2.toFixed(3)}${
+                scatterShowRegression ? '' : ' (hidden)'
+              }`
+            : 'Insufficient variance for regression';
+        $('insights').innerHTML = `Scatter (${points.length} pts) — ${statsHtml}`;
+        // legend includes clickable X/Y swap and choose pair
+        const leg = $('legend');
+        leg.innerHTML = '';
+        function button(label, handler, active = true) {
+          const b = document.createElement('button');
+          b.className = 'text-xs px-2 py-1 rounded border border-border dark:border-border-dark';
+          if (active) b.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+          b.textContent = label;
+          b.onclick = handler;
+          leg.appendChild(b);
+          return b;
+        }
+        button(`X: ${sx.meta.Name}`, () => {
+          scatterPair = { x: sy.id, y: sx.id };
+          renderAll();
+        });
+        button(`Y: ${sy.meta.Name}`, () => {
+          scatterPair = { x: sy.id, y: sx.id };
+          renderAll();
+        });
+        // offer cycle through other series if more than 2
+        if (ordered.length > 2) {
+          button('Next Pair', () => {
+            const idxX = ordered.findIndex((s) => s.id === scatterPair.x);
+            const idxY = ordered.findIndex((s) => s.id === scatterPair.y);
+            const next = (i) => ordered[(i + 1) % ordered.length];
+            const newX = next(idxX);
+            let newY = next(idxY + 1);
+            if (newY.id === newX.id) newY = next(ordered.findIndex((s) => s.id === newX.id) + 1);
+            scatterPair = { x: newX.id, y: newY.id };
+            renderAll();
+          });
+        }
+        // regression toggle
+        const regBtn = button(
+          'Regression',
+          () => {
+            scatterShowRegression = !scatterShowRegression;
+            regBtn.classList.toggle('bg-panel-2');
+            regBtn.classList.toggle('dark:bg-panel-2-dark');
+            drawRegression();
+            $('insights').innerHTML = `Scatter (${points.length} pts) — ${
+              slope != null
+                ? `Slope: ${fmt(slope)} | Intercept: ${fmt(intercept)} | R²: ${r2.toFixed(3)}${
+                    scatterShowRegression ? '' : ' (hidden)'
+                  }`
+                : 'Insufficient variance for regression'
+            }`;
+          },
+          scatterShowRegression,
+        );
+      }
+
       function toLDC(points, units, normalize) {
         const vals = points.map((p) => convertUnits(p.y, units)).filter((v) => Number.isFinite(v));
         if (!vals.length) return [];
@@ -3139,6 +3400,7 @@
       const btnTime = $('view-time'),
         btnLdc = $('view-ldc'),
         btnBalance = $('view-balance'),
+        btnScatter = $('view-scatter'),
         chkNorm = $('ldc-normalize');
       btnTime?.addEventListener('click', () => {
         viewMode = 'time';
@@ -3161,6 +3423,16 @@
         btnBalance.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
         btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnScatter?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        $('zoom-hint').classList.add('hidden');
+        renderAll();
+      });
+      btnScatter?.addEventListener('click', () => {
+        viewMode = 'scatter';
+        btnScatter.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden');
         renderAll();
       });
