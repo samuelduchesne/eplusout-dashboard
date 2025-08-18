@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>EnergyPlus eplusout.sql — Offline Dashboard</title>
+    <script src="dist/version.js"></script>
     <script>
       try {
         var k = 'eplus_theme';
@@ -38,8 +39,15 @@
     >
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div class="flex flex-col flex-1 min-w-0">
-          <h1 class="text-base font-semibold tracking-wide truncate">
-            EnergyPlus eplusout.sql Dashboard
+          <h1 class="text-base font-semibold tracking-wide truncate flex items-baseline gap-2">
+            <span>EnergyPlus eplusout.sql Dashboard</span>
+            <button
+              id="app-version"
+              type="button"
+              class="text-[11px] font-mono text-muted dark:text-muted-dark hover:text-text dark:hover:text-text-dark underline decoration-dotted focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-dark rounded"
+              aria-haspopup="dialog"
+              aria-controls="changelog-modal"
+            ></button>
           </h1>
           <span class="text-xs text-muted dark:text-muted-dark"
             >Drop
@@ -270,6 +278,52 @@
       </section>
     </main>
 
+    <!-- Changelog Modal -->
+    <div
+      id="changelog-backdrop"
+      class="hidden fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm z-40"
+    ></div>
+    <div
+      id="changelog-modal"
+      class="hidden fixed z-50 top-[10%] left-1/2 -translate-x-1/2 w-[min(640px,92%)] max-h-[70%] flex flex-col rounded-lg overflow-hidden border border-border dark:border-border-dark bg-panel dark:bg-panel-dark shadow-lg focus:outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="changelog-title"
+      tabindex="-1"
+    >
+      <div
+        class="flex items-center justify-between px-4 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark rounded-t-lg"
+      >
+        <h2 id="changelog-title" class="font-semibold text-sm">Changelog</h2>
+        <button
+          type="button"
+          class="p-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-dark"
+          aria-label="Close"
+          onclick="hideChangelog()"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            class="w-5 h-5"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div
+        id="changelog-body"
+        class="px-4 py-3 overflow-auto text-text dark:text-text-dark text-xs leading-relaxed"
+      ></div>
+      <div
+        class="px-4 py-2 border-t border-border dark:border-border-dark flex justify-end text-[10px] text-muted dark:text-muted-dark"
+      >
+        <span>Press Esc to close</span>
+      </div>
+    </div>
+
     <!-- Units Settings Modal -->
     <div id="units-backdrop" class="fixed inset-0 bg-black/50 hidden z-40"></div>
     <div id="units-modal" class="fixed inset-0 hidden z-50 grid place-items-center p-4">
@@ -370,6 +424,136 @@
             ? 'dark'
             : 'light';
       }
+      // Inject app version (fallback to hardcoded package.json version if no build replacement)
+      (function setAppVersion() {
+        try {
+          const v = window.__APP_VERSION__ || '0.0.1';
+          const el = document.getElementById('app-version');
+          if (el) el.textContent = 'v' + v;
+        } catch {}
+      })();
+      // Changelog modal logic
+      function escapeHtml(s) {
+        return String(s).replace(
+          /[&<>"']/g,
+          (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m],
+        );
+      }
+      function mdToHtml(md) {
+        const lines = md.split(/\r?\n/);
+        let html = '',
+          listOpen = false;
+        for (const raw of lines) {
+          const line = raw.trimEnd();
+          if (!line) {
+            if (listOpen) {
+              html += '</ul>';
+              listOpen = false;
+            }
+            html += '';
+            continue;
+          }
+          if (line.startsWith('### ')) {
+            if (listOpen) {
+              html += '</ul>';
+              listOpen = false;
+            }
+            html += '<h3 class="mt-4 text-sm font-semibold">' + escapeHtml(line.slice(4)) + '</h3>';
+            continue;
+          }
+          if (line.startsWith('## ')) {
+            if (listOpen) {
+              html += '</ul>';
+              listOpen = false;
+            }
+            html +=
+              '<h2 class="mt-5 text-base font-semibold">' + escapeHtml(line.slice(3)) + '</h2>';
+            continue;
+          }
+          if (line.startsWith('# ')) {
+            if (listOpen) {
+              html += '</ul>';
+              listOpen = false;
+            }
+            html += '<h1 class="mt-5 text-lg font-bold">' + escapeHtml(line.slice(2)) + '</h1>';
+            continue;
+          }
+          if (line.startsWith('- ')) {
+            if (!listOpen) {
+              html += '<ul class="list-disc ml-5 mt-2 space-y-1">';
+              listOpen = true;
+            }
+            html += '<li class="text-xs">' + escapeHtml(line.slice(2)) + '</li>';
+            continue;
+          }
+          // paragraph
+          if (listOpen) {
+            html += '</ul>';
+            listOpen = false;
+          }
+          html += '<p class="text-xs leading-relaxed mt-2">' + escapeHtml(line) + '</p>';
+        }
+        if (listOpen) html += '</ul>';
+        return html;
+      }
+      function showChangelog() {
+        const backdrop = document.getElementById('changelog-backdrop');
+        const modal = document.getElementById('changelog-modal');
+        if (!backdrop || !modal) return;
+        backdrop.classList.remove('hidden');
+        modal.classList.remove('hidden');
+        // Load only once
+        const body = document.getElementById('changelog-body');
+        if (body && !body.dataset.loaded) {
+          const embed =
+            window.__CHANGELOG_MD__ && typeof window.__CHANGELOG_MD__ === 'string'
+              ? window.__CHANGELOG_MD__
+              : null;
+          const ghOwner = 'samuelduchesne';
+          const ghRepo = 'eplusout-dashboard';
+          const branch = 'main';
+          const ghUrl = `https://raw.githubusercontent.com/${ghOwner}/${ghRepo}/${branch}/CHANGELOG.md`;
+          const loadRemote = () =>
+            fetch(ghUrl, { cache: 'no-store' }).then((r) => (r.ok ? r.text() : Promise.reject()));
+          const loadLocal = () =>
+            fetch('CHANGELOG.md').then((r) => (r.ok ? r.text() : Promise.reject()));
+          const render = (txt) => {
+            body.innerHTML = mdToHtml(txt);
+            body.dataset.loaded = '1';
+          };
+          if (embed) {
+            render(embed);
+          } else {
+            loadRemote()
+              .catch(() =>
+                location.protocol === 'file:' ? Promise.reject('file-scheme') : loadLocal(),
+              )
+              .then(render)
+              .catch((err) => {
+                if (err === 'file-scheme') {
+                  body.innerHTML =
+                    '<p class="text-xs text-muted dark:text-muted-dark">Open via a local web server to auto-fetch the changelog (e.g. <code>python -m http.server</code>). Or ensure it is embedded at build.</p>';
+                } else {
+                  // final fallback: show minimal guidance
+                  body.innerHTML =
+                    '<p class="text-xs text-danger dark:text-danger-dark">Changelog unavailable.</p>';
+                }
+              });
+          }
+        }
+        modal.focus();
+      }
+      function hideChangelog() {
+        document.getElementById('changelog-backdrop')?.classList.add('hidden');
+        document.getElementById('changelog-modal')?.classList.add('hidden');
+      }
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') hideChangelog();
+      });
+      document.addEventListener('click', (e) => {
+        if (e.target.id === 'changelog-backdrop') hideChangelog();
+      });
+      document.getElementById('app-version')?.addEventListener('click', showChangelog);
       function applyTheme(t) {
         // Maintain legacy data-theme attribute (for remaining CSS variable usages)
         document.documentElement.setAttribute('data-theme', t);

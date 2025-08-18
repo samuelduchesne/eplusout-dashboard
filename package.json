@@ -4,9 +4,10 @@
   "version": "0.0.1",
   "scripts": {
     "format": "prettier --write index.html",
-    "tailwind": "tailwindcss -c tailwind.config.js -i ./src.css -o ./dist/tailwind.css --minify",
-    "dev:css": "tailwindcss -c tailwind.config.js -i ./src.css -o ./dist/tailwind.css --watch",
-    "build": "npm run tailwind"
+  "version:inject": "node scripts/gen-version.js",
+  "tailwind": "tailwindcss -c tailwind.config.js -i ./src.css -o ./dist/tailwind.css --minify",
+  "dev:css": "npm run version:inject && tailwindcss -c tailwind.config.js -i ./src.css -o ./dist/tailwind.css --watch",
+  "build": "npm run version:inject && npm run tailwind"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
