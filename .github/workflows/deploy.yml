@@ -27,8 +27,8 @@ jobs:
           cache: 'npm'
       - name: Install deps
         run: npm ci
-      - name: Build Tailwind CSS
-        run: npm run tailwind
+      - name: Build project (version + tailwind)
+        run: npm run build
       - name: Prepare artifact
         run: |
           mkdir public

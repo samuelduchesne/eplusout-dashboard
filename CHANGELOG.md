@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented here.
 
+## [0.1.1] - 2025-08-18
+
+_No user-facing changes (deployment-only adjustments)._ 
+
 ## [0.1.0] - 2025-08-18
 
 ### Added
