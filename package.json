@@ -1,7 +1,7 @@
 {
   "name": "eplusout-dashboard",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "scripts": {
     "format": "prettier --write index.html",
   "version:inject": "node scripts/gen-version.js",

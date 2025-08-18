@@ -59,8 +59,8 @@
           <label
             class="px-2.5 py-1.5 text-sm shrink-0 border rounded cursor-pointer bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
           >
-            <input id="file-input" type="file" accept=".sql,.sqlite,.db" class="hidden" />Open
-            eplusout.sql
+            <input id="file-input" type="file" accept=".sql,.sqlite,.db" class="hidden" />
+            Open eplusout.sql
           </label>
           <button
             id="btn-export"
@@ -246,6 +246,7 @@
                   Time Series
                 </button>
                 <button id="view-ldc" class="px-2 py-1 text-xs">Load Duration</button>
+                <button id="view-balance" class="px-2 py-1 text-xs">Load Balance</button>
               </div>
               <label class="ml-1 text-xs inline-flex items-center gap-1">
                 <input id="ldc-normalize" type="checkbox" class="align-middle" />
@@ -1026,6 +1027,8 @@
       WHERE ReportingFrequency IN ('Hourly','Monthly')
       ORDER BY IsMeter DESC, IndexGroup, Name, key;`;
         dict = toObjects(db.exec(sql));
+        // Invalidate load balance cache (new DB or changed dict)
+        __loadBalanceCache = null;
         return dict;
       }
       function queryTimeSeries(dictId) {
@@ -1105,6 +1108,10 @@
         '#d946ef', // chart-10
       ];
 
+      // Cache for load balance aggregated monthly category data (raw Joules)
+      // Invalidated whenever the dictionary is re-queried (new database loaded)
+      let __loadBalanceCache = null; // { monthLabels, catTotals, missing }
+
       let __rendering = false;
       function renderAll() {
         if (__rendering) return; // prevent re-entrant recursive calls
@@ -1149,6 +1156,26 @@
             } else {
               renderLDC(series);
             }
+          } else if (viewMode === 'balance') {
+            // Show loading state while load balance aggregates (can be heavy on first run)
+            const chartEl = $('chart');
+            if (chartEl) {
+              chartEl.innerHTML = `<div id='lb-loading' class='absolute inset-0 flex flex-col gap-3 items-center justify-center text-center bg-panel/40 dark:bg-panel-dark/40 backdrop-blur-sm'>
+  <div class='w-8 h-8 border-2 border-accent dark:border-accent-dark border-t-transparent rounded-full animate-spin' aria-hidden='true'></div>
+  <div class='text-[11px] px-3 py-1.5 rounded bg-panel-2 dark:bg-panel-2-dark border border-border dark:border-border-dark shadow-md text-muted dark:text-muted-dark' role='status' aria-live='polite'>Loading load balance…</div>
+</div>`;
+            }
+            // Allow at least one paint cycle before heavy work:
+            // rAF fires before paint, so a single rAF still blocks showing the spinner.
+            // Use setTimeout (or a double rAF) to yield so the spinner renders first.
+            requestAnimationFrame(() =>
+              setTimeout(() => {
+                renderLoadBalance(series).finally(() => {
+                  const l = document.getElementById('lb-loading');
+                  if (l && l.parentElement === chartEl) l.remove();
+                });
+              }, 0),
+            );
           } else {
             renderChart(series, { normalize: normalizeFlag });
             renderInsights(series);
@@ -2413,6 +2440,546 @@
         $('units').textContent = normalize ? '%' : convertUnitLabel(curves[0]?.meta?.Units || '');
       }
 
+      async function renderLoadBalance(series) {
+        await ensureD3();
+        const container = $('chart');
+        const hadLoading = !!document.getElementById('lb-loading');
+        // Required variable groups (any one of the alternatives in names[] will satisfy)
+        const IDF_LOAD_BALANCE_SNIPPET = `! Load Balance Required Outputs (Monthly variant)\nOutput:Variable,*,Zone Air System Sensible Heating Energy,Monthly;\nOutput:Variable,*,Zone Air System Sensible Cooling Energy,Monthly;\n! or (Ideal Loads)\n! Output:Variable,*,Zone Ideal Loads Supply Air Sensible Heating Energy,Monthly;\n! Output:Variable,*,Zone Ideal Loads Supply Air Sensible Cooling Energy,Monthly;\n\n! Internal Gains\nOutput:Variable,*,People Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Lights Total Heating Energy,Monthly;\nOutput:Variable,*,Electric Equipment Total Heating Energy,Monthly;\nOutput:Variable,*,Hot Water Equipment Total Heating Energy,Monthly;\n\n! Solar\nOutput:Variable,*,Zone Windows Total Transmitted Solar Radiation Energy,Monthly;\n\n! Infiltration / ventilation\nOutput:Variable,*,Zone Infiltration Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Zone Infiltration Sensible Heat Loss Energy,Monthly;\nOutput:Variable,*,Zone Ventilation Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Zone Ventilation Sensible Heat Loss Energy,Monthly;\n\n! Conduction & storage\nOutput:Variable,*,Surface Inside Face Conduction Heat Gain Energy,Monthly;\nOutput:Variable,*,Surface Inside Face Conduction Heat Loss Energy,Monthly;\nOutput:Variable,*,Surface Inside Face Conduction Heat Storage Energy,Monthly;\nOutput:Variable,*,Zone Air Heat Balance Air Energy Storage Energy,Monthly;`;
+        const CATS = [
+          {
+            id: 'heating',
+            label: 'Heating',
+            names: [
+              'Zone Air System Sensible Heating Energy',
+              'Zone Ideal Loads Supply Air Sensible Heating Energy',
+            ],
+            sign: +1,
+          },
+          {
+            id: 'cooling',
+            label: 'Cooling Needed',
+            names: [
+              'Zone Air System Sensible Cooling Energy',
+              'Zone Ideal Loads Supply Air Sensible Cooling Energy',
+            ],
+            sign: -1,
+          },
+          {
+            id: 'internal',
+            label: 'Internal Gains',
+            names: [
+              'People Sensible Heat Gain Energy',
+              'Lights Total Heating Energy',
+              'Electric Equipment Total Heating Energy',
+              'Hot Water Equipment Total Heating Energy',
+            ],
+            sign: +1,
+          },
+          {
+            id: 'solar',
+            label: 'Window Solar',
+            names: ['Zone Windows Total Transmitted Solar Radiation Energy'],
+            sign: +1,
+          },
+          {
+            id: 'inf_gain',
+            label: 'Infiltration Gain',
+            names: ['Zone Infiltration Sensible Heat Gain Energy'],
+            sign: +1,
+          },
+          {
+            id: 'inf_loss',
+            label: 'Infiltration Loss',
+            names: ['Zone Infiltration Sensible Heat Loss Energy'],
+            sign: -1,
+          },
+          {
+            id: 'vent_gain',
+            label: 'Ventilation Gain',
+            names: ['Zone Ventilation Sensible Heat Gain Energy'],
+            sign: +1,
+          },
+          {
+            id: 'vent_loss',
+            label: 'Ventilation Loss',
+            names: ['Zone Ventilation Sensible Heat Loss Energy'],
+            sign: -1,
+          },
+          {
+            id: 'cond_gain',
+            label: 'Window Conduction',
+            names: ['Surface Inside Face Conduction Heat Gain Energy'],
+            sign: +1,
+          },
+          {
+            id: 'cond_loss',
+            label: 'Wall Conduction',
+            names: ['Surface Inside Face Conduction Heat Loss Energy'],
+            sign: -1,
+          },
+          {
+            id: 'storage',
+            label: 'Air / Surface Storage',
+            names: [
+              'Surface Inside Face Conduction Heat Storage Energy',
+              'Zone Air Heat Balance Air Energy Storage Energy',
+            ],
+            sign: 0,
+          },
+        ];
+        if (!db || !dict) {
+          container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3'>Load a database first.</div>`;
+          return;
+        }
+        // Build index of dictionary names -> entries (Hourly or Monthly). Prefer Hourly if present.
+        const byName = dict
+          .filter((d) => d.freq === 'Hourly' || d.freq === 'Monthly')
+          .reduce((m, d) => {
+            (m[d.Name] ||= []).push(d);
+            return m;
+          }, {});
+        const missing = [];
+        // Helper to collect rows per category
+        function pad2(n) {
+          return String(n).padStart(2, '0');
+        }
+        // Map env-month -> category totals (in Joules, signed)
+        let monthLabelsLocal, catTotals;
+        if (__loadBalanceCache) {
+          ({ monthLabels: monthLabelsLocal, catTotals, missing } = __loadBalanceCache);
+        } else {
+          const monthKeys = new Set();
+          const catTotalsLocal = new Map();
+          CATS.forEach((c) => catTotalsLocal.set(c.id, new Map()));
+          // Pre-build filtered lists for each variable name (Hourly preferred) to avoid repeated some/filter operations inside loops
+          const nameToEntries = {};
+          for (const nm in byName) {
+            const arr = byName[nm];
+            if (!arr) continue;
+            nameToEntries[nm] = arr.some((e) => e.freq === 'Hourly')
+              ? arr.filter((e) => e.freq === 'Hourly')
+              : arr;
+          }
+          for (const cat of CATS) {
+            let anyFound = false;
+            for (const nm of cat.names) {
+              const entries = nameToEntries[nm];
+              if (!entries) continue;
+              anyFound = true;
+              for (let ei = 0; ei < entries.length; ei++) {
+                const entry = entries[ei];
+                const rows = queryTimeSeries(entry.id);
+                const mMap = catTotalsLocal.get(cat.id);
+                const sign = cat.sign;
+                const units = entry.Units;
+                for (let ri = 0; ri < rows.length; ri++) {
+                  const r = rows[ri];
+                  const label = `E${r.env}-M${pad2(r.month || 1)}`;
+                  monthKeys.add(label);
+                  let valJ = toJoules(Number(r.value), units) ?? Number(r.value);
+                  if (!isFinite(valJ)) continue;
+                  const applied = sign === 0 ? valJ : valJ * sign;
+                  mMap.set(label, (mMap.get(label) || 0) + applied);
+                }
+              }
+            }
+            if (!anyFound) missing.push(cat.label);
+          }
+          monthLabelsLocal = [...monthKeys].sort();
+          catTotals = catTotalsLocal;
+          __loadBalanceCache = { monthLabels: monthLabelsLocal, catTotals, missing: [...missing] };
+        }
+        const monthLabels = monthLabelsLocal;
+        if (monthLabels.length === 0) {
+          container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3 flex flex-col gap-2'>
+  <div class='flex items-start gap-2'>
+    <span>Required variables not present. Include these Monthly Output:Variable objects (or change Frequency to Hourly for higher fidelity).</span>
+    <button id='idf-copy-btn' class='shrink-0 p-1 rounded border border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark' title='Copy IDF snippet'>
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' class='w-4 h-4'>
+        <path stroke-linecap='round' stroke-linejoin='round' d='M8 16.5h8m-8-4h8m2 8H8.25A2.25 2.25 0 0 1 6 18.75V5.25A2.25 2.25 0 0 1 8.25 3H16.5L21 7.5v11.25A2.25 2.25 0 0 1 18.75 20.5z'/>
+        <path stroke-linecap='round' stroke-linejoin='round' d='M16.5 3v4.5H21'/>
+      </svg>
+    </button>
+  </div>
+  <pre id='idf-snippet' class='hidden whitespace-pre-wrap text-[10px] leading-snug bg-panel-2 dark:bg-panel-2-dark p-2 rounded border border-border dark:border-border-dark max-h-40 overflow-auto'></pre>
+  <button id='idf-toggle' class='self-start text-[10px] px-2 py-1 rounded border border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark'>Show IDF Snippet</button>
+</div>`;
+          // Attach copy / toggle handlers
+          setTimeout(() => {
+            const btn = $('idf-copy-btn');
+            const pre = $('idf-snippet');
+            const toggle = $('idf-toggle');
+            if (btn)
+              btn.addEventListener('click', () => {
+                navigator.clipboard
+                  .writeText(IDF_LOAD_BALANCE_SNIPPET)
+                  .then(() => {
+                    btn.classList.add('bg-accent', 'text-white', 'dark:bg-accent-dark');
+                    btn.title = 'Copied!';
+                    setTimeout(() => {
+                      btn.classList.remove('bg-accent', 'text-white', 'dark:bg-accent-dark');
+                      btn.title = 'Copy IDF snippet';
+                    }, 1400);
+                  })
+                  .catch(() => {});
+              });
+            if (toggle)
+              toggle.addEventListener('click', () => {
+                if (pre.classList.contains('hidden')) {
+                  pre.textContent = IDF_LOAD_BALANCE_SNIPPET;
+                  pre.classList.remove('hidden');
+                  toggle.textContent = 'Hide IDF Snippet';
+                } else {
+                  pre.classList.add('hidden');
+                  toggle.textContent = 'Show IDF Snippet';
+                }
+              });
+          }, 0);
+          return;
+        }
+        // Prepare stacked dataset; one pseudo series per category
+        const paletteLocal = palette; // reuse global palette
+        const catSeries = CATS.filter((c) => !missing.includes(c.label)).map((c, i) => ({
+          id: c.id,
+          meta: { Name: c.label, Units: 'J' },
+          color: paletteLocal[i % paletteLocal.length],
+          points: monthLabels.map((ml) => ({ xLabel: ml, y: catTotals.get(c.id).get(ml) || 0 })),
+        }));
+        // Convert to display units (using convertUnits on value in Joules)
+        catSeries.forEach((cs) => {
+          cs.points.forEach((p) => {
+            p.y = convertUnits(p.y, 'J');
+          });
+        });
+        const containerNote = missing.length
+          ? `<div class='text-xs text-warning dark:text-warning-dark mb-2'>Missing categories: ${missing.join(
+              ', ',
+            )}</div>`
+          : '';
+        // Continue with stacked positive/negative logic
+        const m = { top: 16, right: 24, bottom: 56, left: 64 };
+        // Measure before clearing so loading overlay (if present) contributes correct size
+        const rect = container.getBoundingClientRect();
+        if (!hadLoading) container.innerHTML = '';
+        const width = rect.width,
+          height = rect.height;
+        const w = width - m.left - m.right,
+          h = height - m.top - m.bottom;
+        const {
+          axis: axisColor,
+          grid: gridColor,
+          text: textColor,
+          border: borderColor,
+          tooltipBg,
+        } = chartColors();
+        function shortLabel(raw) {
+          const m = raw.match(/-M(\d{2})/i);
+          if (m) {
+            const idx = parseInt(m[1], 10);
+            return [
+              'Jan',
+              'Feb',
+              'Mar',
+              'Apr',
+              'May',
+              'Jun',
+              'Jul',
+              'Aug',
+              'Sep',
+              'Oct',
+              'Nov',
+              'Dec',
+            ][idx - 1];
+          }
+          return raw;
+        }
+        const monthData = monthLabels.map((ml) => {
+          const row = { label: ml };
+          catSeries.forEach((s) => {
+            row[s.id] = s.points.find((p) => p.xLabel === ml)?.y || 0;
+          });
+          return row;
+        });
+        const keys = catSeries.map((s) => s.id);
+        function stackFiltered(sign) {
+          const filtered = monthData.map((r) => {
+            const c = { label: r.label };
+            keys.forEach((k) => {
+              const v = r[k];
+              c[k] = sign * v > 0 ? v : 0;
+            });
+            return c;
+          });
+          return d3.stack().keys(keys)(filtered);
+        }
+        const posLayers = stackFiltered(1);
+        const negLayers = stackFiltered(-1);
+        const maxPos = d3.max(posLayers, (l) => d3.max(l, (d) => d[1])) || 0;
+        const maxNeg = d3.min(negLayers, (l) => d3.min(l, (d) => d[0])) || 0;
+        const y = d3.scaleLinear().domain([maxNeg, maxPos]).nice().range([h, 0]);
+        const x = d3.scaleBand().domain(monthLabels).range([0, w]).padding(0.15);
+        if (hadLoading) container.innerHTML = '';
+        const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
+        const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+        g.append('g')
+          .attr('class', 'grid')
+          .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(''))
+          .selectAll('line')
+          .attr('stroke', gridColor)
+          .attr('stroke-opacity', 0.35);
+        g.select('.grid').select('.domain').remove();
+        const gx = g
+          .append('g')
+          .attr('transform', `translate(0,${h})`)
+          .call(d3.axisBottom(x).tickFormat(shortLabel));
+        const gy = g.append('g').call(d3.axisLeft(y).ticks(6));
+        gx.selectAll('path,line').attr('stroke', axisColor);
+        gy.selectAll('path,line').attr('stroke', axisColor);
+        gx.selectAll('text').attr('fill', axisColor);
+        gy.selectAll('text').attr('fill', axisColor);
+        g.append('line')
+          .attr('x1', 0)
+          .attr('x2', w)
+          .attr('y1', y(0))
+          .attr('y2', y(0))
+          .attr('stroke', axisColor)
+          .attr('stroke-width', 1.2);
+        function drawLayers(layers) {
+          layers.forEach((layer) => {
+            const color = catSeries.find((s) => s.id === layer.key)?.color || '#999';
+            const grp = g.append('g').attr('fill', color);
+            grp
+              .selectAll('rect')
+              .data(layer)
+              .enter()
+              .append('rect')
+              .attr('x', (d) => x(d.data.label))
+              .attr('width', x.bandwidth())
+              .attr('y', (d) => y(Math.max(d[0], d[1])))
+              .attr('height', (d) => Math.abs(y(d[0]) - y(d[1])))
+              .append('title')
+              .text((d) => {
+                const cs = catSeries.find((s) => s.id === layer.key);
+                const val = d.data[layer.key];
+                return `${shortLabel(d.data.label)}\n${cs?.meta.Name}: ${fmt(
+                  val,
+                )} ${convertUnitLabel('J')}`;
+              });
+          });
+        }
+        drawLayers(posLayers);
+        drawLayers(negLayers);
+        // Interactive vertical guideline + percentage breakdown tooltip
+        let lbTooltip = d3.select(container).select('.lb-tooltip');
+        if (lbTooltip.empty()) {
+          lbTooltip = d3
+            .select(container)
+            .append('div')
+            .attr('class', 'lb-tooltip')
+            .style('position', 'absolute')
+            .style('pointer-events', 'none')
+            .style('background', tooltipBg)
+            .style('border', '1px solid ' + borderColor)
+            .style('color', textColor)
+            .style('padding', '6px 8px')
+            .style('border-radius', '6px')
+            .style('font-size', '12px')
+            .style('display', 'none');
+        }
+        const guide = g
+          .append('line')
+          .attr('class', 'lb-guide')
+          .attr('y1', 0)
+          .attr('y2', h)
+          .attr('stroke', axisColor)
+          .attr('stroke-width', 1)
+          .attr('stroke-dasharray', '3,3')
+          .style('display', 'none');
+        const overlay = g
+          .append('rect')
+          .attr('class', 'lb-overlay')
+          .attr('x', 0)
+          .attr('y', 0)
+          .attr('width', w)
+          .attr('height', h)
+          .attr('fill', 'transparent')
+          .style('cursor', 'crosshair')
+          .on('mousemove', function (ev) {
+            const [mx] = d3.pointer(ev, this);
+            // determine closest month band center
+            let closestLabel = null,
+              closestDist = Infinity,
+              cx = mx;
+            monthLabels.forEach((lbl) => {
+              const bx = x(lbl) + x.bandwidth() / 2;
+              const d = Math.abs(bx - mx);
+              if (d < closestDist) {
+                closestDist = d;
+                closestLabel = lbl;
+                cx = bx;
+              }
+            });
+            if (!closestLabel) {
+              lbTooltip.style('display', 'none');
+              guide.style('display', 'none');
+              return;
+            }
+            guide.style('display', 'block').attr('x1', cx).attr('x2', cx);
+            // collect active series (respect hidden toggles)
+            const active = catSeries.filter((s) => !s._hidden);
+            if (!active.length) {
+              lbTooltip.style('display', 'none');
+              return;
+            }
+            // values at this month
+            const vals = active.map((s) => ({
+              id: s.id,
+              name: s.meta.Name,
+              color: s.color,
+              v: s.points.find((p) => p.xLabel === closestLabel)?.y || 0,
+            }));
+            // Separate positive / negative totals (for meaningful % of each side)
+            const posTotal = d3.sum(
+              vals.filter((r) => r.v > 0),
+              (r) => r.v,
+            );
+            const negTotal = Math.abs(
+              d3.sum(
+                vals.filter((r) => r.v < 0),
+                (r) => r.v,
+              ),
+            );
+            // Build rows: show value + % of its sign group; also overall % of absolute sum
+            const absTotal = posTotal + negTotal;
+            const unitLabel = convertUnitLabel('J');
+            const rowsHtml = vals
+              .filter((r) => r.v !== 0)
+              .sort((a, b) => Math.abs(b.v) - Math.abs(a.v))
+              .map((r) => {
+                const base = r.v > 0 ? posTotal : negTotal;
+                const pctSide = base ? (Math.abs(r.v) / base) * 100 : 0;
+                const pctOverall = absTotal ? (Math.abs(r.v) / absTotal) * 100 : 0;
+                return `<div><span style="color:${r.color}">${escapeHtml(r.name)}</span> — ${fmt(
+                  r.v,
+                )} ${unitLabel} <span class='text-muted dark:text-muted-dark'>(${pctSide.toFixed(
+                  1,
+                )}% of ${r.v > 0 ? 'gains' : 'losses'}, ${pctOverall.toFixed(
+                  1,
+                )}% total)</span></div>`;
+              })
+              .join('');
+            lbTooltip
+              .style('display', 'block')
+              .style('left', m.left + cx + 12 + 'px')
+              .style('top', m.top + 8 + 'px')
+              .html(
+                `<div><strong>${shortLabel(closestLabel)}</strong></div>${
+                  rowsHtml || '<div class="text-muted dark:text-muted-dark">No values</div>'
+                }`,
+              );
+          })
+          .on('mouseleave', () => {
+            lbTooltip.style('display', 'none');
+            guide.style('display', 'none');
+          });
+        const leg = $('legend');
+        leg.innerHTML = '';
+        catSeries.forEach((s) => {
+          const btn = document.createElement('button');
+          btn.className =
+            'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors bg-panel-2 dark:bg-panel-2-dark';
+          btn.innerHTML = `<span style="display:inline-block;width:10px;height:10px;background:${
+            s.color
+          };border-radius:2px;margin-right:6px;vertical-align:middle"></span>${escapeHtml(
+            s.meta.Name,
+          )}`;
+          btn.onclick = () => {
+            // toggle
+            if (s._hidden) {
+              s._hidden = false;
+              btn.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+            } else {
+              s._hidden = true;
+              btn.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+            }
+            // Recompute stacks with hidden series filtered
+            const active = catSeries.filter((x) => !x._hidden);
+            const keysA = active.map((x) => x.id);
+            const monthDataA = monthLabels.map((ml) => {
+              const row = { label: ml };
+              active.forEach((a) => {
+                row[a.id] = a.points.find((p) => p.xLabel === ml)?.y || 0;
+              });
+              return row;
+            });
+            function stack(sign) {
+              const filtered = monthDataA.map((r) => {
+                const c = { label: r.label };
+                keysA.forEach((k) => {
+                  const v = r[k];
+                  c[k] = sign * v > 0 ? v : 0;
+                });
+                return c;
+              });
+              return d3.stack().keys(keysA)(filtered);
+            }
+            const pos = stack(1),
+              neg = stack(-1);
+            const maxP = d3.max(pos, (l) => d3.max(l, (d) => d[1])) || 0;
+            const maxN = d3.min(neg, (l) => d3.min(l, (d) => d[0])) || 0;
+            y.domain([maxN, maxP]).nice();
+            g.selectAll('.layer').remove();
+            function draw(layers) {
+              layers.forEach((layer) => {
+                const color2 = active.find((a) => a.id === layer.key)?.color || '#999';
+                const grp = g.append('g').attr('fill', color2).attr('class', 'layer');
+                grp
+                  .selectAll('rect')
+                  .data(layer)
+                  .enter()
+                  .append('rect')
+                  .attr('x', (d) => x(d.data.label))
+                  .attr('width', x.bandwidth())
+                  .attr('y', (d) => y(Math.max(d[0], d[1])))
+                  .attr('height', (d) => Math.abs(y(d[0]) - y(d[1])))
+                  .append('title')
+                  .text((d) => {
+                    const cs2 = active.find((a) => a.id === layer.key);
+                    const val = d.data[layer.key];
+                    return `${shortLabel(d.data.label)}\n${cs2?.meta.Name}: ${fmt(
+                      val,
+                    )} ${convertUnitLabel('J')}`;
+                  });
+              });
+            }
+            draw(pos);
+            draw(neg);
+            g.selectAll('g.grid')
+              .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(''))
+              .selectAll('line')
+              .attr('stroke', gridColor)
+              .attr('stroke-opacity', 0.35);
+            g.select('g.grid').select('.domain').remove();
+            gy.call(d3.axisLeft(y).ticks(6));
+            gy.selectAll('path,line').attr('stroke', axisColor);
+            gy.selectAll('text').attr('fill', axisColor);
+            // Hide tooltip/guide on restack to avoid stale position referencing removed bars
+            lbTooltip.style('display', 'none');
+            guide.style('display', 'none');
+          };
+          leg.appendChild(btn);
+        });
+        $('insights').innerHTML = `${
+          missing.length
+            ? '<span class="text-warning dark:text-warning-dark">Partial data; missing: ' +
+              missing.join(', ') +
+              '</span><br>'
+            : ''
+        }Load balance (aggregated from available Hourly/Monthly data)`;
+        $('units').textContent = convertUnitLabel('J');
+      }
+
       // Signals inputs
       ['search', 'filter-freq', 'filter-meter', 'filter-group', 'fav-only'].forEach((id) =>
         $(id).addEventListener('input', populateDictionaryList),
@@ -2571,11 +3138,13 @@
 
       const btnTime = $('view-time'),
         btnLdc = $('view-ldc'),
+        btnBalance = $('view-balance'),
         chkNorm = $('ldc-normalize');
       btnTime?.addEventListener('click', () => {
         viewMode = 'time';
         btnTime.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
         btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden'); // LDC view (no time zoom)
         renderAll();
       });
@@ -2583,6 +3152,15 @@
         viewMode = 'ldc';
         btnLdc.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
         btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        $('zoom-hint').classList.add('hidden');
+        renderAll();
+      });
+      btnBalance?.addEventListener('click', () => {
+        viewMode = 'balance';
+        btnBalance.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden');
         renderAll();
       });
