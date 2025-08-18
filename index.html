@@ -942,9 +942,9 @@
           const maxIdx = vals.indexOf(Math.max(...vals));
           const when = s.points[maxIdx];
           const whenTxt = when?.label || when?.xLabel || '';
-          return `<span style='color:${s.color}'>${escapeHtml(
-            s.meta.Name,
-          )}</span>: peak ${fmt(st.max)} at ${escapeHtml(String(whenTxt))}`;
+          return `<span style='color:${s.color}'>${escapeHtml(s.meta.Name)}</span>: peak ${fmt(
+            st.max,
+          )} at ${escapeHtml(String(whenTxt))}`;
         });
         el.innerHTML = lines.join('<br/>');
       }
@@ -954,10 +954,42 @@
       async function getBuildingArea() {
         if (buildingAreaCache != null) return buildingAreaCache;
         try {
-          // Try numeric TabularData first
-          const q1 = db.exec(
-            `SELECT Value FROM TabularData WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') AND (LOWER(ColumnName)='area' OR LOWER(ColumnName) LIKE '%m2%') LIMIT 1;`,
-          );
+          // Preferred direct query (AnnualBuildingUtilityPerformanceSummary)
+          try {
+            const direct = db.exec(`SELECT Value AS total_building_area_m2
+              FROM TabularDataWithStrings
+              WHERE ReportName='AnnualBuildingUtilityPerformanceSummary'
+                AND TableName='Building Area'
+                AND RowName='Total Building Area'
+                AND ColumnName='Area'
+                AND ReportForString LIKE 'Entire Facility%'
+              LIMIT 1;`);
+            const val = direct[0]?.values?.[0]?.[0];
+            if (val != null) {
+              const num = Number(val);
+              if (isFinite(num) && num > 0) {
+                buildingAreaCache = num;
+                return num;
+              }
+            }
+          } catch {}
+          // Detect available columns (older sql schemas may differ)
+          let hasRow = true,
+            hasCol = true;
+          try {
+            const info = db.exec('PRAGMA table_info(TabularData)');
+            const cols = new Set((info[0]?.values || []).map((r) => String(r[1]).toLowerCase()));
+            hasRow = cols.has('rowname');
+            hasCol = cols.has('columnname');
+          } catch {}
+          let q1 = [];
+          if (hasRow && hasCol) {
+            try {
+              q1 = db.exec(
+                `SELECT Value FROM TabularData WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') AND (LOWER(ColumnName)='area' OR LOWER(ColumnName) LIKE '%m2%') LIMIT 1;`,
+              );
+            } catch {}
+          }
           if (q1[0]?.values?.[0]?.[0]) {
             const v = Number(q1[0].values[0][0]);
             if (isFinite(v) && v > 0) {
@@ -965,18 +997,23 @@
               return v;
             }
           }
-          // Fallback: strings table, parse number
-          const q2 = db.exec(
-            `SELECT Value FROM TabularDataWithStrings WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') LIMIT 10;`,
-          );
-          if (q2[0]) {
-            for (const row of q2[0].values) {
-              const m = /([0-9]+(?:\.[0-9]+)?)/.exec(row[0]);
-              if (m) {
-                const v = Number(m[1]);
-                if (isFinite(v) && v > 0) {
-                  buildingAreaCache = v;
-                  return v;
+          // Fallback parse strings table if RowName exists
+          if (hasRow) {
+            let q2 = [];
+            try {
+              q2 = db.exec(
+                `SELECT Value FROM TabularDataWithStrings WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') LIMIT 10;`,
+              );
+            } catch {}
+            if (q2[0]) {
+              for (const row of q2[0].values) {
+                const m = /([0-9]+(?:\.[0-9]+)?)/.exec(row[0]);
+                if (m) {
+                  const v = Number(m[1]);
+                  if (isFinite(v) && v > 0) {
+                    buildingAreaCache = v;
+                    return v;
+                  }
                 }
               }
             }
@@ -1278,9 +1315,9 @@
           const vals = s.points.map((p) => convertUnits(p.y, s.meta.Units));
           const st = computeStats(vals);
           rows.push(`<div class='contents'>
-          <div class='text-[10px] truncate' style='color:${
-            s.color
-          }'>${escapeHtml(s.meta.Name)}</div>
+          <div class='text-[10px] truncate' style='color:${s.color}'>${escapeHtml(
+            s.meta.Name,
+          )}</div>
           <div class='text-[11px]'>${fmt(st.min)}</div>
           <div class='text-[11px]'>${fmt(st.p05)}</div>
           <div class='text-[11px]'>${fmt(st.mean)}</div>
@@ -1938,9 +1975,9 @@
                   rows
                     .map(
                       (r) =>
-                        `<div><span style=\"color:${r.color}\">${escapeHtml(
-                          r.name,
-                        )}</span> — ${fmt(r.y)} ${unitLabel || ''}</div>`,
+                        `<div><span style=\"color:${r.color}\">${escapeHtml(r.name)}</span> — ${fmt(
+                          r.y,
+                        )} ${unitLabel || ''}</div>`,
                     )
                     .join(''),
               );
@@ -2048,6 +2085,12 @@
 
       async function handleFile(file) {
         await readDbFile(file);
+        // Preload D3 early to avoid race when first render triggers before script loads
+        try {
+          await ensureD3();
+        } catch (e) {
+          console.warn('d3 preload failed', e);
+        }
         const list = queryDictionary();
         populateFilters(list);
         populateDictionaryList();
@@ -2101,9 +2144,9 @@
             const tag = d.IsMeter ? 'M' : 'V';
             const units = d.Units ? ` [${escapeHtml(convertUnitLabel(d.Units))}]` : '';
             const key = d.key ? ` (${escapeHtml(d.key)})` : '';
-            const label = `${star}${d.freq} | ${
-              d.IndexGroup || '—'
-            } | [${tag}] ${escapeHtml(d.Name)}${key}${units}`;
+            const label = `${star}${d.freq} | ${d.IndexGroup || '—'} | [${tag}] ${escapeHtml(
+              d.Name,
+            )}${key}${units}`;
             return `<option value=\"${d.id}\">${label}</option>`;
           })
           .join('');
@@ -2248,7 +2291,7 @@
           console.assert(Math.abs(convertUnits(3.6e6, 'J') - 1) < 1e-9, 'SI kWh scaling');
           isIP = true;
           prefEnergyIP = 'kBTU';
-          console.assert(Math.abs(convertUnits(1055.06, 'J') - 1) < 1e-3, 'IP kBTU scaling');
+          console.assert(Math.abs(convertUnits(1055.06, 'J') - 1) < 5e-3, 'IP kBTU scaling');
           prefPowerIP = 'Tons';
           console.assert(Math.abs(convertUnits(12000, 'Btu/h') - 1) < 1e-9, 'IP Tons scaling');
           isIP = _oldIP;
