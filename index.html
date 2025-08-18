@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EnergyPlus eplusout.sql — Offline Dashboard</title>
+  <script>try{var k='eplus_theme';var s=localStorage.getItem(k);var t=(s==='light'||s==='dark')?s:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{--bg:#ffffff;--panel:#ffffff;--panel-2:#f3f6fb;--text:#0b1220;--muted:#5b6b7f;--accent:#2563eb;--accent-strong:#1d4ed8;--accent-2:#16a34a;--danger:#dc2626;--border:#e2e8f0;--code:#eef2f7;--chart-grid:#e5e7eb;--chart-axis:#334155;--chart-line:#2563eb;--chart-bar:#16a34a;--chart-tooltip-bg:rgba(255,255,255,0.98)}
+    :root[data-theme="dark"]{--bg:#0f1418;--panel:#151a20;--panel-2:#0f141a;--text:#e6eef7;--muted:#9fb0c3;--accent:#5aa5ff;--accent-strong:#377df5;--accent-2:#7bd389;--danger:#ff6b6b;--border:#223042;--code:#0b0f14;--chart-grid:#2a384a;--chart-axis:#9fb0c3;--chart-line:#5aa5ff;--chart-bar:#7bd389;--chart-tooltip-bg:rgba(20,25,32,0.95)}
+    .icon-sun{display:none}.icon-moon{display:block}
+    :root[data-theme="light"] .icon-sun{display:block}
+    :root[data-theme="light"] .icon-moon{display:none}
+    :root[data-theme="light"] header{background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(246,249,255,.95))}
+    :root[data-theme="dark"] header{background:linear-gradient(180deg,rgba(18,24,33,.9),rgba(12,17,23,.9))}
+  </style>
+  <script>window.__LIB_URLS__={d3:"https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js",sqljs:"https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js",sqlwasm:"https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.wasm"};</script>
+</head>
+<body class="bg-[var(--bg)] text-[var(--text)] h-screen flex flex-col">
+  <header class="px-4 py-3 border-b border-[var(--border)] sticky top-0 z-10 backdrop-blur-sm">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div class="flex flex-col flex-1 min-w-0">
+        <h1 class="text-base font-semibold tracking-wide truncate">EnergyPlus eplusout.sql Dashboard</h1>
+        <span class="text-xs text-[var(--muted)]">Drop <span class="bg-[var(--code)] px-1 py-0.5 rounded">eplusout.sql</span> to explore variables & meters.</span>
+      </div>
+      <div class="flex flex-nowrap gap-2 overflow-x-auto items-center">
+        <label class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)] cursor-pointer">
+          <input id="file-input" type="file" accept=".sql,.sqlite,.db" class="hidden" />Open eplusout.sql
+        </label>
+        <button id="btn-export" type="button" disabled class="px-3 py-1.5 text-sm rounded-md bg-[var(--accent-strong)] text-white border border-[var(--accent-strong)] disabled:opacity-50 disabled:cursor-not-allowed">Export CSV</button>
+        <button id="btn-theme" type="button" aria-label="Toggle dark mode" title="Toggle dark mode" class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)]">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 pointer-events-none">
+            <g class="icon-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></g>
+            <g class="icon-moon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></g>
+          </svg>
+        </button>
+        <button id="btn-units" type="button" aria-label="Toggle units" title="Toggle SI/IP units" class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)]">SI</button>
+        <button id="btn-units-settings" type="button" aria-label="Unit settings" title="Unit settings" class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)]">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1 1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c0 .66.39 1.26 1 1.51.32.14.67.21 1.02.21H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-3 p-2 sm:p-3 flex-1 overflow-auto">
+    <section class="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--panel)] overflow-hidden min-h-0 order-1 lg:order-none">
+      <div class="flex justify-between items-center px-3 py-2 border-b border-[var(--border)] bg-[var(--panel-2)]">
+        <div class="flex items-center gap-2"><strong>Signals</strong><span id="meta-count" class="text-[var(--muted)]"></span></div>
+        <button id="btn-signals-collapse" type="button" class="px-2 py-1 text-xs border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)]" aria-expanded="true" aria-controls="signals-body">Hide</button>
+      </div>
+      <div id="signals-body" class="p-3 flex flex-col gap-2 overflow-auto">
+        <div id="drop" class="border-2 border-dashed border-[var(--border)] rounded p-3 text-center text-[var(--muted)] bg-[var(--panel)]">Drag & drop <span class="bg-[var(--code)] px-1 rounded">eplusout.sql</span> here</div>
+        <input type="text" id="search" placeholder="Search name/group/key/units…" disabled class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]" />
+        <label class="flex items-center gap-2 text-xs text-[var(--muted)] select-none"><input id="fav-only" type="checkbox" class="h-3.5 w-3.5"> <span>Favorites only (double‑click items to ★/☆)</span></label>
+        <div class="flex gap-2">
+          <select id="filter-freq" disabled class="flex-1 border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"><option value="">Any frequency</option><option value="Hourly">Hourly</option><option value="Monthly">Monthly</option></select>
+          <select id="filter-meter" disabled class="flex-1 border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"><option value="">Vars & Meters</option><option value="1">Meters only</option><option value="0">Variables only</option></select>
+        </div>
+        <select id="filter-group" disabled class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"><option value="">Any index group</option></select>
+        <select id="dictionary" size="12" multiple class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]" disabled></select>
+        <div class="text-xs text-[var(--muted)] mt-2">Tip: Choose an entry to plot. Hourly → line; Monthly → bars.</div>
+      </div>
+    </section>
+
+    <section class="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--panel)] overflow-hidden min-h-0 order-2 lg:order-none">
+      <div class="flex justify-between items-center px-3 py-2 border-b border-[var(--border)] bg-[var(--panel-2)]"><strong id="series-title">Series</strong><span id="units" class="text-[var(--muted)]"></span></div>
+      <div class="p-3 flex flex-col gap-3 overflow-auto">
+        <div id="series-meta" class="grid grid-cols-[auto_1fr] gap-x-2 text-xs text-[var(--muted)]"></div>
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <div class="inline-flex rounded border border-[var(--border)] overflow-hidden">
+              <button id="view-time" class="px-2 py-1 text-xs bg-[var(--panel-2)]">Time Series</button>
+              <button id="view-ldc" class="px-2 py-1 text-xs">Load Duration</button>
+            </div>
+            <label class="ml-1 text-xs inline-flex items-center gap-1">
+              <input id="ldc-normalize" type="checkbox" class="align-middle"> Normalize to peak
+            </label>
+          </div>
+          <div class="text-sm text-[var(--muted)]"><button id="view-zoom" class="px-2 py-1 border rounded">Enable Zoom</button></div>
+        </div>
+        <div id="zoom-hint" class="text-xs text-[var(--muted)] hidden">Drag on the mini-map to zoom. Double-tap to reset.</div>
+        <div id="legend" class="flex flex-wrap gap-2 items-center"></div>
+        <div id="insights" class="rounded-md border border-[var(--border)] bg-[var(--panel-2)] p-3 text-sm"></div>
+        <div id="chart" class="w-full h-[420px] max-[768px]:h-[300px] max-[480px]:h-[220px] relative"></div>
+        <div id="stats" class="grid grid-cols-8 gap-2"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Units Settings Modal -->
+  <div id="units-backdrop" class="fixed inset-0 bg-black/50 hidden z-40"></div>
+  <div id="units-modal" class="fixed inset-0 hidden z-50 grid place-items-center p-4">
+    <div class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-xl">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+        <h3 class="text-sm font-semibold">Unit Settings</h3>
+        <button id="units-close" class="p-1 rounded hover:bg-[var(--panel-2)]" aria-label="Close">✕</button>
+      </div>
+      <div class="p-4 grid gap-4 text-sm">
+        <div>
+          <div class="text-xs text-[var(--muted)] mb-1">SI (metric)</div>
+          <label class="block mb-1">Energy base unit</label>
+          <select id="sel-si-energy" class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]">
+            <option value="J">J</option>
+            <option value="kWh">kWh</option>
+            <option value="MWh">MWh</option>
+          </select>
+        </div>
+        <div>
+          <div class="text-xs text-[var(--muted)] mb-1">IP (US customary)</div>
+          <label class="block mb-1">Energy base unit</label>
+          <select id="sel-ip-energy" class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]">
+            <option value="BTU">BTU</option>
+            <option value="kBTU">kBTU</option>
+            <option value="MMBTU">MMBTU</option>
+          </select>
+        </div>
+        <div>
+          <label class="block mb-1">Power base unit (IP)</label>
+          <select id="sel-ip-power" class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]">
+            <option value="Btu/h">Btu/h</option>
+            <option value="Tons">Tons</option>
+          </select>
+          <div class="text-xs text-[var(--muted)] mt-1">1 Ton = 12,000 Btu/h</div>
+        </div>
+      </div>
+      <div class="px-4 py-3 border-t border-[var(--border)] flex justify-end gap-2">
+        <button id="units-save" class="px-3 py-1.5 text-sm rounded bg-[var(--accent-strong)] text-white">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const THEME_KEY='eplus_theme';
+    const UNITS_KEY='eplus_units_mode';
+    const FAVORITES_KEY='eplus_favs';
+    const SELECT_KEY='eplus_selected_ids';
+    const COLLAPSE_KEY='eplus_signals_collapsed';
+
+    function getPreferredTheme(){const s=localStorage.getItem(THEME_KEY);return s==='light'||s==='dark'?s:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}
+    function applyTheme(t){document.documentElement.setAttribute('data-theme',t);const b=document.getElementById('btn-theme');if(b){const lbl=t==='dark'?'Switch to light mode':'Switch to dark mode';b.title=lbl;b.setAttribute('aria-label',lbl)}}
+    function toggleTheme(){const cur=document.documentElement.getAttribute('data-theme')||'dark';const next=cur==='dark'?'light':'dark';applyTheme(next);localStorage.setItem(THEME_KEY,next);refreshChartTheme()}
+    document.getElementById('btn-theme').addEventListener('click',toggleTheme);
+    applyTheme(document.documentElement.getAttribute('data-theme')||getPreferredTheme());
+
+    function loadExternalScript(url){return new Promise((res,rej)=>{if(document.querySelector(`script[data-src="${url}"]`))return res();const s=document.createElement('script');s.dataset.src=url;s.src=url;s.async=true;s.onload=()=>res();s.onerror=()=>rej(new Error('Failed to load '+url));document.head.appendChild(s)})}
+    async function ensureD3(){if(!window.d3){const url=(window.__LIB_URLS__&&window.__LIB_URLS__.d3)||'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';await loadExternalScript(url)}}
+    let SQL; async function ensureSql(){ if(SQL) return SQL; if(typeof window.initSqlJs!=='function'){ const loader=(window.__LIB_URLS__&&window.__LIB_URLS__.sqljs)||'https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js'; await loadExternalScript(loader);} const cfg=window.__SQL_WASM_BASE64__?{locateFile:()=>'data:application/wasm;base64,'+window.__SQL_WASM_BASE64__}:{locateFile:()=> (window.__LIB_URLS__&&window.__LIB_URLS__.sqlwasm)||'https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.wasm'}; SQL=await window.initSqlJs(cfg); return SQL; }
+
+    const $=id=>document.getElementById(id); const cssVar=name=>getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    function toObjects(result){if(!result||!result[0])return[];const cols=result[0].columns;return result[0].values.map(row=>Object.fromEntries(row.map((v,i)=>[cols[i],v])))}
+    function quantile(sorted,p){if(!sorted.length)return NaN;const idx=(sorted.length-1)*p;const lo=Math.floor(idx),hi=Math.ceil(idx);if(lo===hi)return sorted[lo];return sorted[lo]+(sorted[hi]-sorted[lo])*(idx-lo)}
+    function computeStats(values){const n=values.length;if(!n)return{count:0};let sum=0,min=Infinity,max=-Infinity;for(const v of values){sum+=v;if(v<min)min=v;if(v>max)max=v}const mean=sum/n;const s=[...values].sort((a,b)=>a-b);return{count:n,sum,min,p05:quantile(s,0.05),mean,median:quantile(s,0.5),p95:quantile(s,0.95),max}}
+    function fmt(n){if(n==null||isNaN(n))return'—';const a=Math.abs(n);if(a>=1e6)return(n/1e6).toFixed(2)+'M';if(a>=1e3)return(n/1e3).toFixed(2)+'k';if(a===0||a>=1)return n.toFixed(2);return n.toPrecision(3)}
+    function downloadFile(name,text){const blob=new Blob([text],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();URL.revokeObjectURL(a.href);a.remove()}
+
+    let db,dict=[],selected=new Map();
+    let favs=new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY)||'[]'));
+    let zoomEnabled=false;
+    let baseFreq=null;
+    let viewMode='time';
+
+    let isIP = localStorage.getItem(UNITS_KEY)==='IP' ? true : false;
+    const btnUnits=$('btn-units'); if(btnUnits){btnUnits.textContent=isIP?'IP':'SI'; btnUnits.addEventListener('click',()=>{ isIP=!isIP; btnUnits.textContent=isIP?'IP':'SI'; localStorage.setItem(UNITS_KEY, isIP?'IP':'SI'); renderAll();});}
+
+    // Units preferences + modal wiring
+    const ENERGY_SI_KEY='eplus_energy_unit_si';
+    const ENERGY_IP_KEY='eplus_energy_unit_ip';
+    const POWER_IP_KEY='eplus_power_unit_ip';
+    let prefEnergySI = localStorage.getItem(ENERGY_SI_KEY) || 'J';
+    let prefEnergyIP = localStorage.getItem(ENERGY_IP_KEY) || 'BTU';
+    let prefPowerIP  = localStorage.getItem(POWER_IP_KEY)  || 'Btu/h';
+
+    const btnUnitsSettings=$('btn-units-settings');
+    const unitsModal=$('units-modal');
+    const unitsBackdrop=$('units-backdrop');
+    const unitsClose=$('units-close');
+    const unitsSave=$('units-save');
+    const selSiEnergy=$('sel-si-energy');
+    const selIpEnergy=$('sel-ip-energy');
+    const selIpPower=$('sel-ip-power');
+
+    function showUnits(){ selSiEnergy.value=prefEnergySI; selIpEnergy.value=prefEnergyIP; selIpPower.value=prefPowerIP; unitsModal.classList.remove('hidden'); unitsBackdrop.classList.remove('hidden'); }
+    function hideUnits(){ unitsModal.classList.add('hidden'); unitsBackdrop.classList.add('hidden'); }
+    btnUnitsSettings?.addEventListener('click',showUnits);
+    unitsClose?.addEventListener('click',hideUnits);
+    unitsBackdrop?.addEventListener('click',hideUnits);
+    unitsSave?.addEventListener('click',()=>{ prefEnergySI=selSiEnergy.value; prefEnergyIP=selIpEnergy.value; prefPowerIP=selIpPower.value; localStorage.setItem(ENERGY_SI_KEY,prefEnergySI); localStorage.setItem(ENERGY_IP_KEY,prefEnergyIP); localStorage.setItem(POWER_IP_KEY,prefPowerIP); hideUnits(); renderAll(); });
+
+    function unitKind(units){ if(!units) return 'other'; const u=String(units).toLowerCase(); if(u.includes('wh')||u.includes('joule')||u==='j'||u.includes('kwh')||u.includes('mwh')) return 'energy'; if(u.includes('btu/h')||u.includes('btuh')||(/\bw(?!h)\b/.test(u))||u.includes('watt')||u.includes('ton')) return 'power'; return 'other'; }
+    function toJoules(value, units){ const u=String(units||'').toLowerCase(); if(u.includes('mwh')) return value*3.6e9; if(u.includes('kwh')) return value*3.6e6; if(u.includes('wh')) return value*3600; if(u.includes('joule')||u==='j') return value; return null; }
+
+    const __orig_convertUnits = (typeof convertUnits==='function')?convertUnits:(v)=>v;
+    const __orig_convertUnitLabel = (typeof convertUnitLabel==='function')?convertUnitLabel:(u)=>u||'';
+
+    function convertUnits(value,units){ if(value==null||!isFinite(value)) return value; if(!units) return value; const kind=unitKind(units);
+      if(isIP){ const u=String(units).toLowerCase(); if(u==='c'||u.includes('celsius')) return value*9/5+32; if(kind==='energy'){ let J=toJoules(value,units); if(J==null) J=value; let btu=J/1055.06; if(prefEnergyIP==='kBTU') return btu/1e3; if(prefEnergyIP==='MMBTU') return btu/1e6; return btu; } if(kind==='power'){ let v=value; const ul=String(units).toLowerCase(); if(ul.includes('w')&&!ul.includes('wh')) v=value*3.412141633; if(prefPowerIP==='Tons') return v/12000; return v; } return __orig_convertUnits(value,units); }
+      else { if(kind==='energy'){ let J=toJoules(value,units); if(J==null) J=value; if(prefEnergySI==='kWh') return J/3.6e6; if(prefEnergySI==='MWh') return J/3.6e9; return J; } return __orig_convertUnits(value,units); }
+    }
+    function convertUnitLabel(units){ if(!units) return units||''; const kind=unitKind(units); if(isIP){ const u=String(units).toLowerCase(); if(u==='c'||u.includes('celsius')) return 'F'; if(kind==='energy') return prefEnergyIP; if(kind==='power') return prefPowerIP==='Tons'?'tons':'Btu/h'; return __orig_convertUnitLabel(units); } else { if(kind==='energy') return prefEnergySI; return __orig_convertUnitLabel(units); } }
+
+    function refreshChartTheme(){if(selected.size===0)return;renderAll()}
+    async function readDbFile(file){const SQLMod=await ensureSql();const u8=new Uint8Array(await file.arrayBuffer());db=new SQLMod.Database(u8);return db}
+    function queryDictionary(){const sql=`
+      SELECT ReportDataDictionaryIndex AS id, IsMeter, Type, IndexGroup, KeyValue AS key,
+             Name, ReportingFrequency AS freq, Units
+      FROM ReportDataDictionary
+      WHERE ReportingFrequency IN ('Hourly','Monthly')
+      ORDER BY IsMeter DESC, IndexGroup, Name, key;`; dict=toObjects(db.exec(sql)); return dict}
+    function queryTimeSeries(dictId){const stmt=db.prepare(`
+      SELECT rd.Value AS value, t.EnvironmentPeriodIndex AS env, t.SimulationDays AS sday,
+             t.Month AS month, t.Day AS day, t.Hour AS hour, t.Minute AS minute,
+             t.IntervalType AS interval, t.TimeIndex AS tindex
+      FROM ReportData rd JOIN Time t ON t.TimeIndex = rd.TimeIndex
+      WHERE rd.ReportDataDictionaryIndex = ?
+      ORDER BY t.TimeIndex;`); stmt.bind([dictId]); const rows=[]; while(stmt.step()) rows.push(stmt.getAsObject()); stmt.free(); return rows }
+
+    function timeLabel(r){const hh=String(r.hour??0).padStart(2,'0');const mm=String(r.minute??0).padStart(2,'0');const md=`${String(r.month||1).padStart(2,'0')}/${String(r.day||1).padStart(2,'0')}`;return`Env ${r.env} — ${md} ${hh}:${mm}`}
+    function toHourlyPoints(rows){const year=2000;return rows.map(r=>({x:Date.UTC(year+(r.env||0)-1,(r.month||1)-1,r.day||1,r.hour||0,r.minute||0),y:Number(r.value),label:timeLabel(r)}))}
+    function toMonthlyPoints(rows){return rows.map(r=>({xLabel:`E${r.env}-M${String(r.month||1).padStart(2,'0')}`,y:Number(r.value)}))}
+
+    function exportCSV(seriesMap){ const header=baseFreq==='Hourly'?['datetime_utc','value','series_id']:['label','value','series_id']; const rows=[header.join(',')]; seriesMap.forEach((v,id)=>{const series=v.points; const units=v.meta.Units||''; for(const d of series){ const val=convertUnits(d.y,units); const x=Number.isFinite(d.x)?new Date(d.x).toISOString():(d.xLabel||''); rows.push(`${JSON.stringify(x)},${val},${id}`)} }); return rows.join('\n') }
+
+    const palette=['#2563eb','#7c3aed','#16a34a','#ef4444','#f59e0b','#06b6d4','#d946ef','#10b981','#e11d48','#3b82f6'];
+
+    function renderAll(){
+      const metaEl=$('series-meta'); const unitsEl=$('units'); const titleEl=$('series-title');
+      const metas=[...selected.values()].map(v=>v.meta);
+      titleEl.textContent=metas.length?`${baseFreq} • ${metas.length} series`:'Series';
+      const consistentUnits = metas.every(m=>m.Units===metas[0]?.Units);
+      unitsEl.textContent= metas.length ? (consistentUnits? convertUnitLabel(metas[0]?.Units||'') : '(mixed units)') : '';
+      metaEl.innerHTML=metas.map(m=>`<span class='text-[var(--muted)]'>${m.IsMeter?'Meter':'Variable'}:</span><span>${escapeHtml(m.Name)}${m.key?` (${escapeHtml(m.key)})`:''}</span>`).join('');
+      const visibleEntries=[...selected.entries()].filter(([,v])=>v.visible!==false);
+      const series=visibleEntries.map(([id,v],i)=>({id,meta:v.meta,color:palette[i%palette.length],points:v.points,visible:v.visible!==false}));
+      if(viewMode==='ldc'){
+        if(baseFreq!=='Hourly'){
+          $('legend').innerHTML=''; $('chart').innerHTML=''; $('insights').innerHTML='Load duration curves require Hourly data.'; $('units').textContent='(n/a)';
+        } else {
+          renderLDC(series);
+        }
+      } else {
+        renderChart(series);
+        renderInsights(series);
+      }
+      const has=selected.size>0; const b=$('btn-export'); if(b) b.disabled=!has;
+    }
+
+    async function handleSelectionChange(){
+      const selEl=$('dictionary'); const chosen=[...selEl.selectedOptions].map(o=>Number(o.value));
+      localStorage.setItem(SELECT_KEY, JSON.stringify(chosen));
+      if(chosen.length===0){selected.clear(); baseFreq=null; renderAll(); return}
+      const first=dict.find(d=>d.id===chosen[0]); baseFreq=first?.freq||'Hourly';
+      for(const id of chosen){
+        const meta=dict.find(d=>d.id===id);
+        if(!meta||meta.freq!==baseFreq) continue;
+        if(!selected.has(id)){
+          const rows=queryTimeSeries(id);
+          const pts=baseFreq==='Hourly'?toHourlyPoints(rows):toMonthlyPoints(rows);
+          selected.set(id,{meta,points:pts,visible:true});
+        }
+      }
+      for(const id of [...selected.keys()]){ if(!chosen.includes(id)) selected.delete(id); }
+      renderAll();
+    }
+
+    function renderInsights(series){
+      const el=$('insights'); if(series.length===0){el.textContent=''; return}
+      const lines=series.map(s=>{const vals=s.points.map(p=>convertUnits(p.y,s.meta.Units)); const st=computeStats(vals); const maxIdx=vals.indexOf(Math.max(...vals)); const when=s.points[maxIdx]; const whenTxt= when?.label || (when?.xLabel||''); return `<span style='color:${s.color}'>${escapeHtml(s.meta.Name)}</span>: peak ${fmt(st.max)} at ${escapeHtml(String(whenTxt))}`;});
+      el.innerHTML=lines.join('<br/>');
+    }
+
+    async function renderChart(series){
+      await ensureD3(); const container=$('chart'); container.innerHTML='';
+      const rect=container.getBoundingClientRect(); const width=rect.width,height=rect.height;
+      const m={top:16,right:24,bottom:baseFreq==='Hourly'?56:36,left:56}; const w=width-m.left-m.right,h=height-m.top-m.bottom;
+      const axisColor=cssVar('--chart-axis'), gridColor=cssVar('--chart-grid'), tooltipBg=cssVar('--chart-tooltip-bg'), textColor=cssVar('--text'), borderColor=cssVar('--border');
+      const svg=d3.select(container).append('svg').attr('width',width).attr('height',height);
+      const g=svg.append('g').attr('transform',`translate(${m.left},${m.top})`);
+
+      const allY=series.flatMap(s=>s.points.map(p=>convertUnits(p.y,s.meta.Units)));
+      const y=d3.scaleLinear().domain([Math.min(0,d3.min(allY)), d3.max(allY)]).nice().range([h,0]);
+      g.append('g').attr('class','grid').call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat('')).selectAll('line').attr('stroke',gridColor).attr('stroke-opacity',0.35);
+      g.select('.grid').select('.domain').remove();
+
+      if(baseFreq==='Hourly'){
+        const x=d3.scaleUtc().domain(d3.extent(series.flatMap(s=>s.points.map(p=>p.x)))).range([0,w]);
+        const gx=g.append('g').attr('transform',`translate(0,${h})`).call(d3.axisBottom(x).ticks(6)); const gy=g.append('g').call(d3.axisLeft(y).ticks(6));
+        gx.selectAll('path,line').attr('stroke',axisColor); gy.selectAll('path,line').attr('stroke',axisColor); gx.selectAll('text').attr('fill',axisColor); gy.selectAll('text').attr('fill',axisColor);
+        for(const s of series){ const line=d3.line().x(d=>x(d.x)).y(d=>y(convertUnits(d.y,s.meta.Units))); g.append('path').datum(s.points).attr('fill','none').attr('stroke-width',1.8).attr('stroke',s.color).attr('class','series').attr('d',line) }
+        if(zoomEnabled){ const brush=d3.brushX().extent([[0, h-24],[w, h]]).on('end', (event)=>{const sel=event.selection; if(!sel){x.domain(d3.extent(series.flatMap(s=>s.points.map(p=>p.x))));} else {x.domain(sel.map(x.invert));} redraw();}); g.append('g').attr('class','brush').call(brush); $('zoom-hint').classList.remove('hidden'); } else { $('zoom-hint').classList.add('hidden'); }
+        function redraw(){ gx.call(d3.axisBottom(x).ticks(6)); gx.selectAll('path,line').attr('stroke',axisColor); gx.selectAll('text').attr('fill',axisColor); g.selectAll('path.series').remove(); for(const s of series){ g.append('path').datum(s.points).attr('class','series').attr('fill','none').attr('stroke-width',1.8).attr('stroke',s.color).attr('d',d3.line().x(p=>x(p.x)).y(p=>y(convertUnits(p.y,s.meta.Units)))); } }
+        redraw(); svg.on('dblclick',()=>{x.domain(d3.extent(series.flatMap(s=>s.points.map(p=>p.x)))); redraw();});
+        const tooltip=d3.select(container).append('div').style('position','absolute').style('pointer-events','none').style('background',tooltipBg).style('border','1px solid '+borderColor).style('color',textColor).style('padding','6px 8px').style('border-radius','6px').style('font-size','12px').style('display','none');
+        const allPts=series.flatMap(s=>s.points.map(p=>({x:p.x, y:convertUnits(p.y,s.meta.Units), label:p.label, color:s.color, name:s.meta.Name, units:convertUnitLabel(s.meta.Units)})) ).sort((a,b)=>a.x-b.x);
+        const bisect=d3.bisector(d=>d.x).left; svg.on('mousemove', (event)=>{ const [mx]=d3.pointer(event,g.node()); const x0=x.invert(mx); const i=Math.min(allPts.length-1,Math.max(0,bisect(allPts,x0))); const d=allPts[i]; tooltip.style('display','block').style('left',(event.offsetX+12)+'px').style('top',(event.offsetY-24)+'px').html(`<div><strong>${d.label}</strong></div><div><span style='color:${d.color}'>${d.name}</span> — ${fmt(d.y)} ${d.units||''}</div>`); }).on('mouseleave',()=>tooltip.style('display','none'));
+      } else {
+        const x=d3.scaleBand().domain(series[0]?.points.map(p=>p.xLabel)||[]).range([0,w]).padding(0.2);
+        const x1=d3.scaleBand().domain(series.map(s=>String(s.id))).range([0,x.bandwidth()]).padding(0.05);
+        const gx=g.append('g').attr('transform',`translate(0,${h})`).call(d3.axisBottom(x)); const gy=g.append('g').call(d3.axisLeft(y).ticks(6));
+        gx.selectAll('path,line').attr('stroke',axisColor); gy.selectAll('path,line').attr('stroke',axisColor); gx.selectAll('text').attr('fill',axisColor).style('text-anchor','end').attr('transform','rotate(-30)'); gy.selectAll('text').attr('fill',axisColor);
+        series.forEach(s=>{ g.selectAll(`rect.bar-${s.id}`).data(s.points).enter().append('rect').attr('x',d=>x(d.xLabel)+x1(String(s.id))).attr('y',d=>y(convertUnits(d.y,s.meta.Units))).attr('width',x1.bandwidth()).attr('height',d=>h-y(convertUnits(d.y,s.meta.Units))).attr('fill',s.color); });
+      }
+      const leg=$('legend'); leg.innerHTML='';
+      series.forEach(s=>{const item=document.createElement('button'); item.className='text-xs px-2 py-1 rounded border'; item.style.borderColor=cssVar('--border'); item.style.background=s.visible===false?'transparent':'var(--panel-2)'; item.innerHTML=`<span style="display:inline-block;width:10px;height:10px;background:${s.color};border-radius:2px;margin-right:6px;vertical-align:middle"></span>${s.meta.Name}`; item.onclick=()=>{const v=selected.get(s.id); v.visible=!v.visible; selected.set(s.id,v); renderAll();}; leg.appendChild(item);});
+    }
+
+    function toLDC(points, units, normalize){
+      const vals = points.map(p=>convertUnits(p.y, units)).filter(v=>Number.isFinite(v));
+      if(!vals.length) return [];
+      vals.sort((a,b)=>b-a);
+      const peak=vals[0]; const n=vals.length;
+      return vals.map((v,i)=>({ x: (n>1? (i/(n-1))*100 : 0), y: normalize? (v/peak)*100 : v }));
+    }
+
+    async function renderLDC(series){
+      await ensureD3(); const container=$('chart'); container.innerHTML='';
+      const rect=container.getBoundingClientRect(); const width=rect.width, height=rect.height;
+      const m={top:16,right:24,bottom:40,left:56}, w=width-m.left-m.right, h=height-m.top-m.bottom;
+      const axisColor=cssVar('--chart-axis'), gridColor=cssVar('--chart-grid');
+      const normalize = $('ldc-normalize')?.checked === true;
+
+      const curves = series.map(s=>({ ...s, points: toLDC(s.points, s.meta.Units, normalize) })).filter(c=>c.points.length);
+      if(!curves.length){ $('insights').textContent='No data available for LDC.'; return; }
+
+      const yMax = d3.max(curves.flatMap(c=>c.points.map(p=>p.y)));
+      const x=d3.scaleLinear().domain([0,100]).range([0,w]);
+      const y=d3.scaleLinear().domain([0,yMax]).nice().range([h,0]);
+
+      const svg=d3.select(container).append('svg').attr('width',width).attr('height',height);
+      const g=svg.append('g').attr('transform',`translate(${m.left},${m.top})`);
+
+      g.append('g').attr('class','grid')
+        .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(''))
+        .selectAll('line').attr('stroke',gridColor).attr('stroke-opacity',0.35);
+      g.select('.grid').select('.domain').remove();
+
+      const gx=g.append('g').attr('transform',`translate(0,${h})`).call(d3.axisBottom(x).ticks(6).tickFormat(d=>d+'%'));
+      const gy=g.append('g').call(d3.axisLeft(y).ticks(6));
+      gx.selectAll('path,line').attr('stroke',axisColor); gy.selectAll('path,line').attr('stroke',axisColor);
+      gx.selectAll('text').attr('fill',axisColor); gy.selectAll('text').attr('fill',axisColor);
+
+      const line=d3.line().x(d=>x(d.x)).y(d=>y(d.y));
+      curves.forEach(c=>{ g.append('path').datum(c.points).attr('fill','none').attr('stroke',c.color).attr('stroke-width',1.8).attr('d',line); });
+
+      [10,50,90].forEach(p=>{ const xx=x(p); g.append('line').attr('x1',xx).attr('x2',xx).attr('y1',0).attr('y2',h).attr('stroke',axisColor).attr('stroke-dasharray','2,3').attr('opacity',0.6); });
+
+      const textColor=cssVar('--text'), borderColor=cssVar('--border'), tooltipBg=cssVar('--chart-tooltip-bg');
+      const tooltip=d3.select(container).append('div').style('position','absolute').style('pointer-events','none')
+        .style('background',tooltipBg).style('border','1px solid '+borderColor).style('color',textColor)
+        .style('padding','6px 8px').style('border-radius','6px').style('font-size','12px').style('display','none');
+
+      svg.on('mousemove',(event)=>{
+        const [mx]=d3.pointer(event,g.node()); const px=Math.max(0,Math.min(100,x.invert(mx)));
+        const rows=curves.map(c=>{ const a=c.points; if(!a.length) return null; let i=Math.floor((px/100)*(a.length-1)); i=Math.max(0,Math.min(a.length-1,i)); return {name:c.meta.Name,color:c.color,y:a[i].y}; }).filter(Boolean).sort((a,b)=>b.y-a.y);
+        const unitLabel = normalize ? '%' : convertUnitLabel(curves[0].meta.Units);
+        tooltip.style('display','block').style('left',(event.offsetX+12)+'px').style('top',(event.offsetY-24)+'px')
+          .html(`<div><strong>P${px.toFixed(0)}</strong></div>` + rows.map(r=>`<div><span style=\"color:${r.color}\">${escapeHtml(r.name)}</span> — ${fmt(r.y)} ${unitLabel||''}</div>`).join(''));
+      }).on('mouseleave',()=>tooltip.style('display','none'));
+
+      const leg=$('legend'); leg.innerHTML='';
+      curves.forEach(s=>{ const item=document.createElement('button'); item.className='text-xs px-2 py-1 rounded border'; item.style.borderColor=cssVar('--border'); item.style.background=s.visible===false?'transparent':'var(--panel-2)'; item.innerHTML=`<span style=\"display:inline-block;width:10px;height:10px;background:${s.color};border-radius:2px;margin-right:6px;vertical-align:middle\"></span>${s.meta.Name}`; item.onclick=()=>{ const v=selected.get(s.id); v.visible=!v.visible; selected.set(s.id,v); renderAll(); }; leg.appendChild(item); });
+
+      const el=$('insights'); const lbl= normalize? '(normalized to each series peak)':''; el.innerHTML=`Load duration curve ${lbl}`;
+      $('units').textContent = normalize ? '%' : convertUnitLabel(curves[0]?.meta?.Units || '');
+    }
+
+    // Signals inputs
+    ['search','filter-freq','filter-meter','filter-group','fav-only'].forEach(id=>$(id).addEventListener('input',populateDictionaryList));
+
+    $('file-input').addEventListener('change',async e=>{const f=e.target.files[0];if(f)await handleFile(f)});
+
+    function enableDropZone(el){ if(!el) return; const highlight=()=> el.classList.add('ring-2','ring-[var(--accent)]','ring-offset-2','ring-offset-[var(--panel)]'); const unhighlight=()=> el.classList.remove('ring-2','ring-[var(--accent)]','ring-offset-2','ring-offset-[var(--panel)]'); ['dragenter','dragover'].forEach(evt=> el.addEventListener(evt,(e)=>{e.preventDefault();e.stopPropagation();highlight();})); ['dragleave','drop'].forEach(evt=> el.addEventListener(evt,(e)=>{e.preventDefault();e.stopPropagation();unhighlight();})); el.addEventListener('drop', async (e)=>{const f=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(f){await handleFile(f);}}); el.addEventListener('click',()=>{const fi=$('file-input'); if(fi) fi.click();}); }
+    enableDropZone($('drop'));
+
+    $('btn-signals-collapse').addEventListener('click',()=>{ const body=$('signals-body'); const btn=$('btn-signals-collapse'); const hidden=body.classList.toggle('hidden'); btn.setAttribute('aria-expanded', String(!hidden)); btn.textContent= hidden ? 'Show' : 'Hide'; localStorage.setItem(COLLAPSE_KEY, hidden?'1':'0'); });
+    (function restoreSignalsCollapse(){ const v=localStorage.getItem(COLLAPSE_KEY); const body=$('signals-body'); const btn=$('btn-signals-collapse'); if(v==='1'){body.classList.add('hidden'); btn.setAttribute('aria-expanded','false'); btn.textContent='Show';} else {body.classList.remove('hidden'); btn.setAttribute('aria-expanded','true'); btn.textContent='Hide';} })();
+
+    async function handleFile(file){await readDbFile(file);const list=queryDictionary();populateFilters(list);populateDictionaryList(); restoreSelection();}
+    function populateFilters(list){const groups=Array.from(new Set(list.map(d=>d.IndexGroup).filter(Boolean))).sort();const gSel=$('filter-group');gSel.innerHTML=`<option value=\"\">Any index group</option>`+groups.map(g=>`<option>${escapeHtml(g)}</option>`).join('');['search','filter-freq','filter-meter','filter-group','dictionary','fav-only'].forEach(id=>$(id).disabled=false);$('meta-count').textContent=`${list.length} entries`}
+    function populateDictionaryList(){ const q=$('search').value.trim().toLowerCase(); const fFreq=$('filter-freq').value; const fMeter=$('filter-meter').value; const fGroup=$('filter-group').value; const onlyFav=$('fav-only')?.checked; const filtered=dict.filter(d=>{ if(fFreq&&d.freq!==fFreq) return false; if(fMeter!==''&&String(d.IsMeter)!==fMeter) return false; if(fGroup&&d.IndexGroup!==fGroup) return false; if(onlyFav && !favs.has(d.id)) return false; const hay=`${d.Name} ${d.IndexGroup||''} ${d.key||''} ${d.Units||''}`.toLowerCase(); return !q||hay.includes(q)}); const sel=$('dictionary'); sel.innerHTML=filtered.map(d=>{ const star=favs.has(d.id)?'★ ':''; const tag=d.IsMeter?'M':'V'; const units=d.Units?` [${escapeHtml(convertUnitLabel(d.Units))}]`:''; const key=d.key?` (${escapeHtml(d.key)})`:''; const label=`${star}${d.freq} | ${d.IndexGroup||'—'} | [${tag}] ${escapeHtml(d.Name)}${key}${units}`; return`<option value=\"${d.id}\">${label}</option>`}).join(''); $('meta-count').textContent=`${filtered.length} / ${dict.length}` }
+    function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'}[m]))}
+
+    $('dictionary').addEventListener('change',handleSelectionChange);
+    $('dictionary').addEventListener('dblclick',()=>{ const sel=$('dictionary'); const opt=sel.selectedOptions[0]; if(!opt) return; const id=Number(opt.value); if(favs.has(id)) favs.delete(id); else favs.add(id); localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favs])); populateDictionaryList(); });
+
+    $('btn-export').addEventListener('click',()=>{ if(selected.size===0) return; downloadFile('series.csv', exportCSV(selected)); });
+    $('view-zoom').addEventListener('click',()=>{ zoomEnabled=!zoomEnabled; $('view-zoom').textContent = zoomEnabled ? 'Disable Zoom' : 'Enable Zoom'; renderAll(); });
+    $('view-zoom').textContent = zoomEnabled ? 'Disable Zoom' : 'Enable Zoom';
+
+    const btnTime=$('view-time'), btnLdc=$('view-ldc'), chkNorm=$('ldc-normalize');
+    btnTime?.addEventListener('click',()=>{ viewMode='time'; btnTime.classList.add('bg-[var(--panel-2)]'); btnLdc?.classList.remove('bg-[var(--panel-2)]'); $('zoom-hint').classList.add('hidden'); renderAll(); });
+    btnLdc?.addEventListener('click',()=>{ viewMode='ldc'; btnLdc.classList.add('bg-[var(--panel-2)]'); btnTime?.classList.remove('bg-[var(--panel-2)]'); $('zoom-hint').classList.add('hidden'); renderAll(); });
+    chkNorm?.addEventListener('change',()=>{ if(viewMode==='ldc') renderAll(); });
+
+    function restoreSelection(){ try{const raw=localStorage.getItem(SELECT_KEY); if(!raw) return; const ids=JSON.parse(raw); const sel=$('dictionary'); for(const option of sel.options){ if(ids.includes(Number(option.value))) option.selected=true; } handleSelectionChange(); }catch{} }
+
+    (function(){ try{ console.assert(fmt(1000)==='1.00k','fmt k'); const st=computeStats([1,2,3,4]); console.assert(st.count===4 && st.min===1 && st.max===4 && Math.abs(st.mean-2.5)<1e-9,'stats'); const ptsH=toHourlyPoints([{value:1,env:1,month:1,day:1,hour:0,minute:0}]); console.assert(ptsH.length===1 && typeof ptsH[0].x==='number','hourly points'); const ptsM=toMonthlyPoints([{value:5,env:2,month:7}]); console.assert(ptsM.length===1 && ptsM[0].xLabel.startsWith('E2-'),'monthly points'); const m=new Map([[1,{meta:{Units:'W'},points:[{xLabel:'L',y:3}]}]]); const csv=exportCSV(m); console.assert(/label,value,series_id/.test(csv)||/datetime_utc/.test(csv),'csv header'); console.assert(escapeHtml('<tag>')==='&lt;tag&gt;','escapeHtml'); console.assert(typeof zoomEnabled==='boolean','zoom flag exists'); const ldc=toLDC([{y:1},{y:3},{y:2}], 'W', false); console.assert(ldc.length===3 && ldc[0].y>=ldc[1].y,'ldc sorted'); console.assert(viewMode==='time','default view mode time'); const normEl=document.getElementById('ldc-normalize'); console.assert(normEl && normEl.checked===false, 'ldc normalize default OFF');
+      const _oldIP=isIP, _esi=prefEnergySI, _eip=prefEnergyIP, _pip=prefPowerIP; isIP=false; prefEnergySI='kWh'; console.assert(Math.abs(convertUnits(3.6e6,'J')-1)<1e-9,'SI kWh scaling'); isIP=true; prefEnergyIP='kBTU'; console.assert(Math.abs(convertUnits(1055.06,'J')-1)<1e-3,'IP kBTU scaling'); prefPowerIP='Tons'; console.assert(Math.abs(convertUnits(12000,'Btu/h')-1)<1e-9,'IP Tons scaling'); isIP=_oldIP; prefEnergySI=_esi; prefEnergyIP=_eip; prefPowerIP=_pip; 
+      console.info('Self-tests passed'); }catch(e){ console.warn('Self-tests failed',e) } })();
+  </script>
+</body>
+</html>
