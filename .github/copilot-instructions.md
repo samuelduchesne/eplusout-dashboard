@@ -104,3 +104,11 @@ Before starting a new task in the above plan, update progress in the plan.
 - Work through each checklist item systematically.
 - Keep communication concise and focused.
 - Follow development best practices.
+
+## Changelog Maintenance
+
+- Whenever a user-visible feature is added, changed, fixed, or removed, add an entry to `CHANGELOG.md` under an `## [Unreleased]` section (create it if missing) with one of the categorized subsections: `### Added`, `### Changed`, `### Fixed`, `### Removed`.
+- On version bump (package.json `version` change), promote the `Unreleased` entries to a new version heading: `## [x.y.z] - YYYY-MM-DD` and start a fresh empty `Unreleased` section above it.
+- Ensure the build is re-run (`npm run build`) so the embedded changelog and version variables (`dist/version.js`) reflect the latest changes.
+- If no user-visible changes occurred (e.g., dev tooling only), you may skip updating the changelog for that commit, but DO document any release version tag.
+- Keep headings and list formatting consistent (blank line after headings, lists surrounded by blank lines) to satisfy markdown lint.
