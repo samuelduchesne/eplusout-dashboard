@@ -15,5 +15,17 @@ Just open the `index.html` file in your browser. No server or internet connectio
 
 ## Customization
 
-- Replace the sample data in the script section with your own data as needed.
-- You can add more charts or tables by extending the HTML and JavaScript sections.
+
+## Development
+
+Formatting is enforced on `index.html` using Prettier via pre-commit.
+
+Setup:
+
+1. Install dependencies: `npm install`
+2. Install pre-commit (if not already): `pip install pre-commit` (or use your package manager)
+3. Run `pre-commit install` to activate the hook.
+
+Manual formatting: `npm run format`
+
+Note: Only `index.html` is targeted currently. Adjust `.pre-commit-config.yaml` if more files are added.

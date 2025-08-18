@@ -1,0 +1,2 @@
+# Ignore lockfiles or generated artifacts if added later
+node_modules
