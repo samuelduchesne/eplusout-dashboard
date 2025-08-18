@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -6,17 +6,17 @@
     <title>EnergyPlus eplusout.sql — Offline Dashboard</title>
     <script>
       try {
-        var k = "eplus_theme";
+        var k = 'eplus_theme';
         var s = localStorage.getItem(k);
         var t =
-          s === "light" || s === "dark"
+          s === 'light' || s === 'dark'
             ? s
-            : matchMedia("(prefers-color-scheme: dark)").matches
-            ? "dark"
-            : "light";
-        document.documentElement.setAttribute("data-theme", t);
+            : matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        document.documentElement.setAttribute('data-theme', t);
       } catch (e) {
-        document.documentElement.setAttribute("data-theme", "light");
+        document.documentElement.setAttribute('data-theme', 'light');
       }
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -39,7 +39,7 @@
         --chart-bar: #16a34a;
         --chart-tooltip-bg: rgba(255, 255, 255, 0.98);
       }
-      :root[data-theme="dark"] {
+      :root[data-theme='dark'] {
         --bg: #0f1418;
         --panel: #151a20;
         --panel-2: #0f141a;
@@ -63,51 +63,37 @@
       .icon-moon {
         display: block;
       }
-      :root[data-theme="light"] .icon-sun {
+      :root[data-theme='light'] .icon-sun {
         display: block;
       }
-      :root[data-theme="light"] .icon-moon {
+      :root[data-theme='light'] .icon-moon {
         display: none;
       }
-      :root[data-theme="light"] header {
-        background: linear-gradient(
-          180deg,
-          rgba(255, 255, 255, 0.95),
-          rgba(246, 249, 255, 0.95)
-        );
+      :root[data-theme='light'] header {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(246, 249, 255, 0.95));
       }
-      :root[data-theme="dark"] header {
-        background: linear-gradient(
-          180deg,
-          rgba(18, 24, 33, 0.9),
-          rgba(12, 17, 23, 0.9)
-        );
+      :root[data-theme='dark'] header {
+        background: linear-gradient(180deg, rgba(18, 24, 33, 0.9), rgba(12, 17, 23, 0.9));
       }
     </style>
     <script>
       window.__LIB_URLS__ = {
-        d3: "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js",
-        sqljs: "https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js",
-        sqlwasm: "https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.wasm",
+        d3: 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js',
+        sqljs: 'https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js',
+        sqlwasm: 'https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.wasm',
       };
     </script>
   </head>
   <body class="bg-[var(--bg)] text-[var(--text)] h-screen flex flex-col">
-    <header
-      class="px-4 py-3 border-b border-[var(--border)] sticky top-0 z-10 backdrop-blur-sm"
-    >
-      <div
-        class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-      >
+    <header class="px-4 py-3 border-b border-[var(--border)] sticky top-0 z-10 backdrop-blur-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div class="flex flex-col flex-1 min-w-0">
           <h1 class="text-base font-semibold tracking-wide truncate">
             EnergyPlus eplusout.sql Dashboard
           </h1>
           <span class="text-xs text-[var(--muted)]"
             >Drop
-            <span class="bg-[var(--code)] px-1 py-0.5 rounded"
-              >eplusout.sql</span
-            >
+            <span class="bg-[var(--code)] px-1 py-0.5 rounded">eplusout.sql</span>
             to explore variables & meters.</span
           >
         </div>
@@ -115,12 +101,8 @@
           <label
             class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)] cursor-pointer"
           >
-            <input
-              id="file-input"
-              type="file"
-              accept=".sql,.sqlite,.db"
-              class="hidden"
-            />Open eplusout.sql
+            <input id="file-input" type="file" accept=".sql,.sqlite,.db" class="hidden" />Open
+            eplusout.sql
           </label>
           <button
             id="btn-export"
@@ -192,9 +174,7 @@
       </div>
     </header>
 
-    <main
-      class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-3 p-2 sm:p-3 flex-1 overflow-auto"
-    >
+    <main class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-3 p-2 sm:p-3 flex-1 overflow-auto">
       <section
         class="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--panel)] overflow-hidden min-h-0 order-1 lg:order-none"
       >
@@ -202,8 +182,7 @@
           class="flex justify-between items-center px-3 py-2 border-b border-[var(--border)] bg-[var(--panel-2)]"
         >
           <div class="flex items-center gap-2">
-            <strong>Signals</strong
-            ><span id="meta-count" class="text-[var(--muted)]"></span>
+            <strong>Signals</strong><span id="meta-count" class="text-[var(--muted)]"></span>
           </div>
           <button
             id="btn-signals-collapse"
@@ -230,8 +209,7 @@
             disabled
             class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
           />
-          <label
-            class="flex items-center gap-2 text-xs text-[var(--muted)] select-none"
+          <label class="flex items-center gap-2 text-xs text-[var(--muted)] select-none"
             ><input id="fav-only" type="checkbox" class="h-3.5 w-3.5" />
             <span>Favorites only (double‑click items to ★/☆)</span></label
           >
@@ -286,32 +264,18 @@
         </div>
         <div class="p-3 flex flex-col gap-3 overflow-auto">
           <div id="series-meta" class="relative text-xs text-[var(--muted)]">
-            <div
-              id="series-meta-entries"
-              class="grid grid-cols-[auto_1fr] gap-x-2 pr-10"
-            ></div>
+            <div id="series-meta-entries" class="grid grid-cols-[auto_1fr] gap-x-2 pr-10"></div>
           </div>
           <div class="flex items-center justify-between flex-wrap gap-2">
             <div class="flex items-center gap-3 flex-wrap">
-              <div
-                class="inline-flex rounded border border-[var(--border)] overflow-hidden"
-              >
-                <button
-                  id="view-time"
-                  class="px-2 py-1 text-xs bg-[var(--panel-2)]"
-                >
+              <div class="inline-flex rounded border border-[var(--border)] overflow-hidden">
+                <button id="view-time" class="px-2 py-1 text-xs bg-[var(--panel-2)]">
                   Time Series
                 </button>
-                <button id="view-ldc" class="px-2 py-1 text-xs">
-                  Load Duration
-                </button>
+                <button id="view-ldc" class="px-2 py-1 text-xs">Load Duration</button>
               </div>
               <label class="ml-1 text-xs inline-flex items-center gap-1">
-                <input
-                  id="ldc-normalize"
-                  type="checkbox"
-                  class="align-middle"
-                />
+                <input id="ldc-normalize" type="checkbox" class="align-middle" />
                 Normalize to peak
               </label>
             </div>
@@ -319,10 +283,7 @@
               class="flex items-center gap-2 ml-auto text-sm text-[var(--muted)]"
               id="toolbar-actions"
             >
-              <button
-                id="view-zoom"
-                class="px-2 py-1 text-xs border rounded bg-[var(--panel-2)]"
-              >
+              <button id="view-zoom" class="px-2 py-1 text-xs border rounded bg-[var(--panel-2)]">
                 Enable Zoom
               </button>
               <!-- tariff button will be injected here if present -->
@@ -336,10 +297,7 @@
             id="insights"
             class="rounded-md border border-[var(--border)] bg-[var(--panel-2)] p-3 text-sm"
           ></div>
-          <div
-            id="kpis"
-            class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2"
-          ></div>
+          <div id="kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2"></div>
           <div
             id="chart"
             class="w-full h-[420px] max-[768px]:h-[300px] max-[480px]:h-[220px] relative"
@@ -350,26 +308,14 @@
     </main>
 
     <!-- Units Settings Modal -->
-    <div
-      id="units-backdrop"
-      class="fixed inset-0 bg-black/50 hidden z-40"
-    ></div>
-    <div
-      id="units-modal"
-      class="fixed inset-0 hidden z-50 grid place-items-center p-4"
-    >
+    <div id="units-backdrop" class="fixed inset-0 bg-black/50 hidden z-40"></div>
+    <div id="units-modal" class="fixed inset-0 hidden z-50 grid place-items-center p-4">
       <div
         class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-xl"
       >
-        <div
-          class="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]"
-        >
+        <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
           <h3 class="text-sm font-semibold">Unit Settings</h3>
-          <button
-            id="units-close"
-            class="p-1 rounded hover:bg-[var(--panel-2)]"
-            aria-label="Close"
-          >
+          <button id="units-close" class="p-1 rounded hover:bg-[var(--panel-2)]" aria-label="Close">
             ✕
           </button>
         </div>
@@ -387,9 +333,7 @@
             </select>
           </div>
           <div>
-            <div class="text-xs text-[var(--muted)] mb-1">
-              IP (US customary)
-            </div>
+            <div class="text-xs text-[var(--muted)] mb-1">IP (US customary)</div>
             <label class="block mb-1">Energy base unit</label>
             <select
               id="sel-ip-energy"
@@ -409,14 +353,10 @@
               <option value="Btu/h">Btu/h</option>
               <option value="Tons">Tons</option>
             </select>
-            <div class="text-xs text-[var(--muted)] mt-1">
-              1 Ton = 12,000 Btu/h
-            </div>
+            <div class="text-xs text-[var(--muted)] mt-1">1 Ton = 12,000 Btu/h</div>
           </div>
         </div>
-        <div
-          class="px-4 py-3 border-t border-[var(--border)] flex justify-end gap-2"
-        >
+        <div class="px-4 py-3 border-t border-[var(--border)] flex justify-end gap-2">
           <button
             id="units-save"
             class="px-3 py-1.5 text-sm rounded bg-[var(--accent-strong)] text-white"
@@ -428,55 +368,48 @@
     </div>
 
     <script>
-      const THEME_KEY = "eplus_theme";
-      const UNITS_KEY = "eplus_units_mode";
-      const FAVORITES_KEY = "eplus_favs";
-      const SELECT_KEY = "eplus_selected_ids";
-      const COLLAPSE_KEY = "eplus_signals_collapsed";
+      const THEME_KEY = 'eplus_theme';
+      const UNITS_KEY = 'eplus_units_mode';
+      const FAVORITES_KEY = 'eplus_favs';
+      const SELECT_KEY = 'eplus_selected_ids';
+      const COLLAPSE_KEY = 'eplus_signals_collapsed';
 
       function getPreferredTheme() {
         const s = localStorage.getItem(THEME_KEY);
-        return s === "light" || s === "dark"
+        return s === 'light' || s === 'dark'
           ? s
-          : matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
+          : matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
       }
       function applyTheme(t) {
-        document.documentElement.setAttribute("data-theme", t);
-        const b = document.getElementById("btn-theme");
+        document.documentElement.setAttribute('data-theme', t);
+        const b = document.getElementById('btn-theme');
         if (b) {
-          const lbl =
-            t === "dark" ? "Switch to light mode" : "Switch to dark mode";
+          const lbl = t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
           b.title = lbl;
-          b.setAttribute("aria-label", lbl);
+          b.setAttribute('aria-label', lbl);
         }
       }
       function toggleTheme() {
-        const cur =
-          document.documentElement.getAttribute("data-theme") || "dark";
-        const next = cur === "dark" ? "light" : "dark";
+        const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+        const next = cur === 'dark' ? 'light' : 'dark';
         applyTheme(next);
         localStorage.setItem(THEME_KEY, next);
         refreshChartTheme();
       }
-      document
-        .getElementById("btn-theme")
-        .addEventListener("click", toggleTheme);
-      applyTheme(
-        document.documentElement.getAttribute("data-theme") ||
-          getPreferredTheme()
-      );
+      document.getElementById('btn-theme').addEventListener('click', toggleTheme);
+      applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());
 
       function loadExternalScript(url) {
         return new Promise((res, rej) => {
           if (document.querySelector(`script[data-src="${url}"]`)) return res();
-          const s = document.createElement("script");
+          const s = document.createElement('script');
           s.dataset.src = url;
           s.src = url;
           s.async = true;
           s.onload = () => res();
-          s.onerror = () => rej(new Error("Failed to load " + url));
+          s.onerror = () => rej(new Error('Failed to load ' + url));
           document.head.appendChild(s);
         });
       }
@@ -484,28 +417,27 @@
         if (!window.d3) {
           const url =
             (window.__LIB_URLS__ && window.__LIB_URLS__.d3) ||
-            "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js";
+            'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
           await loadExternalScript(url);
         }
       }
       let SQL;
       async function ensureSql() {
         if (SQL) return SQL;
-        if (typeof window.initSqlJs !== "function") {
+        if (typeof window.initSqlJs !== 'function') {
           const loader =
             (window.__LIB_URLS__ && window.__LIB_URLS__.sqljs) ||
-            "https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js";
+            'https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js';
           await loadExternalScript(loader);
         }
         const cfg = window.__SQL_WASM_BASE64__
           ? {
-              locateFile: () =>
-                "data:application/wasm;base64," + window.__SQL_WASM_BASE64__,
+              locateFile: () => 'data:application/wasm;base64,' + window.__SQL_WASM_BASE64__,
             }
           : {
               locateFile: () =>
                 (window.__LIB_URLS__ && window.__LIB_URLS__.sqlwasm) ||
-                "https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.wasm",
+                'https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.wasm',
             };
         SQL = await window.initSqlJs(cfg);
         return SQL;
@@ -513,15 +445,11 @@
 
       const $ = (id) => document.getElementById(id);
       const cssVar = (name) =>
-        getComputedStyle(document.documentElement)
-          .getPropertyValue(name)
-          .trim();
+        getComputedStyle(document.documentElement).getPropertyValue(name).trim();
       function toObjects(result) {
         if (!result || !result[0]) return [];
         const cols = result[0].columns;
-        return result[0].values.map((row) =>
-          Object.fromEntries(row.map((v, i) => [cols[i], v]))
-        );
+        return result[0].values.map((row) => Object.fromEntries(row.map((v, i) => [cols[i], v])));
       }
       function quantile(sorted, p) {
         if (!sorted.length) return NaN;
@@ -556,43 +484,43 @@
         };
       }
       function fmt(n) {
-        if (n == null || isNaN(n)) return "—";
+        if (n == null || isNaN(n)) return '—';
         const a = Math.abs(n);
-        if (a >= 1e6) return (n / 1e6).toFixed(2) + "M";
-        if (a >= 1e3) return (n / 1e3).toFixed(2) + "k";
+        if (a >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+        if (a >= 1e3) return (n / 1e3).toFixed(2) + 'k';
         if (a === 0 || a >= 1) return n.toFixed(2);
         return n.toPrecision(3);
       }
       // KPI specific formatting: thousands separators; no decimals for large numbers
       function kpiFmt(n, opts = {}) {
-        if (n == null || !isFinite(n)) return "—";
+        if (n == null || !isFinite(n)) return '—';
         const abs = Math.abs(n);
         // Allow explicit decimals override
         if (opts.decimals != null) {
-          return new Intl.NumberFormat("en-US", {
+          return new Intl.NumberFormat('en-US', {
             minimumFractionDigits: opts.decimals,
             maximumFractionDigits: opts.decimals,
           }).format(n);
         }
         if (abs >= 1000) {
-          return new Intl.NumberFormat("en-US", {
+          return new Intl.NumberFormat('en-US', {
             maximumFractionDigits: 0,
           }).format(Math.round(n));
         }
         if (abs >= 100) {
-          return new Intl.NumberFormat("en-US", {
+          return new Intl.NumberFormat('en-US', {
             minimumFractionDigits: 1,
             maximumFractionDigits: 1,
           }).format(n);
         }
-        return new Intl.NumberFormat("en-US", {
+        return new Intl.NumberFormat('en-US', {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         }).format(n);
       }
       function downloadFile(name, text) {
-        const blob = new Blob([text], { type: "text/plain" });
-        const a = document.createElement("a");
+        const blob = new Blob([text], { type: 'text/plain' });
+        const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = name;
         document.body.appendChild(a);
@@ -604,59 +532,57 @@
       let db,
         dict = [],
         selected = new Map();
-      let favs = new Set(
-        JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]")
-      );
+      let favs = new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'));
       let zoomEnabled = false;
       let baseFreq = null;
-      let viewMode = "time";
+      let viewMode = 'time';
       // Preserve current hourly x-domain across redraws (zoom + resize)
       let currentXDomain = null;
 
-      let isIP = localStorage.getItem(UNITS_KEY) === "IP" ? true : false;
-      const btnUnits = $("btn-units");
+      let isIP = localStorage.getItem(UNITS_KEY) === 'IP' ? true : false;
+      const btnUnits = $('btn-units');
       if (btnUnits) {
-        btnUnits.textContent = isIP ? "IP" : "SI";
-        btnUnits.addEventListener("click", () => {
+        btnUnits.textContent = isIP ? 'IP' : 'SI';
+        btnUnits.addEventListener('click', () => {
           isIP = !isIP;
-          btnUnits.textContent = isIP ? "IP" : "SI";
-          localStorage.setItem(UNITS_KEY, isIP ? "IP" : "SI");
+          btnUnits.textContent = isIP ? 'IP' : 'SI';
+          localStorage.setItem(UNITS_KEY, isIP ? 'IP' : 'SI');
           renderAll();
         });
       }
 
       // Units preferences + modal wiring
-      const ENERGY_SI_KEY = "eplus_energy_unit_si";
-      const ENERGY_IP_KEY = "eplus_energy_unit_ip";
-      const POWER_IP_KEY = "eplus_power_unit_ip";
-      let prefEnergySI = localStorage.getItem(ENERGY_SI_KEY) || "J";
-      let prefEnergyIP = localStorage.getItem(ENERGY_IP_KEY) || "BTU";
-      let prefPowerIP = localStorage.getItem(POWER_IP_KEY) || "Btu/h";
+      const ENERGY_SI_KEY = 'eplus_energy_unit_si';
+      const ENERGY_IP_KEY = 'eplus_energy_unit_ip';
+      const POWER_IP_KEY = 'eplus_power_unit_ip';
+      let prefEnergySI = localStorage.getItem(ENERGY_SI_KEY) || 'J';
+      let prefEnergyIP = localStorage.getItem(ENERGY_IP_KEY) || 'BTU';
+      let prefPowerIP = localStorage.getItem(POWER_IP_KEY) || 'Btu/h';
 
-      const btnUnitsSettings = $("btn-units-settings");
-      const unitsModal = $("units-modal");
-      const unitsBackdrop = $("units-backdrop");
-      const unitsClose = $("units-close");
-      const unitsSave = $("units-save");
-      const selSiEnergy = $("sel-si-energy");
-      const selIpEnergy = $("sel-ip-energy");
-      const selIpPower = $("sel-ip-power");
+      const btnUnitsSettings = $('btn-units-settings');
+      const unitsModal = $('units-modal');
+      const unitsBackdrop = $('units-backdrop');
+      const unitsClose = $('units-close');
+      const unitsSave = $('units-save');
+      const selSiEnergy = $('sel-si-energy');
+      const selIpEnergy = $('sel-ip-energy');
+      const selIpPower = $('sel-ip-power');
 
       function showUnits() {
         selSiEnergy.value = prefEnergySI;
         selIpEnergy.value = prefEnergyIP;
         selIpPower.value = prefPowerIP;
-        unitsModal.classList.remove("hidden");
-        unitsBackdrop.classList.remove("hidden");
+        unitsModal.classList.remove('hidden');
+        unitsBackdrop.classList.remove('hidden');
       }
       function hideUnits() {
-        unitsModal.classList.add("hidden");
-        unitsBackdrop.classList.add("hidden");
+        unitsModal.classList.add('hidden');
+        unitsBackdrop.classList.add('hidden');
       }
-      btnUnitsSettings?.addEventListener("click", showUnits);
-      unitsClose?.addEventListener("click", hideUnits);
-      unitsBackdrop?.addEventListener("click", hideUnits);
-      unitsSave?.addEventListener("click", () => {
+      btnUnitsSettings?.addEventListener('click', showUnits);
+      unitsClose?.addEventListener('click', hideUnits);
+      unitsBackdrop?.addEventListener('click', hideUnits);
+      unitsSave?.addEventListener('click', () => {
         prefEnergySI = selSiEnergy.value;
         prefEnergyIP = selIpEnergy.value;
         prefPowerIP = selIpPower.value;
@@ -668,41 +594,38 @@
       });
 
       function unitKind(units) {
-        if (!units) return "other";
+        if (!units) return 'other';
         const u = String(units).toLowerCase();
         if (
-          u.includes("wh") ||
-          u.includes("joule") ||
-          u === "j" ||
-          u.includes("kwh") ||
-          u.includes("mwh")
+          u.includes('wh') ||
+          u.includes('joule') ||
+          u === 'j' ||
+          u.includes('kwh') ||
+          u.includes('mwh')
         )
-          return "energy";
+          return 'energy';
         if (
-          u.includes("btu/h") ||
-          u.includes("btuh") ||
+          u.includes('btu/h') ||
+          u.includes('btuh') ||
           /\bw(?!h)\b/.test(u) ||
-          u.includes("watt") ||
-          u.includes("ton")
+          u.includes('watt') ||
+          u.includes('ton')
         )
-          return "power";
-        return "other";
+          return 'power';
+        return 'other';
       }
       function toJoules(value, units) {
-        const u = String(units || "").toLowerCase();
-        if (u.includes("mwh")) return value * 3.6e9;
-        if (u.includes("kwh")) return value * 3.6e6;
-        if (u.includes("wh")) return value * 3600;
-        if (u.includes("joule") || u === "j") return value;
+        const u = String(units || '').toLowerCase();
+        if (u.includes('mwh')) return value * 3.6e9;
+        if (u.includes('kwh')) return value * 3.6e6;
+        if (u.includes('wh')) return value * 3600;
+        if (u.includes('joule') || u === 'j') return value;
         return null;
       }
 
-      const __orig_convertUnits =
-        typeof convertUnits === "function" ? convertUnits : (v) => v;
-      const __orig_convertUnitLabel =
-        typeof convertUnitLabel === "function"
-          ? convertUnitLabel
-          : (u) => u || "";
+      // NOTE: Avoid capturing a hoisted previous convertUnits; identity fallbacks prevent recursion.
+      const __orig_convertUnits = (v) => v;
+      const __orig_convertUnitLabel = (u) => u || '';
 
       function convertUnits(value, units) {
         if (value == null || !isFinite(value)) return value;
@@ -710,108 +633,106 @@
         const kind = unitKind(units);
         if (isIP) {
           const u = String(units).toLowerCase();
-          if (u === "c" || u.includes("celsius")) return (value * 9) / 5 + 32;
-          if (kind === "energy") {
+          if (u === 'c' || u.includes('celsius')) return (value * 9) / 5 + 32;
+          if (kind === 'energy') {
             let J = toJoules(value, units);
             if (J == null) J = value;
             let btu = J / 1055.06;
-            if (prefEnergyIP === "kBTU") return btu / 1e3;
-            if (prefEnergyIP === "MMBTU") return btu / 1e6;
+            if (prefEnergyIP === 'kBTU') return btu / 1e3;
+            if (prefEnergyIP === 'MMBTU') return btu / 1e6;
             return btu;
           }
-          if (kind === "power") {
+          if (kind === 'power') {
             let v = value;
             const ul = String(units).toLowerCase();
-            if (ul.includes("w") && !ul.includes("wh")) v = value * 3.412141633;
-            if (prefPowerIP === "Tons") return v / 12000;
+            if (ul.includes('w') && !ul.includes('wh')) v = value * 3.412141633;
+            if (prefPowerIP === 'Tons') return v / 12000;
             return v;
           }
           return __orig_convertUnits(value, units);
         } else {
-          if (kind === "energy") {
+          if (kind === 'energy') {
             let J = toJoules(value, units);
             if (J == null) J = value;
-            if (prefEnergySI === "kWh") return J / 3.6e6;
-            if (prefEnergySI === "MWh") return J / 3.6e9;
+            if (prefEnergySI === 'kWh') return J / 3.6e6;
+            if (prefEnergySI === 'MWh') return J / 3.6e9;
             return J;
           }
           return __orig_convertUnits(value, units);
         }
       }
       function convertUnitLabel(units) {
-        if (!units) return units || "";
+        if (!units) return units || '';
         const kind = unitKind(units);
         if (isIP) {
           const u = String(units).toLowerCase();
-          if (u === "c" || u.includes("celsius")) return "F";
-          if (kind === "energy") return prefEnergyIP;
-          if (kind === "power")
-            return prefPowerIP === "Tons" ? "tons" : "Btu/h";
+          if (u === 'c' || u.includes('celsius')) return 'F';
+          if (kind === 'energy') return prefEnergyIP;
+          if (kind === 'power') return prefPowerIP === 'Tons' ? 'tons' : 'Btu/h';
           return __orig_convertUnitLabel(units);
         } else {
-          if (kind === "energy") return prefEnergySI;
+          if (kind === 'energy') return prefEnergySI;
           return __orig_convertUnitLabel(units);
         }
       }
 
       // Helper: label for opposite unit system (only energy/power for now)
       function convertUnitLabelOpposite(units) {
-        if (!units) return "";
+        if (!units) return '';
         const kind = unitKind(units);
         if (isIP) {
           // left IP, right SI
-          if (kind === "energy") return prefEnergySI;
-          if (kind === "power") return "W";
+          if (kind === 'energy') return prefEnergySI;
+          if (kind === 'power') return 'W';
         } else {
           // left SI, right IP
-          if (kind === "energy") return prefEnergyIP;
-          if (kind === "power")
-            return prefPowerIP === "Tons" ? "tons" : "Btu/h";
+          if (kind === 'energy') return prefEnergyIP;
+          if (kind === 'power') return prefPowerIP === 'Tons' ? 'tons' : 'Btu/h';
         }
-        return "";
+        return '';
       }
       // Convert a displayed tick value (already in current system) to opposite system.
       function convertDisplayedToOpposite(v, origUnits) {
         if (!isFinite(v)) return v;
         const kind = unitKind(origUnits);
-        if (kind === "energy") {
+        if (kind === 'energy') {
           if (isIP) {
             // IP -> SI
             let J; // build J from current displayed IP unit
-            if (prefEnergyIP === "BTU") J = v * 1055.06;
-            else if (prefEnergyIP === "kBTU") J = v * 1000 * 1055.06;
-            else if (prefEnergyIP === "MMBTU") J = v * 1e6 * 1055.06;
+            if (prefEnergyIP === 'BTU') J = v * 1055.06;
+            else if (prefEnergyIP === 'kBTU') J = v * 1000 * 1055.06;
+            else if (prefEnergyIP === 'MMBTU') J = v * 1e6 * 1055.06;
             else J = v * 1055.06; // fallback
-            if (prefEnergySI === "J") return J;
-            if (prefEnergySI === "kWh") return J / 3.6e6;
-            if (prefEnergySI === "MWh") return J / 3.6e9;
+            if (prefEnergySI === 'J') return J;
+            if (prefEnergySI === 'kWh') return J / 3.6e6;
+            if (prefEnergySI === 'MWh') return J / 3.6e9;
             return J;
           } else {
             // SI -> IP
             let J;
-            if (prefEnergySI === "J") J = v;
-            else if (prefEnergySI === "kWh") J = v * 3.6e6;
-            else if (prefEnergySI === "MWh") J = v * 3.6e9;
+            if (prefEnergySI === 'J') J = v;
+            else if (prefEnergySI === 'kWh') J = v * 3.6e6;
+            else if (prefEnergySI === 'MWh') J = v * 3.6e9;
             else J = v;
             const BTU = J / 1055.06;
-            if (prefEnergyIP === "BTU") return BTU;
-            if (prefEnergyIP === "kBTU") return BTU / 1000;
-            if (prefEnergyIP === "MMBTU") return BTU / 1e6;
+            if (prefEnergyIP === 'BTU') return BTU;
+            if (prefEnergyIP === 'kBTU') return BTU / 1000;
+            if (prefEnergyIP === 'MMBTU') return BTU / 1e6;
             return BTU;
           }
         }
-        if (kind === "power") {
+        if (kind === 'power') {
           if (isIP) {
             // IP -> SI (W)
             let Btuh;
-            if (prefPowerIP === "Tons") Btuh = v * 12000;
+            if (prefPowerIP === 'Tons') Btuh = v * 12000;
             else Btuh = v; // v is in Btu/h already
             const W = Btuh * 0.29307107; // 1 Btu/h =0.29307107 W
             return W;
           } else {
             // SI -> IP
             const W = v;
-            if (prefPowerIP === "Tons") return W / 0.29307107 / 12000; // W -> Btu/h -> tons
+            if (prefPowerIP === 'Tons') return W / 0.29307107 / 12000; // W -> Btu/h -> tons
             return W / 0.29307107; // Btu/h
           }
         }
@@ -854,11 +775,12 @@
       }
 
       function timeLabel(r) {
-        const hh = String(r.hour ?? 0).padStart(2, "0");
-        const mm = String(r.minute ?? 0).padStart(2, "0");
-        const md = `${String(r.month || 1).padStart(2, "0")}/${String(
-          r.day || 1
-        ).padStart(2, "0")}`;
+        const hh = String(r.hour ?? 0).padStart(2, '0');
+        const mm = String(r.minute ?? 0).padStart(2, '0');
+        const md = `${String(r.month || 1).padStart(2, '0')}/${String(r.day || 1).padStart(
+          2,
+          '0',
+        )}`;
         return `Env ${r.env} — ${md} ${hh}:${mm}`;
       }
       function toHourlyPoints(rows) {
@@ -869,7 +791,7 @@
             (r.month || 1) - 1,
             r.day || 1,
             r.hour || 0,
-            r.minute || 0
+            r.minute || 0,
           ),
           y: Number(r.value),
           label: timeLabel(r),
@@ -877,141 +799,141 @@
       }
       function toMonthlyPoints(rows) {
         return rows.map((r) => ({
-          xLabel: `E${r.env}-M${String(r.month || 1).padStart(2, "0")}`,
+          xLabel: `E${r.env}-M${String(r.month || 1).padStart(2, '0')}`,
           y: Number(r.value),
         }));
       }
 
       function exportCSV(seriesMap) {
         const header =
-          baseFreq === "Hourly"
-            ? ["datetime_utc", "value", "series_id"]
-            : ["label", "value", "series_id"];
-        const rows = [header.join(",")];
+          baseFreq === 'Hourly'
+            ? ['datetime_utc', 'value', 'series_id']
+            : ['label', 'value', 'series_id'];
+        const rows = [header.join(',')];
         seriesMap.forEach((v, id) => {
           const series = v.points;
-          const units = v.meta.Units || "";
+          const units = v.meta.Units || '';
           for (const d of series) {
             const val = convertUnits(d.y, units);
-            const x = Number.isFinite(d.x)
-              ? new Date(d.x).toISOString()
-              : d.xLabel || "";
+            const x = Number.isFinite(d.x) ? new Date(d.x).toISOString() : d.xLabel || '';
             rows.push(`${JSON.stringify(x)},${val},${id}`);
           }
         });
-        return rows.join("\n");
+        return rows.join('\n');
       }
 
       const palette = [
-        "#2563eb",
-        "#7c3aed",
-        "#16a34a",
-        "#ef4444",
-        "#f59e0b",
-        "#06b6d4",
-        "#d946ef",
-        "#10b981",
-        "#e11d48",
-        "#3b82f6",
+        '#2563eb',
+        '#7c3aed',
+        '#16a34a',
+        '#ef4444',
+        '#f59e0b',
+        '#06b6d4',
+        '#d946ef',
+        '#10b981',
+        '#e11d48',
+        '#3b82f6',
       ];
 
+      let __rendering = false;
       function renderAll() {
-        const metaEl = $("series-meta-entries");
-        const unitsEl = $("units");
-        const titleEl = $("series-title");
-        const metas = [...selected.values()].map((v) => v.meta);
-        const normalizeFlag =
-          viewMode === "time" && $("ldc-normalize")?.checked === true;
-        titleEl.textContent = metas.length
-          ? `${baseFreq} • ${metas.length} series`
-          : "Series";
-        const consistentUnits = metas.every((m) => m.Units === metas[0]?.Units);
-        unitsEl.textContent = metas.length
-          ? consistentUnits
-            ? convertUnitLabel(metas[0]?.Units || "")
-            : "(mixed units)"
-          : "";
-        metaEl.innerHTML = metas
-          .map(
-            (m) =>
-              `<span class='text-[var(--muted)]'>${
-                m.IsMeter ? "Meter" : "Variable"
-              }:</span><span>${escapeHtml(m.Name)}${
-                m.key ? ` (${escapeHtml(m.key)})` : ""
-              }</span>`
-          )
-          .join("");
-        const visibleEntries = [...selected.entries()].filter(
-          ([, v]) => v.visible !== false
-        );
-        const series = visibleEntries.map(([id, v], i) => ({
-          id,
-          meta: v.meta,
-          color: palette[i % palette.length],
-          points: v.points,
-          visible: v.visible !== false,
-        }));
-        if (viewMode === "ldc") {
-          if (baseFreq !== "Hourly") {
-            $("legend").innerHTML = "";
-            $("chart").innerHTML = "";
-            $("insights").innerHTML =
-              "Load duration curves require Hourly data.";
-            $("units").textContent = "(n/a)";
+        if (__rendering) return; // prevent re-entrant recursive calls
+        __rendering = true;
+        try {
+          const metaEl = $('series-meta-entries');
+          const unitsEl = $('units');
+          const titleEl = $('series-title');
+          const metas = [...selected.values()].map((v) => v.meta);
+          const normalizeFlag = viewMode === 'time' && $('ldc-normalize')?.checked === true;
+          titleEl.textContent = metas.length ? `${baseFreq} • ${metas.length} series` : 'Series';
+          const consistentUnits = metas.every((m) => m.Units === metas[0]?.Units);
+          unitsEl.textContent = metas.length
+            ? consistentUnits
+              ? convertUnitLabel(metas[0]?.Units || '')
+              : '(mixed units)'
+            : '';
+          metaEl.innerHTML = metas
+            .map(
+              (m) =>
+                `<span class='text-[var(--muted)]'>${
+                  m.IsMeter ? 'Meter' : 'Variable'
+                }:</span><span>${escapeHtml(m.Name)}${
+                  m.key ? ` (${escapeHtml(m.key)})` : ''
+                }</span>`,
+            )
+            .join('');
+          const visibleEntries = [...selected.entries()].filter(([, v]) => v.visible !== false);
+          const series = visibleEntries.map(([id, v], i) => ({
+            id,
+            meta: v.meta,
+            color: palette[i % palette.length],
+            points: v.points,
+            visible: v.visible !== false,
+          }));
+          if (viewMode === 'ldc') {
+            if (baseFreq !== 'Hourly') {
+              $('legend').innerHTML = '';
+              $('chart').innerHTML = '';
+              $('insights').innerHTML = 'Load duration curves require Hourly data.';
+              $('units').textContent = '(n/a)';
+            } else {
+              renderLDC(series);
+            }
           } else {
-            renderLDC(series);
+            renderChart(series, { normalize: normalizeFlag });
+            renderInsights(series);
+            renderKPIs(series);
+            if (normalizeFlag && metas.length) {
+              unitsEl.textContent = '%';
+            }
           }
-        } else {
-          renderChart(series, { normalize: normalizeFlag });
-          renderInsights(series);
-          renderKPIs(series);
-          if (normalizeFlag && metas.length) {
-            unitsEl.textContent = "%";
-          }
+          renderStats(series); // always refresh stats (even if empty)
+          const has = selected.size > 0;
+          const b = $('btn-export');
+          if (b) b.disabled = !has;
+        } finally {
+          __rendering = false;
         }
-        renderStats(series); // always refresh stats (even if empty)
-        const has = selected.size > 0;
-        const b = $("btn-export");
-        if (b) b.disabled = !has;
       }
 
       async function handleSelectionChange() {
-        const selEl = $("dictionary");
-        const chosen = [...selEl.selectedOptions].map((o) => Number(o.value));
-        localStorage.setItem(SELECT_KEY, JSON.stringify(chosen));
-        if (chosen.length === 0) {
-          selected.clear();
-          baseFreq = null;
-          currentXDomain = null;
-          renderAll();
-          return;
-        }
-        const first = dict.find((d) => d.id === chosen[0]);
-        const newFreq = first?.freq || "Hourly";
-        if (newFreq !== baseFreq) currentXDomain = null;
-        baseFreq = newFreq;
-        for (const id of chosen) {
-          const meta = dict.find((d) => d.id === id);
-          if (!meta || meta.freq !== baseFreq) continue;
-          if (!selected.has(id)) {
-            const rows = queryTimeSeries(id);
-            const pts =
-              baseFreq === "Hourly"
-                ? toHourlyPoints(rows)
-                : toMonthlyPoints(rows);
-            selected.set(id, { meta, points: pts, visible: true });
+        try {
+          const selEl = $('dictionary');
+          const chosen = [...selEl.selectedOptions].map((o) => Number(o.value));
+          localStorage.setItem(SELECT_KEY, JSON.stringify(chosen));
+          if (chosen.length === 0) {
+            selected.clear();
+            baseFreq = null;
+            currentXDomain = null;
+            renderAll();
+            return;
           }
+          const first = dict.find((d) => d.id === chosen[0]);
+          const newFreq = first?.freq || 'Hourly';
+          if (newFreq !== baseFreq) currentXDomain = null;
+          baseFreq = newFreq;
+          for (const id of chosen) {
+            const meta = dict.find((d) => d.id === id);
+            if (!meta || meta.freq !== baseFreq) continue;
+            if (!selected.has(id)) {
+              const rows = queryTimeSeries(id);
+              const pts = baseFreq === 'Hourly' ? toHourlyPoints(rows) : toMonthlyPoints(rows);
+              selected.set(id, { meta, points: pts, visible: true });
+            }
+          }
+          for (const id of [...selected.keys()]) {
+            if (!chosen.includes(id)) selected.delete(id);
+          }
+          renderAll();
+        } catch (e) {
+          console.error('Selection change failed', e);
         }
-        for (const id of [...selected.keys()]) {
-          if (!chosen.includes(id)) selected.delete(id);
-        }
-        renderAll();
       }
 
       function renderInsights(series) {
-        const el = $("insights");
+        const el = $('insights');
         if (series.length === 0) {
-          el.textContent = "";
+          el.textContent = '';
           return;
         }
         const lines = series.map((s) => {
@@ -1019,12 +941,12 @@
           const st = computeStats(vals);
           const maxIdx = vals.indexOf(Math.max(...vals));
           const when = s.points[maxIdx];
-          const whenTxt = when?.label || when?.xLabel || "";
+          const whenTxt = when?.label || when?.xLabel || '';
           return `<span style='color:${s.color}'>${escapeHtml(
-            s.meta.Name
+            s.meta.Name,
           )}</span>: peak ${fmt(st.max)} at ${escapeHtml(String(whenTxt))}`;
         });
-        el.innerHTML = lines.join("<br/>");
+        el.innerHTML = lines.join('<br/>');
       }
 
       // ================= KPIs & Stats =================
@@ -1034,7 +956,7 @@
         try {
           // Try numeric TabularData first
           const q1 = db.exec(
-            `SELECT Value FROM TabularData WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') AND (LOWER(ColumnName)='area' OR LOWER(ColumnName) LIKE '%m2%') LIMIT 1;`
+            `SELECT Value FROM TabularData WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') AND (LOWER(ColumnName)='area' OR LOWER(ColumnName) LIKE '%m2%') LIMIT 1;`,
           );
           if (q1[0]?.values?.[0]?.[0]) {
             const v = Number(q1[0].values[0][0]);
@@ -1045,7 +967,7 @@
           }
           // Fallback: strings table, parse number
           const q2 = db.exec(
-            `SELECT Value FROM TabularDataWithStrings WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') LIMIT 10;`
+            `SELECT Value FROM TabularDataWithStrings WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') LIMIT 10;`,
           );
           if (q2[0]) {
             for (const row of q2[0].values) {
@@ -1060,7 +982,7 @@
             }
           }
         } catch (e) {
-          console.warn("Area query failed", e);
+          console.warn('Area query failed', e);
         }
         buildingAreaCache = null;
         return null;
@@ -1082,9 +1004,7 @@
         }
         if (hasJ) return { J: totalJ };
         // fallback treat value already in preferred converted units
-        const vals = points
-          .map((p) => convertUnits(p.y, units))
-          .filter((v) => isFinite(v));
+        const vals = points.map((p) => convertUnits(p.y, units)).filter((v) => isFinite(v));
         return {
           value: vals.reduce((a, b) => a + b, 0),
           units: convertUnitLabel(units),
@@ -1092,7 +1012,7 @@
       }
 
       function loadFactor(points, units) {
-        if (baseFreq !== "Hourly" || !points.length) return null;
+        if (baseFreq !== 'Hourly' || !points.length) return null;
         const vals = points.map((p) => convertUnits(p.y, units));
         const st = computeStats(vals);
         if (!st.max || st.max === 0) return null;
@@ -1100,20 +1020,17 @@
       }
 
       async function renderKPIs(series) {
-        const el = $("kpis");
-        el.innerHTML = "";
+        const el = $('kpis');
+        el.innerHTML = '';
         if (!series.length) return;
         const primary = series[0];
         const isMeter = primary.meta.IsMeter == 1;
         const kpiItems = []; // {title,value,desc}
         if (isMeter) {
-          const annual = annualEnergyFromPoints(
-            primary.points,
-            primary.meta.Units
-          );
+          const annual = annualEnergyFromPoints(primary.points, primary.meta.Units);
           if (annual) {
-            let displayVal = "—",
-              label = "Annual Energy";
+            let displayVal = '—',
+              label = 'Annual Energy';
             if (annual.J != null) {
               // convert to current preferred energy unit
               let val;
@@ -1121,18 +1038,18 @@
               if (isIP) {
                 const kWh = annual.J / 3.6e6; // always compute kWh for cost/EUI
                 // Convert to chosen IP energy unit by converting J -> chosen label through existing convertUnits path
-                val = convertUnits(annual.J, "J");
-                unitLbl = convertUnitLabel("J");
+                val = convertUnits(annual.J, 'J');
+                unitLbl = convertUnitLabel('J');
                 displayVal = `${kpiFmt(val)} ${unitLbl}`;
               } else {
-                val = convertUnits(annual.J, "J");
-                unitLbl = convertUnitLabel("J");
+                val = convertUnits(annual.J, 'J');
+                unitLbl = convertUnitLabel('J');
                 displayVal = `${kpiFmt(val)} ${unitLbl}`;
               }
               kpiItems.push({
                 title: label,
                 value: displayVal,
-                desc: "Total annual energy summed over all intervals for the selected meter.",
+                desc: 'Total annual energy summed over all intervals for the selected meter.',
               });
               // EUI if area available
               const area = await getBuildingArea();
@@ -1143,107 +1060,103 @@
                   // kBtu/ft2 or MMBtu/ft2 depending on energy unit selection
                   const ft2 = area * 10.7639;
                   const kBtu = kWh * 3.412141633;
-                  if (prefEnergyIP === "MMBTU") {
+                  if (prefEnergyIP === 'MMBTU') {
                     euiVal = kBtu / 1000 / ft2;
-                    euiUnits = "MMBtu/ft²";
-                  } else if (prefEnergyIP === "kBTU") {
+                    euiUnits = 'MMBtu/ft²';
+                  } else if (prefEnergyIP === 'kBTU') {
                     euiVal = kBtu / ft2;
-                    euiUnits = "kBtu/ft²";
+                    euiUnits = 'kBtu/ft²';
                   } else {
                     euiVal = (kBtu / ft2) * 1000;
-                    euiUnits = "Btu/ft²";
+                    euiUnits = 'Btu/ft²';
                   }
                 } else {
                   const m2 = area;
                   const kWhVal = kWh;
-                  if (prefEnergySI === "MWh") {
+                  if (prefEnergySI === 'MWh') {
                     euiVal = kWhVal / 1000 / m2;
-                    euiUnits = "MWh/m²";
-                  } else if (prefEnergySI === "kWh") {
+                    euiUnits = 'MWh/m²';
+                  } else if (prefEnergySI === 'kWh') {
                     euiVal = kWhVal / m2;
-                    euiUnits = "kWh/m²";
+                    euiUnits = 'kWh/m²';
                   } else {
                     // J
                     euiVal = annual.J / m2;
-                    euiUnits = "J/m²";
+                    euiUnits = 'J/m²';
                   }
                 }
                 kpiItems.push({
-                  title: "EUI",
+                  title: 'EUI',
                   value: `${kpiFmt(euiVal)} ${euiUnits}`,
-                  desc: "Energy Use Intensity: annual energy divided by building floor area.",
+                  desc: 'Energy Use Intensity: annual energy divided by building floor area.',
                 });
               } else {
                 kpiItems.push({
-                  title: "EUI",
-                  value: "Area?",
-                  desc: "Energy Use Intensity. Floor area not found in tabular output.",
+                  title: 'EUI',
+                  value: 'Area?',
+                  desc: 'Energy Use Intensity. Floor area not found in tabular output.',
                 });
               }
             } else if (annual.value != null) {
               kpiItems.push({
                 title: label,
-                value: `${kpiFmt(annual.value)} ${annual.units || ""}`,
-                desc: "Total annual energy summed over all intervals for the selected meter.",
+                value: `${kpiFmt(annual.value)} ${annual.units || ''}`,
+                desc: 'Total annual energy summed over all intervals for the selected meter.',
               });
             }
           }
         }
         // Peak demand & timestamp already computed in insights; replicate for first series
-        const vals = primary.points.map((p) =>
-          convertUnits(p.y, primary.meta.Units)
-        );
+        const vals = primary.points.map((p) => convertUnits(p.y, primary.meta.Units));
         const st = computeStats(vals);
         if (isFinite(st.max)) {
           const idx = vals.indexOf(st.max);
           const when = primary.points[idx];
-          const whenTxt = when?.label || when?.xLabel || "";
+          const whenTxt = when?.label || when?.xLabel || '';
           kpiItems.push({
-            title: "Peak",
+            title: 'Peak',
             value: `${kpiFmt(st.max)} ${convertUnitLabel(primary.meta.Units)}
-<span class='block text-[10px] text-[var(--muted)] truncate'>${escapeHtml(
-              whenTxt
-            )}</span>`,
-            desc: "Maximum interval value and when it occurred.",
+<span class='block text-[10px] text-[var(--muted)] truncate'>${escapeHtml(whenTxt)}</span>`,
+            desc: 'Maximum interval value and when it occurred.',
           });
         }
         const lf = loadFactor(primary.points, primary.meta.Units);
         if (lf) {
           kpiItems.push({
-            title: "Load Factor",
-            value: (lf * 100).toFixed(1) + "%",
-            desc: "Average / peak over the Weather Run Period (Hourly data only).",
+            title: 'Load Factor',
+            value: (lf * 100).toFixed(1) + '%',
+            desc: 'Average / peak over the Weather Run Period (Hourly data only).',
           });
         }
         // Tariff cost (energy + demand) if annual energy computed and hourly
-        if (baseFreq === "Hourly" && isMeter) {
+        if (baseFreq === 'Hourly' && isMeter) {
           const cost = computeTariffCost(primary);
           if (cost) {
             kpiItems.push({
-              title: "Cost (est.)",
+              title: 'Cost (est.)',
               value: `$${kpiFmt(
-                cost.total
+                cost.total,
               )}<span class='block text-[10px] text-[var(--muted)]'>E:$${kpiFmt(
-                cost.energy
+                cost.energy,
               )} D:$${kpiFmt(cost.demand)}</span>`,
-              desc: "Simple cost estimate: flat $/kWh energy plus monthly peak demand charges.",
+              desc: 'Simple cost estimate: flat $/kWh energy plus monthly peak demand charges.',
             });
           }
         }
         // Energy balance (only if facility meter)
-        if (/electricity:facility/i.test(primary.meta.Name || "")) {
-          const eb = await computeEnergyBalance("Electricity");
+        if (/electricity:facility/i.test(primary.meta.Name || '')) {
+          const eb = await computeEnergyBalance('Electricity');
           if (eb) {
             const cls =
               Math.abs(eb.residualPct) > 5
-                ? "text-[var(--danger)] font-semibold"
-                : "text-[var(--muted)]";
+                ? 'text-[var(--danger)] font-semibold'
+                : 'text-[var(--muted)]';
             kpiItems.push({
-              title: "Elec Balance",
+              title: 'Elec Balance',
               value: `<span class='${cls}'>${kpiFmt(eb.residualPct, {
                 decimals: 1,
               })}%</span>`,
-              desc: "Residual between Electricity:Facility and the sum of end-use electricity meters.",
+              desc: 'Residual between Electricity:Facility and the sum of end-use electricity meters.',
             });
           }
         }
@@ -1251,20 +1164,20 @@
         el.innerHTML = kpiItems
           .map(
             (
-              k
+              k,
             ) => `<div class="relative group p-2 rounded-md border border-[var(--border)] bg-[var(--panel-2)] flex flex-col min-w-[110px]" data-tip="${escapeHtml(
-              k.desc || ""
+              k.desc || '',
             )}">
             <span class="flex items-center justify-between gap-1">
               <span class="text-[10px] uppercase tracking-wide text-[var(--muted)]">${escapeHtml(
-                k.title
+                k.title,
               )}</span>
               <button type="button" class="kpi-help text-[10px] w-4 h-4 leading-none inline-flex items-center justify-center border border-[var(--border)] rounded cursor-help" aria-label="Info" tabindex="0">?</button>
             </span>
             <span class="text-sm leading-tight mt-0.5">${k.value}</span>
-          </div>`
+          </div>`,
           )
-          .join("");
+          .join('');
         attachKpiTooltips();
       }
 
@@ -1273,17 +1186,16 @@
       let kpiActiveBtn = null;
       function ensureKpiTooltip() {
         if (!kpiTooltipEl) {
-          kpiTooltipEl = document.createElement("div");
-          kpiTooltipEl.id = "kpi-tooltip";
-          kpiTooltipEl.className =
-            "pointer-events-none text-xs max-w-[200px] z-40";
-          kpiTooltipEl.style.position = "fixed";
-          kpiTooltipEl.style.background = "var(--panel)";
-          kpiTooltipEl.style.border = "1px solid var(--border)";
-          kpiTooltipEl.style.padding = "6px 8px";
-          kpiTooltipEl.style.borderRadius = "6px";
-          kpiTooltipEl.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
-          kpiTooltipEl.style.display = "none";
+          kpiTooltipEl = document.createElement('div');
+          kpiTooltipEl.id = 'kpi-tooltip';
+          kpiTooltipEl.className = 'pointer-events-none text-xs max-w-[200px] z-40';
+          kpiTooltipEl.style.position = 'fixed';
+          kpiTooltipEl.style.background = 'var(--panel)';
+          kpiTooltipEl.style.border = '1px solid var(--border)';
+          kpiTooltipEl.style.padding = '6px 8px';
+          kpiTooltipEl.style.borderRadius = '6px';
+          kpiTooltipEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+          kpiTooltipEl.style.display = 'none';
           document.body.appendChild(kpiTooltipEl);
         }
         return kpiTooltipEl;
@@ -1294,36 +1206,34 @@
         const rect = target.getBoundingClientRect();
         const top = rect.top - 8;
         const left = Math.min(window.innerWidth - 220, rect.left);
-        tip.style.top = (top < 8 ? rect.bottom + 8 : top) + "px";
-        tip.style.left = left + "px";
-        tip.style.display = "block";
+        tip.style.top = (top < 8 ? rect.bottom + 8 : top) + 'px';
+        tip.style.left = left + 'px';
+        tip.style.display = 'block';
       }
       function hideKpiTooltip() {
-        if (kpiTooltipEl) kpiTooltipEl.style.display = "none";
+        if (kpiTooltipEl) kpiTooltipEl.style.display = 'none';
         kpiActiveBtn = null;
       }
       function attachKpiTooltips() {
-        const helps = document.querySelectorAll(
-          "#kpis .kpi-help, #tariff-pop .kpi-help"
-        );
+        const helps = document.querySelectorAll('#kpis .kpi-help, #tariff-pop .kpi-help');
         helps.forEach((btn) => {
-          const parent = btn.closest("[data-tip]");
-          const text = parent?.getAttribute("data-tip") || "";
+          const parent = btn.closest('[data-tip]');
+          const text = parent?.getAttribute('data-tip') || '';
           const enter = () => {
             if (!text) return;
             showKpiTooltip(btn, text);
           };
           const leave = (e) => {
-            if (e.type === "mouseleave" && kpiActiveBtn === btn) return;
+            if (e.type === 'mouseleave' && kpiActiveBtn === btn) return;
             if (!kpiActiveBtn) hideKpiTooltip();
           };
-          btn.addEventListener("mouseenter", enter);
-          btn.addEventListener("focus", enter);
-          btn.addEventListener("mouseleave", leave);
-          btn.addEventListener("blur", () => {
+          btn.addEventListener('mouseenter', enter);
+          btn.addEventListener('focus', enter);
+          btn.addEventListener('mouseleave', leave);
+          btn.addEventListener('blur', () => {
             if (kpiActiveBtn !== btn) hideKpiTooltip();
           });
-          btn.addEventListener("click", (e) => {
+          btn.addEventListener('click', (e) => {
             e.stopPropagation();
             if (kpiActiveBtn === btn) {
               kpiActiveBtn = null;
@@ -1334,39 +1244,35 @@
             }
           });
         });
-        document.addEventListener("click", (e) => {
-          if (
-            kpiActiveBtn &&
-            !e.target.closest("#kpis") &&
-            !e.target.closest("#tariff-pop")
-          )
+        document.addEventListener('click', (e) => {
+          if (kpiActiveBtn && !e.target.closest('#kpis') && !e.target.closest('#tariff-pop'))
             hideKpiTooltip();
         });
         window.addEventListener(
-          "scroll",
+          'scroll',
           () => {
             if (kpiActiveBtn) hideKpiTooltip();
           },
-          true
+          true,
         );
       }
 
       function renderStats(series) {
-        const el = $("stats");
+        const el = $('stats');
         if (!el) return;
         if (!series.length) {
-          el.innerHTML = "";
+          el.innerHTML = '';
           return;
         }
         // Build header row + one row per series
-        const cols = ["Series", "Min", "P05", "Mean", "Median", "P95", "Max"];
+        const cols = ['Series', 'Min', 'P05', 'Mean', 'Median', 'P95', 'Max'];
         const rows = [
           `<div class='contents'>${cols
             .map(
               (c) =>
-                `<div class="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">${c}</div>`
+                `<div class="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">${c}</div>`,
             )
-            .join("")}</div>`,
+            .join('')}</div>`,
         ];
         series.forEach((s) => {
           const vals = s.points.map((p) => convertUnits(p.y, s.meta.Units));
@@ -1383,9 +1289,9 @@
           <div class='text-[11px]'>${fmt(st.max)}</div>
         </div>`);
         });
-        el.className = "grid gap-x-3 gap-y-1 items-center"; // responsive grid auto-flow
-        el.style.gridTemplateColumns = "repeat(7,minmax(0,1fr))";
-        el.innerHTML = rows.join("");
+        el.className = 'grid gap-x-3 gap-y-1 items-center'; // responsive grid auto-flow
+        el.style.gridTemplateColumns = 'repeat(7,minmax(0,1fr))';
+        el.innerHTML = rows.join('');
       }
 
       // Energy Balance
@@ -1396,37 +1302,32 @@
         if (energyBalanceCache[key]) return energyBalanceCache[key];
         try {
           const names = [
-            "Facility",
-            "Heating",
-            "Cooling",
-            "InteriorLights",
-            "ExteriorLights",
-            "InteriorEquipment",
-            "ExteriorEquipment",
-            "Fans",
-            "Pumps",
-            "HeatRejection",
-            "Humidification",
-            "HeatRecovery",
-            "WaterSystems",
-            "Refrigeration",
-            "Cogeneration",
+            'Facility',
+            'Heating',
+            'Cooling',
+            'InteriorLights',
+            'ExteriorLights',
+            'InteriorEquipment',
+            'ExteriorEquipment',
+            'Fans',
+            'Pumps',
+            'HeatRejection',
+            'Humidification',
+            'HeatRecovery',
+            'WaterSystems',
+            'Refrigeration',
+            'Cogeneration',
           ];
           function findDict(name) {
-            return dict.find(
-              (d) => d.Name === `${kind}:${name}` && d.freq === "Monthly"
-            );
+            return dict.find((d) => d.Name === `${kind}:${name}` && d.freq === 'Monthly');
           }
-          const fac = findDict("Facility");
+          const fac = findDict('Facility');
           if (!fac) return null;
           const rowsFacility = queryTimeSeries(fac.id);
-          const totalFac = rowsFacility.reduce(
-            (a, r) => a + Number(r.value || 0),
-            0
-          );
+          const totalFac = rowsFacility.reduce((a, r) => a + Number(r.value || 0), 0);
           let sumComponents = 0;
           names
-            .filter((n) => n !== "Facility")
+            .filter((n) => n !== 'Facility')
             .forEach((n) => {
               const m = findDict(n);
               if (m) {
@@ -1447,54 +1348,42 @@
           energyBalanceCache[key] = out;
           return out;
         } catch (e) {
-          console.warn("Energy balance failed", e);
+          console.warn('Energy balance failed', e);
           return null;
         }
       }
 
       // Tariff simple cost model
-      const TARIFF_ENERGY_KEY = "eplus_tariff_energy_rate"; // legacy single
-      const TARIFF_ENERGY_KEY_ELEC = "eplus_tariff_energy_rate_elec";
-      const TARIFF_ENERGY_KEY_DH = "eplus_tariff_energy_rate_dh";
-      const TARIFF_ENERGY_KEY_DC = "eplus_tariff_energy_rate_dc";
-      const TARIFF_DEMAND_KEY = "eplus_tariff_demand_rate";
+      const TARIFF_ENERGY_KEY = 'eplus_tariff_energy_rate'; // legacy single
+      const TARIFF_ENERGY_KEY_ELEC = 'eplus_tariff_energy_rate_elec';
+      const TARIFF_ENERGY_KEY_DH = 'eplus_tariff_energy_rate_dh';
+      const TARIFF_ENERGY_KEY_DC = 'eplus_tariff_energy_rate_dc';
+      const TARIFF_DEMAND_KEY = 'eplus_tariff_demand_rate';
       let rateElec = parseFloat(
         localStorage.getItem(TARIFF_ENERGY_KEY_ELEC) ||
           localStorage.getItem(TARIFF_ENERGY_KEY) ||
-          "0.10"
+          '0.10',
       );
-      let rateDH = parseFloat(
-        localStorage.getItem(TARIFF_ENERGY_KEY_DH) || "0.06"
-      );
-      let rateDC = parseFloat(
-        localStorage.getItem(TARIFF_ENERGY_KEY_DC) || "0.08"
-      );
-      let tariffDemandRate = parseFloat(
-        localStorage.getItem(TARIFF_DEMAND_KEY) || "12"
-      ); // $/kW-month (electricity only)
+      let rateDH = parseFloat(localStorage.getItem(TARIFF_ENERGY_KEY_DH) || '0.06');
+      let rateDC = parseFloat(localStorage.getItem(TARIFF_ENERGY_KEY_DC) || '0.08');
+      let tariffDemandRate = parseFloat(localStorage.getItem(TARIFF_DEMAND_KEY) || '12'); // $/kW-month (electricity only)
       // Backwards compatibility variable
       let tariffEnergyRate = rateElec;
 
       function getFuelKind(meta) {
-        if (!meta || meta.IsMeter != 1) return "other";
-        const name = (meta.Name || "").toLowerCase();
-        if (name.includes("electric")) return "electricity";
-        if (
-          name.includes("districtheating") ||
-          name.includes("district heating")
-        )
-          return "districtheating";
-        if (
-          name.includes("districtcooling") ||
-          name.includes("district cooling")
-        )
-          return "districtcooling";
-        return "other";
+        if (!meta || meta.IsMeter != 1) return 'other';
+        const name = (meta.Name || '').toLowerCase();
+        if (name.includes('electric')) return 'electricity';
+        if (name.includes('districtheating') || name.includes('district heating'))
+          return 'districtheating';
+        if (name.includes('districtcooling') || name.includes('district cooling'))
+          return 'districtcooling';
+        return 'other';
       }
       function computeTariffCost(seriesObj) {
         try {
           const pts = seriesObj.points;
-          if (!pts.length || baseFreq !== "Hourly") return null; // annual energy J sum to kWh
+          if (!pts.length || baseFreq !== 'Hourly') return null; // annual energy J sum to kWh
           const unit = seriesObj.meta.Units;
           const kind = getFuelKind(seriesObj.meta);
           let totalJ = 0;
@@ -1505,22 +1394,22 @@
           }
           const totalKWh = totalJ / 3.6e6;
           let energyRate = tariffEnergyRate;
-          if (kind === "electricity") energyRate = rateElec;
-          else if (kind === "districtheating") energyRate = rateDH;
-          else if (kind === "districtcooling") energyRate = rateDC;
+          if (kind === 'electricity') energyRate = rateElec;
+          else if (kind === 'districtheating') energyRate = rateDH;
+          else if (kind === 'districtcooling') energyRate = rateDC;
           const energyCost = totalKWh * energyRate;
           // Demand: compute kW per hour (kWh for that hour) => kW
           const byMonth = new Map();
           pts.forEach((p) => {
             const date = new Date(p.x);
-            const m = date.getUTCFullYear() + "-" + (date.getUTCMonth() + 1);
+            const m = date.getUTCFullYear() + '-' + (date.getUTCMonth() + 1);
             const kW = (toJoules(p.y, unit) || 0) / 3.6e6;
             const cur = byMonth.get(m) || { peak: 0 };
             if (kW > cur.peak) cur.peak = kW;
             byMonth.set(m, cur);
           });
           let demandCost = 0;
-          if (kind === "electricity") {
+          if (kind === 'electricity') {
             byMonth.forEach((v) => {
               demandCost += v.peak * tariffDemandRate;
             });
@@ -1538,22 +1427,21 @@
 
       // Tariff popover UI
       function injectTariffUI() {
-        if (document.getElementById("tariff-btn")) return;
+        if (document.getElementById('tariff-btn')) return;
         const container =
-          document.querySelector("#toolbar-actions") ||
-          document.querySelector("#series-meta");
+          document.querySelector('#toolbar-actions') || document.querySelector('#series-meta');
         if (!container) return;
-        const btn = document.createElement("button");
-        btn.id = "tariff-btn";
-        btn.className = "px-2 py-1 text-xs border rounded bg-[var(--panel-2)]";
-        btn.textContent = "$";
-        btn.title = "Tariff settings";
+        const btn = document.createElement('button');
+        btn.id = 'tariff-btn';
+        btn.className = 'px-2 py-1 text-xs border rounded bg-[var(--panel-2)]';
+        btn.textContent = '$';
+        btn.title = 'Tariff settings';
         container.appendChild(btn);
-        const pop = document.createElement("div");
-        pop.id = "tariff-pop";
+        const pop = document.createElement('div');
+        pop.id = 'tariff-pop';
         pop.className =
-          "hidden z-50 w-64 border border-[var(--border)] rounded-md bg-[var(--panel)] shadow-lg p-3 text-xs";
-        pop.style.position = "fixed";
+          'hidden z-50 w-64 border border-[var(--border)] rounded-md bg-[var(--panel)] shadow-lg p-3 text-xs';
+        pop.style.position = 'fixed';
         pop.innerHTML = `<div class='flex justify-between items-center mb-1'><strong class='text-xs'>Tariff</strong><button id='tariff-close' class='px-1 rounded hover:bg-[var(--panel-2)]' aria-label='Close'>✕</button></div>
         <div class='space-y-2'>
         <label class='block' data-tip='Electricity volumetric charge ($/kWh). Applied to total annual electric kWh.'>
@@ -1591,45 +1479,40 @@
           attachKpiTooltips();
         }, 0);
         document.body.appendChild(pop);
-        btn.addEventListener("click", () => {
-          if (pop.classList.contains("hidden")) {
+        btn.addEventListener('click', () => {
+          if (pop.classList.contains('hidden')) {
             const r = btn.getBoundingClientRect();
             const margin = 6;
             const w = 260;
-            let left = Math.min(
-              window.innerWidth - w - 8,
-              Math.max(8, r.right - w)
-            );
+            let left = Math.min(window.innerWidth - w - 8, Math.max(8, r.right - w));
             let top = r.bottom + margin;
             if (top + pop.offsetHeight > window.innerHeight) {
               top = r.top - pop.offsetHeight - margin;
             }
-            pop.style.left = left + "px";
-            pop.style.top = top + "px";
-            pop.classList.remove("hidden");
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+            pop.classList.remove('hidden');
           } else {
-            pop.classList.add("hidden");
+            pop.classList.add('hidden');
           }
         });
         pop
-          .querySelector("#tariff-close")
-          .addEventListener("click", () => pop.classList.add("hidden"));
-        document.addEventListener("click", (e) => {
+          .querySelector('#tariff-close')
+          .addEventListener('click', () => pop.classList.add('hidden'));
+        document.addEventListener('click', (e) => {
           if (
-            !pop.classList.contains("hidden") &&
-            !e.target.closest("#tariff-pop") &&
+            !pop.classList.contains('hidden') &&
+            !e.target.closest('#tariff-pop') &&
             e.target !== btn
           ) {
-            pop.classList.add("hidden");
+            pop.classList.add('hidden');
           }
         });
-        pop.querySelector("#tariff-save").addEventListener("click", () => {
-          const erElec = parseFloat(
-            pop.querySelector("#tariff-energy-elec").value
-          );
-          const erDH = parseFloat(pop.querySelector("#tariff-energy-dh").value);
-          const erDC = parseFloat(pop.querySelector("#tariff-energy-dc").value);
-          const dr = parseFloat(pop.querySelector("#tariff-demand").value);
+        pop.querySelector('#tariff-save').addEventListener('click', () => {
+          const erElec = parseFloat(pop.querySelector('#tariff-energy-elec').value);
+          const erDH = parseFloat(pop.querySelector('#tariff-energy-dh').value);
+          const erDC = parseFloat(pop.querySelector('#tariff-energy-dc').value);
+          const dr = parseFloat(pop.querySelector('#tariff-demand').value);
           if (isFinite(erElec)) rateElec = erElec;
           if (isFinite(erDH)) rateDH = erDH;
           if (isFinite(erDC)) rateDC = erDC;
@@ -1641,7 +1524,7 @@
           localStorage.setItem(TARIFF_ENERGY_KEY_DC, rateDC);
           localStorage.setItem(TARIFF_ENERGY_KEY, rateElec);
           localStorage.setItem(TARIFF_DEMAND_KEY, tariffDemandRate);
-          pop.classList.add("hidden");
+          pop.classList.add('hidden');
           renderAll();
         });
       }
@@ -1649,41 +1532,32 @@
 
       async function renderChart(series, opts = {}) {
         await ensureD3();
-        const container = $("chart");
-        container.innerHTML = "";
+        const container = $('chart');
+        container.innerHTML = '';
         const rect = container.getBoundingClientRect();
         const width = rect.width,
           height = rect.height;
         const metas = [...selected.values()].map((v) => v.meta);
-        const consistentUnits =
-          metas.length && metas.every((m) => m.Units === metas[0].Units);
+        const consistentUnits = metas.length && metas.every((m) => m.Units === metas[0].Units);
         const primaryMeta = consistentUnits ? metas[0] : null;
         const normalize = opts.normalize === true;
         const showSecondary =
-          !normalize &&
-          primaryMeta &&
-          ["energy", "power"].includes(unitKind(primaryMeta.Units));
+          !normalize && primaryMeta && ['energy', 'power'].includes(unitKind(primaryMeta.Units));
         const m = {
           top: 16,
           right: showSecondary ? 68 : 24,
-          bottom: baseFreq === "Hourly" ? 56 : 36,
+          bottom: baseFreq === 'Hourly' ? 56 : 36,
           left: 56,
         };
         const w = width - m.left - m.right,
           h = height - m.top - m.bottom;
-        const axisColor = cssVar("--chart-axis"),
-          gridColor = cssVar("--chart-grid"),
-          tooltipBg = cssVar("--chart-tooltip-bg"),
-          textColor = cssVar("--text"),
-          borderColor = cssVar("--border");
-        const svg = d3
-          .select(container)
-          .append("svg")
-          .attr("width", width)
-          .attr("height", height);
-        const g = svg
-          .append("g")
-          .attr("transform", `translate(${m.left},${m.top})`);
+        const axisColor = cssVar('--chart-axis'),
+          gridColor = cssVar('--chart-grid'),
+          tooltipBg = cssVar('--chart-tooltip-bg'),
+          textColor = cssVar('--text'),
+          borderColor = cssVar('--border');
+        const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
+        const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
         const peaks = new Map();
         if (normalize) {
           series.forEach((s) => {
@@ -1700,24 +1574,22 @@
           return (val / pk) * 100;
         }
         const allY = series.flatMap((s) =>
-          s.points.map((p) => normVal(convertUnits(p.y, s.meta.Units), s))
+          s.points.map((p) => normVal(convertUnits(p.y, s.meta.Units), s)),
         );
         const y = d3
           .scaleLinear()
           .domain([Math.min(0, d3.min(allY)), d3.max(allY)])
           .nice()
           .range([h, 0]);
-        g.append("g")
-          .attr("class", "grid")
-          .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(""))
-          .selectAll("line")
-          .attr("stroke", gridColor)
-          .attr("stroke-opacity", 0.35);
-        g.select(".grid").select(".domain").remove();
-        if (baseFreq === "Hourly") {
-          const fullDomain = d3.extent(
-            series.flatMap((s) => s.points.map((p) => p.x))
-          );
+        g.append('g')
+          .attr('class', 'grid')
+          .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(''))
+          .selectAll('line')
+          .attr('stroke', gridColor)
+          .attr('stroke-opacity', 0.35);
+        g.select('.grid').select('.domain').remove();
+        if (baseFreq === 'Hourly') {
+          const fullDomain = d3.extent(series.flatMap((s) => s.points.map((p) => p.x)));
           const x = d3.scaleUtc().domain(fullDomain).range([0, w]);
           if (
             currentXDomain &&
@@ -1727,49 +1599,47 @@
             x.domain(currentXDomain);
           else currentXDomain = null;
           const gx = g
-            .append("g")
-            .attr("transform", `translate(0,${h})`)
+            .append('g')
+            .attr('transform', `translate(0,${h})`)
             .call(d3.axisBottom(x).ticks(6));
-          const gy = g.append("g").call(d3.axisLeft(y).ticks(6));
+          const gy = g.append('g').call(d3.axisLeft(y).ticks(6));
           if (showSecondary) {
             const oppLabel = convertUnitLabelOpposite(primaryMeta.Units);
             const axisR = d3
               .axisRight(y)
               .ticks(6)
-              .tickFormat((t) =>
-                fmt(convertDisplayedToOpposite(t, primaryMeta.Units))
-              );
-            g.append("g")
-              .attr("transform", `translate(${w},0)`)
+              .tickFormat((t) => fmt(convertDisplayedToOpposite(t, primaryMeta.Units)));
+            g.append('g')
+              .attr('transform', `translate(${w},0)`)
               .call(axisR)
-              .selectAll("text")
-              .attr("fill", axisColor);
+              .selectAll('text')
+              .attr('fill', axisColor);
             if (oppLabel) {
-              g.append("text")
-                .attr("x", w)
-                .attr("y", -4)
-                .attr("text-anchor", "end")
-                .attr("fill", axisColor)
-                .attr("font-size", "10px")
+              g.append('text')
+                .attr('x', w)
+                .attr('y', -4)
+                .attr('text-anchor', 'end')
+                .attr('fill', axisColor)
+                .attr('font-size', '10px')
                 .text(oppLabel);
             }
           }
-          gx.selectAll("path,line").attr("stroke", axisColor);
-          gy.selectAll("path,line").attr("stroke", axisColor);
-          gx.selectAll("text").attr("fill", axisColor);
-          gy.selectAll("text").attr("fill", axisColor);
+          gx.selectAll('path,line').attr('stroke', axisColor);
+          gy.selectAll('path,line').attr('stroke', axisColor);
+          gx.selectAll('text').attr('fill', axisColor);
+          gy.selectAll('text').attr('fill', axisColor);
           for (const s of series) {
             const line = d3
               .line()
               .x((d) => x(d.x))
               .y((d) => y(normVal(convertUnits(d.y, s.meta.Units), s)));
-            g.append("path")
+            g.append('path')
               .datum(s.points)
-              .attr("fill", "none")
-              .attr("stroke-width", 1.8)
-              .attr("stroke", s.color)
-              .attr("class", "series")
-              .attr("d", line);
+              .attr('fill', 'none')
+              .attr('stroke-width', 1.8)
+              .attr('stroke', s.color)
+              .attr('class', 'series')
+              .attr('d', line);
           }
           if (zoomEnabled) {
             const brush = d3
@@ -1778,7 +1648,7 @@
                 [0, h - 24],
                 [w, h],
               ])
-              .on("end", (ev) => {
+              .on('end', (ev) => {
                 const sel = ev.selection;
                 if (!sel) {
                   x.domain(fullDomain);
@@ -1789,50 +1659,50 @@
                 }
                 redraw();
               });
-            g.append("g").attr("class", "brush").call(brush);
-            $("zoom-hint").classList.remove("hidden");
+            g.append('g').attr('class', 'brush').call(brush);
+            $('zoom-hint').classList.remove('hidden');
           } else {
-            $("zoom-hint").classList.add("hidden");
+            $('zoom-hint').classList.add('hidden');
           }
           function redraw() {
             gx.call(d3.axisBottom(x).ticks(6));
-            gx.selectAll("path,line").attr("stroke", axisColor);
-            gx.selectAll("text").attr("fill", axisColor);
-            g.selectAll("path.series").remove();
+            gx.selectAll('path,line').attr('stroke', axisColor);
+            gx.selectAll('text').attr('fill', axisColor);
+            g.selectAll('path.series').remove();
             for (const s of series) {
-              g.append("path")
+              g.append('path')
                 .datum(s.points)
-                .attr("class", "series")
-                .attr("fill", "none")
-                .attr("stroke-width", 1.8)
-                .attr("stroke", s.color)
+                .attr('class', 'series')
+                .attr('fill', 'none')
+                .attr('stroke-width', 1.8)
+                .attr('stroke', s.color)
                 .attr(
-                  "d",
+                  'd',
                   d3
                     .line()
                     .x((p) => x(p.x))
-                    .y((p) => y(normVal(convertUnits(p.y, s.meta.Units), s)))
+                    .y((p) => y(normVal(convertUnits(p.y, s.meta.Units), s))),
                 );
             }
           }
           redraw();
-          svg.on("dblclick", () => {
+          svg.on('dblclick', () => {
             x.domain(fullDomain);
             currentXDomain = null;
             redraw();
           });
           const tooltip = d3
             .select(container)
-            .append("div")
-            .style("position", "absolute")
-            .style("pointer-events", "none")
-            .style("background", tooltipBg)
-            .style("border", "1px solid " + borderColor)
-            .style("color", textColor)
-            .style("padding", "6px 8px")
-            .style("border-radius", "6px")
-            .style("font-size", "12px")
-            .style("display", "none");
+            .append('div')
+            .style('position', 'absolute')
+            .style('pointer-events', 'none')
+            .style('background', tooltipBg)
+            .style('border', '1px solid ' + borderColor)
+            .style('color', textColor)
+            .style('padding', '6px 8px')
+            .style('border-radius', '6px')
+            .style('font-size', '12px')
+            .style('display', 'none');
           const allPts = series
             .flatMap((s) =>
               s.points.map((p) => ({
@@ -1842,39 +1712,30 @@
                 label: p.label,
                 color: s.color,
                 name: s.meta.Name,
-                units: normalize ? "%" : convertUnitLabel(s.meta.Units),
-              }))
+                units: normalize ? '%' : convertUnitLabel(s.meta.Units),
+              })),
             )
             .sort((a, b) => a.x - b.x);
           const bisect = d3.bisector((d) => d.x).left;
           svg
-            .on("mousemove", (ev) => {
+            .on('mousemove', (ev) => {
               const [mx] = d3.pointer(ev, g.node());
               const x0 = x.invert(mx);
-              const i = Math.min(
-                allPts.length - 1,
-                Math.max(0, bisect(allPts, x0))
-              );
+              const i = Math.min(allPts.length - 1, Math.max(0, bisect(allPts, x0)));
               const d = allPts[i];
               tooltip
-                .style("display", "block")
-                .style("left", ev.offsetX + 12 + "px")
-                .style("top", ev.offsetY - 24 + "px")
+                .style('display', 'block')
+                .style('left', ev.offsetX + 12 + 'px')
+                .style('top', ev.offsetY - 24 + 'px')
                 .html(
-                  `<div><strong>${
-                    d.label
-                  }</strong></div><div><span style='color:${d.color}'>${
+                  `<div><strong>${d.label}</strong></div><div><span style='color:${d.color}'>${
                     d.name
-                  }</span> — ${fmt(d.y)} ${d.units || ""}${
-                    normalize
-                      ? ` <span class='text-[var(--muted)]'>(raw ${fmt(
-                          d.raw
-                        )})</span>`
-                      : ""
-                  }</div>`
+                  }</span> — ${fmt(d.y)} ${d.units || ''}${
+                    normalize ? ` <span class='text-[var(--muted)]'>(raw ${fmt(d.raw)})</span>` : ''
+                  }</div>`,
                 );
             })
-            .on("mouseleave", () => tooltip.style("display", "none"));
+            .on('mouseleave', () => tooltip.style('display', 'none'));
         } else {
           const x = d3
             .scaleBand()
@@ -1886,60 +1747,54 @@
             .domain(series.map((s) => String(s.id)))
             .range([0, x.bandwidth()])
             .padding(0.05);
-          const gx = g
-            .append("g")
-            .attr("transform", `translate(0,${h})`)
-            .call(d3.axisBottom(x));
-          const gy = g.append("g").call(d3.axisLeft(y).ticks(6));
+          const gx = g.append('g').attr('transform', `translate(0,${h})`).call(d3.axisBottom(x));
+          const gy = g.append('g').call(d3.axisLeft(y).ticks(6));
           if (showSecondary) {
             const axisR = d3
               .axisRight(y)
               .ticks(6)
-              .tickFormat((t) =>
-                fmt(convertDisplayedToOpposite(t, primaryMeta.Units))
-              );
-            g.append("g")
-              .attr("transform", `translate(${w},0)`)
+              .tickFormat((t) => fmt(convertDisplayedToOpposite(t, primaryMeta.Units)));
+            g.append('g')
+              .attr('transform', `translate(${w},0)`)
               .call(axisR)
-              .selectAll("text")
-              .attr("fill", axisColor);
+              .selectAll('text')
+              .attr('fill', axisColor);
             if (convertUnitLabelOpposite(primaryMeta.Units)) {
-              g.append("text")
-                .attr("x", w)
-                .attr("y", -4)
-                .attr("text-anchor", "end")
-                .attr("fill", axisColor)
-                .attr("font-size", "10px")
+              g.append('text')
+                .attr('x', w)
+                .attr('y', -4)
+                .attr('text-anchor', 'end')
+                .attr('fill', axisColor)
+                .attr('font-size', '10px')
                 .text(convertUnitLabelOpposite(primaryMeta.Units));
             }
           }
-          gx.selectAll("path,line").attr("stroke", axisColor);
-          gy.selectAll("path,line").attr("stroke", axisColor);
-          gx.selectAll("text")
-            .attr("fill", axisColor)
-            .style("text-anchor", "end")
-            .attr("transform", "rotate(-30)");
-          gy.selectAll("text").attr("fill", axisColor);
+          gx.selectAll('path,line').attr('stroke', axisColor);
+          gy.selectAll('path,line').attr('stroke', axisColor);
+          gx.selectAll('text')
+            .attr('fill', axisColor)
+            .style('text-anchor', 'end')
+            .attr('transform', 'rotate(-30)');
+          gy.selectAll('text').attr('fill', axisColor);
           series.forEach((s) => {
             g.selectAll(`rect.bar-${s.id}`)
               .data(s.points)
               .enter()
-              .append("rect")
-              .attr("x", (d) => x(d.xLabel) + x1(String(s.id)))
-              .attr("y", (d) => y(convertUnits(d.y, s.meta.Units)))
-              .attr("width", x1.bandwidth())
-              .attr("height", (d) => h - y(convertUnits(d.y, s.meta.Units)))
-              .attr("fill", s.color);
+              .append('rect')
+              .attr('x', (d) => x(d.xLabel) + x1(String(s.id)))
+              .attr('y', (d) => y(convertUnits(d.y, s.meta.Units)))
+              .attr('width', x1.bandwidth())
+              .attr('height', (d) => h - y(convertUnits(d.y, s.meta.Units)))
+              .attr('fill', s.color);
           });
         }
-        const leg = $("legend");
-        leg.innerHTML = "";
+        const leg = $('legend');
+        leg.innerHTML = '';
         series.forEach((s) => {
-          const item = document.createElement("button");
-          item.className = "text-xs px-2 py-1 rounded border";
-          item.style.borderColor = cssVar("--border");
-          item.style.background =
-            s.visible === false ? "transparent" : "var(--panel-2)";
+          const item = document.createElement('button');
+          item.className = 'text-xs px-2 py-1 rounded border';
+          item.style.borderColor = cssVar('--border');
+          item.style.background = s.visible === false ? 'transparent' : 'var(--panel-2)';
           item.innerHTML = `<span style="display:inline-block;width:10px;height:10px;background:${s.color};border-radius:2px;margin-right:6px;vertical-align:middle"></span>${s.meta.Name}`;
           item.onclick = () => {
             const v = selected.get(s.id);
@@ -1952,9 +1807,7 @@
       }
 
       function toLDC(points, units, normalize) {
-        const vals = points
-          .map((p) => convertUnits(p.y, units))
-          .filter((v) => Number.isFinite(v));
+        const vals = points.map((p) => convertUnits(p.y, units)).filter((v) => Number.isFinite(v));
         if (!vals.length) return [];
         vals.sort((a, b) => b - a);
         const peak = vals[0];
@@ -1967,17 +1820,17 @@
 
       async function renderLDC(series) {
         await ensureD3();
-        const container = $("chart");
-        container.innerHTML = "";
+        const container = $('chart');
+        container.innerHTML = '';
         const rect = container.getBoundingClientRect();
         const width = rect.width,
           height = rect.height;
         const m = { top: 16, right: 24, bottom: 40, left: 56 },
           w = width - m.left - m.right,
           h = height - m.top - m.bottom;
-        const axisColor = cssVar("--chart-axis"),
-          gridColor = cssVar("--chart-grid");
-        const normalize = $("ldc-normalize")?.checked === true;
+        const axisColor = cssVar('--chart-axis'),
+          gridColor = cssVar('--chart-grid');
+        const normalize = $('ldc-normalize')?.checked === true;
 
         const curves = series
           .map((s) => ({
@@ -1986,7 +1839,7 @@
           }))
           .filter((c) => c.points.length);
         if (!curves.length) {
-          $("insights").textContent = "No data available for LDC.";
+          $('insights').textContent = 'No data available for LDC.';
           return;
         }
 
@@ -1994,81 +1847,75 @@
         const x = d3.scaleLinear().domain([0, 100]).range([0, w]);
         const y = d3.scaleLinear().domain([0, yMax]).nice().range([h, 0]);
 
-        const svg = d3
-          .select(container)
-          .append("svg")
-          .attr("width", width)
-          .attr("height", height);
-        const g = svg
-          .append("g")
-          .attr("transform", `translate(${m.left},${m.top})`);
+        const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
+        const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
 
-        g.append("g")
-          .attr("class", "grid")
-          .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(""))
-          .selectAll("line")
-          .attr("stroke", gridColor)
-          .attr("stroke-opacity", 0.35);
-        g.select(".grid").select(".domain").remove();
+        g.append('g')
+          .attr('class', 'grid')
+          .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(''))
+          .selectAll('line')
+          .attr('stroke', gridColor)
+          .attr('stroke-opacity', 0.35);
+        g.select('.grid').select('.domain').remove();
 
         const gx = g
-          .append("g")
-          .attr("transform", `translate(0,${h})`)
+          .append('g')
+          .attr('transform', `translate(0,${h})`)
           .call(
             d3
               .axisBottom(x)
               .ticks(6)
-              .tickFormat((d) => d + "%")
+              .tickFormat((d) => d + '%'),
           );
-        const gy = g.append("g").call(d3.axisLeft(y).ticks(6));
-        gx.selectAll("path,line").attr("stroke", axisColor);
-        gy.selectAll("path,line").attr("stroke", axisColor);
-        gx.selectAll("text").attr("fill", axisColor);
-        gy.selectAll("text").attr("fill", axisColor);
+        const gy = g.append('g').call(d3.axisLeft(y).ticks(6));
+        gx.selectAll('path,line').attr('stroke', axisColor);
+        gy.selectAll('path,line').attr('stroke', axisColor);
+        gx.selectAll('text').attr('fill', axisColor);
+        gy.selectAll('text').attr('fill', axisColor);
 
         const line = d3
           .line()
           .x((d) => x(d.x))
           .y((d) => y(d.y));
         curves.forEach((c) => {
-          g.append("path")
+          g.append('path')
             .datum(c.points)
-            .attr("fill", "none")
-            .attr("stroke", c.color)
-            .attr("stroke-width", 1.8)
-            .attr("d", line);
+            .attr('fill', 'none')
+            .attr('stroke', c.color)
+            .attr('stroke-width', 1.8)
+            .attr('d', line);
         });
 
         [10, 50, 90].forEach((p) => {
           const xx = x(p);
-          g.append("line")
-            .attr("x1", xx)
-            .attr("x2", xx)
-            .attr("y1", 0)
-            .attr("y2", h)
-            .attr("stroke", axisColor)
-            .attr("stroke-dasharray", "2,3")
-            .attr("opacity", 0.6);
+          g.append('line')
+            .attr('x1', xx)
+            .attr('x2', xx)
+            .attr('y1', 0)
+            .attr('y2', h)
+            .attr('stroke', axisColor)
+            .attr('stroke-dasharray', '2,3')
+            .attr('opacity', 0.6);
         });
 
-        const textColor = cssVar("--text"),
-          borderColor = cssVar("--border"),
-          tooltipBg = cssVar("--chart-tooltip-bg");
+        const textColor = cssVar('--text'),
+          borderColor = cssVar('--border'),
+          tooltipBg = cssVar('--chart-tooltip-bg');
         const tooltip = d3
           .select(container)
-          .append("div")
-          .style("position", "absolute")
-          .style("pointer-events", "none")
-          .style("background", tooltipBg)
-          .style("border", "1px solid " + borderColor)
-          .style("color", textColor)
-          .style("padding", "6px 8px")
-          .style("border-radius", "6px")
-          .style("font-size", "12px")
-          .style("display", "none");
+          .append('div')
+          .style('position', 'absolute')
+          .style('pointer-events', 'none')
+          .style('background', tooltipBg)
+          .style('border', '1px solid ' + borderColor)
+          .style('color', textColor)
+          .style('padding', '6px 8px')
+          .style('border-radius', '6px')
+          .style('font-size', '12px')
+          .style('display', 'none');
 
         svg
-          .on("mousemove", (event) => {
+          .on('mousemove', (event) => {
             const [mx] = d3.pointer(event, g.node());
             const px = Math.max(0, Math.min(100, x.invert(mx)));
             const rows = curves
@@ -2081,35 +1928,32 @@
               })
               .filter(Boolean)
               .sort((a, b) => b.y - a.y);
-            const unitLabel = normalize
-              ? "%"
-              : convertUnitLabel(curves[0].meta.Units);
+            const unitLabel = normalize ? '%' : convertUnitLabel(curves[0].meta.Units);
             tooltip
-              .style("display", "block")
-              .style("left", event.offsetX + 12 + "px")
-              .style("top", event.offsetY - 24 + "px")
+              .style('display', 'block')
+              .style('left', event.offsetX + 12 + 'px')
+              .style('top', event.offsetY - 24 + 'px')
               .html(
                 `<div><strong>P${px.toFixed(0)}</strong></div>` +
                   rows
                     .map(
                       (r) =>
                         `<div><span style=\"color:${r.color}\">${escapeHtml(
-                          r.name
-                        )}</span> — ${fmt(r.y)} ${unitLabel || ""}</div>`
+                          r.name,
+                        )}</span> — ${fmt(r.y)} ${unitLabel || ''}</div>`,
                     )
-                    .join("")
+                    .join(''),
               );
           })
-          .on("mouseleave", () => tooltip.style("display", "none"));
+          .on('mouseleave', () => tooltip.style('display', 'none'));
 
-        const leg = $("legend");
-        leg.innerHTML = "";
+        const leg = $('legend');
+        leg.innerHTML = '';
         curves.forEach((s) => {
-          const item = document.createElement("button");
-          item.className = "text-xs px-2 py-1 rounded border";
-          item.style.borderColor = cssVar("--border");
-          item.style.background =
-            s.visible === false ? "transparent" : "var(--panel-2)";
+          const item = document.createElement('button');
+          item.className = 'text-xs px-2 py-1 rounded border';
+          item.style.borderColor = cssVar('--border');
+          item.style.background = s.visible === false ? 'transparent' : 'var(--panel-2)';
           item.innerHTML = `<span style=\"display:inline-block;width:10px;height:10px;background:${s.color};border-radius:2px;margin-right:6px;vertical-align:middle\"></span>${s.meta.Name}`;
           item.onclick = () => {
             const v = selected.get(s.id);
@@ -2120,26 +1964,18 @@
           leg.appendChild(item);
         });
 
-        const el = $("insights");
-        const lbl = normalize ? "(normalized to each series peak)" : "";
+        const el = $('insights');
+        const lbl = normalize ? '(normalized to each series peak)' : '';
         el.innerHTML = `Load duration curve ${lbl}`;
-        $("units").textContent = normalize
-          ? "%"
-          : convertUnitLabel(curves[0]?.meta?.Units || "");
+        $('units').textContent = normalize ? '%' : convertUnitLabel(curves[0]?.meta?.Units || '');
       }
 
       // Signals inputs
-      [
-        "search",
-        "filter-freq",
-        "filter-meter",
-        "filter-group",
-        "fav-only",
-      ].forEach((id) =>
-        $(id).addEventListener("input", populateDictionaryList)
+      ['search', 'filter-freq', 'filter-meter', 'filter-group', 'fav-only'].forEach((id) =>
+        $(id).addEventListener('input', populateDictionaryList),
       );
 
-      $("file-input").addEventListener("change", async (e) => {
+      $('file-input').addEventListener('change', async (e) => {
         const f = e.target.files[0];
         if (f) await handleFile(f);
       });
@@ -2148,66 +1984,65 @@
         if (!el) return;
         const highlight = () =>
           el.classList.add(
-            "ring-2",
-            "ring-[var(--accent)]",
-            "ring-offset-2",
-            "ring-offset-[var(--panel)]"
+            'ring-2',
+            'ring-[var(--accent)]',
+            'ring-offset-2',
+            'ring-offset-[var(--panel)]',
           );
         const unhighlight = () =>
           el.classList.remove(
-            "ring-2",
-            "ring-[var(--accent)]",
-            "ring-offset-2",
-            "ring-offset-[var(--panel)]"
+            'ring-2',
+            'ring-[var(--accent)]',
+            'ring-offset-2',
+            'ring-offset-[var(--panel)]',
           );
-        ["dragenter", "dragover"].forEach((evt) =>
+        ['dragenter', 'dragover'].forEach((evt) =>
           el.addEventListener(evt, (e) => {
             e.preventDefault();
             e.stopPropagation();
             highlight();
-          })
+          }),
         );
-        ["dragleave", "drop"].forEach((evt) =>
+        ['dragleave', 'drop'].forEach((evt) =>
           el.addEventListener(evt, (e) => {
             e.preventDefault();
             e.stopPropagation();
             unhighlight();
-          })
+          }),
         );
-        el.addEventListener("drop", async (e) => {
-          const f =
-            e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        el.addEventListener('drop', async (e) => {
+          const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
           if (f) {
             await handleFile(f);
           }
         });
-        el.addEventListener("click", () => {
-          const fi = $("file-input");
+        el.addEventListener('click', () => {
+          const fi = $('file-input');
           if (fi) fi.click();
         });
       }
-      enableDropZone($("drop"));
+      enableDropZone($('drop'));
 
-      $("btn-signals-collapse").addEventListener("click", () => {
-        const body = $("signals-body");
-        const btn = $("btn-signals-collapse");
-        const hidden = body.classList.toggle("hidden");
-        btn.setAttribute("aria-expanded", String(!hidden));
-        btn.textContent = hidden ? "Show" : "Hide";
-        localStorage.setItem(COLLAPSE_KEY, hidden ? "1" : "0");
+      $('btn-signals-collapse').addEventListener('click', () => {
+        const body = $('signals-body');
+        const btn = $('btn-signals-collapse');
+        const hidden = body.classList.toggle('hidden');
+        btn.setAttribute('aria-expanded', String(!hidden));
+        btn.textContent = hidden ? 'Show' : 'Hide';
+        localStorage.setItem(COLLAPSE_KEY, hidden ? '1' : '0');
       });
       (function restoreSignalsCollapse() {
         const v = localStorage.getItem(COLLAPSE_KEY);
-        const body = $("signals-body");
-        const btn = $("btn-signals-collapse");
-        if (v === "1") {
-          body.classList.add("hidden");
-          btn.setAttribute("aria-expanded", "false");
-          btn.textContent = "Show";
+        const body = $('signals-body');
+        const btn = $('btn-signals-collapse');
+        if (v === '1') {
+          body.classList.add('hidden');
+          btn.setAttribute('aria-expanded', 'false');
+          btn.textContent = 'Show';
         } else {
-          body.classList.remove("hidden");
-          btn.setAttribute("aria-expanded", "true");
-          btn.textContent = "Hide";
+          body.classList.remove('hidden');
+          btn.setAttribute('aria-expanded', 'true');
+          btn.textContent = 'Hide';
         }
       })();
 
@@ -2217,75 +2052,80 @@
         populateFilters(list);
         populateDictionaryList();
         restoreSelection();
+        // If nothing selected from previous session, auto-select the first meter
+        if (selected.size === 0) {
+          const firstMeter = list.find((d) => d.IsMeter == 1);
+          if (firstMeter) {
+            const sel = $('dictionary');
+            for (const option of sel.options) {
+              if (Number(option.value) === firstMeter.id) {
+                option.selected = true;
+                break;
+              }
+            }
+            handleSelectionChange();
+          }
+        }
       }
       function populateFilters(list) {
-        const groups = Array.from(
-          new Set(list.map((d) => d.IndexGroup).filter(Boolean))
-        ).sort();
-        const gSel = $("filter-group");
+        const groups = Array.from(new Set(list.map((d) => d.IndexGroup).filter(Boolean))).sort();
+        const gSel = $('filter-group');
         gSel.innerHTML =
           `<option value=\"\">Any index group</option>` +
-          groups.map((g) => `<option>${escapeHtml(g)}</option>`).join("");
-        [
-          "search",
-          "filter-freq",
-          "filter-meter",
-          "filter-group",
-          "dictionary",
-          "fav-only",
-        ].forEach((id) => ($(id).disabled = false));
-        $("meta-count").textContent = `${list.length} entries`;
+          groups.map((g) => `<option>${escapeHtml(g)}</option>`).join('');
+        ['search', 'filter-freq', 'filter-meter', 'filter-group', 'dictionary', 'fav-only'].forEach(
+          (id) => ($(id).disabled = false),
+        );
+        $('meta-count').textContent = `${list.length} entries`;
       }
       function populateDictionaryList() {
-        const q = $("search").value.trim().toLowerCase();
-        const fFreq = $("filter-freq").value;
-        const fMeter = $("filter-meter").value;
-        const fGroup = $("filter-group").value;
-        const onlyFav = $("fav-only")?.checked;
+        const q = $('search').value.trim().toLowerCase();
+        const fFreq = $('filter-freq').value;
+        const fMeter = $('filter-meter').value;
+        const fGroup = $('filter-group').value;
+        const onlyFav = $('fav-only')?.checked;
         const filtered = dict.filter((d) => {
           if (fFreq && d.freq !== fFreq) return false;
-          if (fMeter !== "" && String(d.IsMeter) !== fMeter) return false;
+          if (fMeter !== '' && String(d.IsMeter) !== fMeter) return false;
           if (fGroup && d.IndexGroup !== fGroup) return false;
           if (onlyFav && !favs.has(d.id)) return false;
-          const hay = `${d.Name} ${d.IndexGroup || ""} ${d.key || ""} ${
-            d.Units || ""
+          const hay = `${d.Name} ${d.IndexGroup || ''} ${d.key || ''} ${
+            d.Units || ''
           }`.toLowerCase();
           return !q || hay.includes(q);
         });
-        const sel = $("dictionary");
+        const sel = $('dictionary');
         sel.innerHTML = filtered
           .map((d) => {
-            const star = favs.has(d.id) ? "★ " : "";
-            const tag = d.IsMeter ? "M" : "V";
-            const units = d.Units
-              ? ` [${escapeHtml(convertUnitLabel(d.Units))}]`
-              : "";
-            const key = d.key ? ` (${escapeHtml(d.key)})` : "";
+            const star = favs.has(d.id) ? '★ ' : '';
+            const tag = d.IsMeter ? 'M' : 'V';
+            const units = d.Units ? ` [${escapeHtml(convertUnitLabel(d.Units))}]` : '';
+            const key = d.key ? ` (${escapeHtml(d.key)})` : '';
             const label = `${star}${d.freq} | ${
-              d.IndexGroup || "—"
+              d.IndexGroup || '—'
             } | [${tag}] ${escapeHtml(d.Name)}${key}${units}`;
             return `<option value=\"${d.id}\">${label}</option>`;
           })
-          .join("");
-        $("meta-count").textContent = `${filtered.length} / ${dict.length}`;
+          .join('');
+        $('meta-count').textContent = `${filtered.length} / ${dict.length}`;
       }
       function escapeHtml(s) {
         return String(s).replace(
           /[&<>"']/g,
           (m) =>
             ({
-              "&": "&amp;",
-              "<": "&lt;",
-              ">": "&gt;",
-              '"': "&quot;",
-              "'": "&#039;",
-            }[m])
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#039;',
+            })[m],
         );
       }
 
-      $("dictionary").addEventListener("change", handleSelectionChange);
-      $("dictionary").addEventListener("dblclick", () => {
-        const sel = $("dictionary");
+      $('dictionary').addEventListener('change', handleSelectionChange);
+      $('dictionary').addEventListener('dblclick', () => {
+        const sel = $('dictionary');
         const opt = sel.selectedOptions[0];
         if (!opt) return;
         const id = Number(opt.value);
@@ -2295,38 +2135,36 @@
         populateDictionaryList();
       });
 
-      $("btn-export").addEventListener("click", () => {
+      $('btn-export').addEventListener('click', () => {
         if (selected.size === 0) return;
-        downloadFile("series.csv", exportCSV(selected));
+        downloadFile('series.csv', exportCSV(selected));
       });
-      $("view-zoom").addEventListener("click", () => {
+      $('view-zoom').addEventListener('click', () => {
         zoomEnabled = !zoomEnabled;
-        $("view-zoom").textContent = zoomEnabled
-          ? "Disable Zoom"
-          : "Enable Zoom";
+        $('view-zoom').textContent = zoomEnabled ? 'Disable Zoom' : 'Enable Zoom';
         if (!zoomEnabled) currentXDomain = null;
         renderAll();
       });
-      $("view-zoom").textContent = zoomEnabled ? "Disable Zoom" : "Enable Zoom";
+      $('view-zoom').textContent = zoomEnabled ? 'Disable Zoom' : 'Enable Zoom';
 
-      const btnTime = $("view-time"),
-        btnLdc = $("view-ldc"),
-        chkNorm = $("ldc-normalize");
-      btnTime?.addEventListener("click", () => {
-        viewMode = "time";
-        btnTime.classList.add("bg-[var(--panel-2)]");
-        btnLdc?.classList.remove("bg-[var(--panel-2)]");
-        $("zoom-hint").classList.add("hidden");
+      const btnTime = $('view-time'),
+        btnLdc = $('view-ldc'),
+        chkNorm = $('ldc-normalize');
+      btnTime?.addEventListener('click', () => {
+        viewMode = 'time';
+        btnTime.classList.add('bg-[var(--panel-2)]');
+        btnLdc?.classList.remove('bg-[var(--panel-2)]');
+        $('zoom-hint').classList.add('hidden');
         renderAll();
       });
-      btnLdc?.addEventListener("click", () => {
-        viewMode = "ldc";
-        btnLdc.classList.add("bg-[var(--panel-2)]");
-        btnTime?.classList.remove("bg-[var(--panel-2)]");
-        $("zoom-hint").classList.add("hidden");
+      btnLdc?.addEventListener('click', () => {
+        viewMode = 'ldc';
+        btnLdc.classList.add('bg-[var(--panel-2)]');
+        btnTime?.classList.remove('bg-[var(--panel-2)]');
+        $('zoom-hint').classList.add('hidden');
         renderAll();
       });
-      chkNorm?.addEventListener("change", () => {
+      chkNorm?.addEventListener('change', () => {
         // Always re-render; normalization now applies to both time & LDC views
         renderAll();
       });
@@ -2336,7 +2174,7 @@
           const raw = localStorage.getItem(SELECT_KEY);
           if (!raw) return;
           const ids = JSON.parse(raw);
-          const sel = $("dictionary");
+          const sel = $('dictionary');
           for (const option of sel.options) {
             if (ids.includes(Number(option.value))) option.selected = true;
           }
@@ -2345,15 +2183,14 @@
       }
       // Responsive resize: observe chart container; throttle with rAF for smooth live resizing
       (function () {
-        const chartEl = document.getElementById("chart");
-        if (!chartEl || typeof ResizeObserver === "undefined") return;
+        const chartEl = document.getElementById('chart');
+        if (!chartEl || typeof ResizeObserver === 'undefined') return;
         let frame = null;
         let lastW = 0,
           lastH = 0;
         const ro = new ResizeObserver((entries) => {
           const cr = entries[0].contentRect;
-          if (Math.abs(cr.width - lastW) < 1 && Math.abs(cr.height - lastH) < 1)
-            return;
+          if (Math.abs(cr.width - lastW) < 1 && Math.abs(cr.height - lastH) < 1) return;
           lastW = cr.width;
           lastH = cr.height;
           if (frame) return; // already scheduled
@@ -2366,7 +2203,7 @@
         });
         ro.observe(chartEl);
         // also listen to window resize for layout shifts affecting chart width indirectly (e.g., sidebar collapse)
-        window.addEventListener("resize", () => {
+        window.addEventListener('resize', () => {
           if (frame) return;
           frame = requestAnimationFrame(() => {
             frame = null;
@@ -2379,76 +2216,48 @@
 
       (function () {
         try {
-          console.assert(fmt(1000) === "1.00k", "fmt k");
+          console.assert(fmt(1000) === '1.00k', 'fmt k');
           const st = computeStats([1, 2, 3, 4]);
           console.assert(
-            st.count === 4 &&
-              st.min === 1 &&
-              st.max === 4 &&
-              Math.abs(st.mean - 2.5) < 1e-9,
-            "stats"
+            st.count === 4 && st.min === 1 && st.max === 4 && Math.abs(st.mean - 2.5) < 1e-9,
+            'stats',
           );
-          const ptsH = toHourlyPoints([
-            { value: 1, env: 1, month: 1, day: 1, hour: 0, minute: 0 },
-          ]);
-          console.assert(
-            ptsH.length === 1 && typeof ptsH[0].x === "number",
-            "hourly points"
-          );
+          const ptsH = toHourlyPoints([{ value: 1, env: 1, month: 1, day: 1, hour: 0, minute: 0 }]);
+          console.assert(ptsH.length === 1 && typeof ptsH[0].x === 'number', 'hourly points');
           const ptsM = toMonthlyPoints([{ value: 5, env: 2, month: 7 }]);
-          console.assert(
-            ptsM.length === 1 && ptsM[0].xLabel.startsWith("E2-"),
-            "monthly points"
-          );
-          const m = new Map([
-            [1, { meta: { Units: "W" }, points: [{ xLabel: "L", y: 3 }] }],
-          ]);
+          console.assert(ptsM.length === 1 && ptsM[0].xLabel.startsWith('E2-'), 'monthly points');
+          const m = new Map([[1, { meta: { Units: 'W' }, points: [{ xLabel: 'L', y: 3 }] }]]);
           const csv = exportCSV(m);
           console.assert(
             /label,value,series_id/.test(csv) || /datetime_utc/.test(csv),
-            "csv header"
+            'csv header',
           );
-          console.assert(escapeHtml("<tag>") === "&lt;tag&gt;", "escapeHtml");
-          console.assert(typeof zoomEnabled === "boolean", "zoom flag exists");
-          const ldc = toLDC([{ y: 1 }, { y: 3 }, { y: 2 }], "W", false);
-          console.assert(
-            ldc.length === 3 && ldc[0].y >= ldc[1].y,
-            "ldc sorted"
-          );
-          console.assert(viewMode === "time", "default view mode time");
-          const normEl = document.getElementById("ldc-normalize");
-          console.assert(
-            normEl && normEl.checked === false,
-            "ldc normalize default OFF"
-          );
+          console.assert(escapeHtml('<tag>') === '&lt;tag&gt;', 'escapeHtml');
+          console.assert(typeof zoomEnabled === 'boolean', 'zoom flag exists');
+          const ldc = toLDC([{ y: 1 }, { y: 3 }, { y: 2 }], 'W', false);
+          console.assert(ldc.length === 3 && ldc[0].y >= ldc[1].y, 'ldc sorted');
+          console.assert(viewMode === 'time', 'default view mode time');
+          const normEl = document.getElementById('ldc-normalize');
+          console.assert(normEl && normEl.checked === false, 'ldc normalize default OFF');
           const _oldIP = isIP,
             _esi = prefEnergySI,
             _eip = prefEnergyIP,
             _pip = prefPowerIP;
           isIP = false;
-          prefEnergySI = "kWh";
-          console.assert(
-            Math.abs(convertUnits(3.6e6, "J") - 1) < 1e-9,
-            "SI kWh scaling"
-          );
+          prefEnergySI = 'kWh';
+          console.assert(Math.abs(convertUnits(3.6e6, 'J') - 1) < 1e-9, 'SI kWh scaling');
           isIP = true;
-          prefEnergyIP = "kBTU";
-          console.assert(
-            Math.abs(convertUnits(1055.06, "J") - 1) < 1e-3,
-            "IP kBTU scaling"
-          );
-          prefPowerIP = "Tons";
-          console.assert(
-            Math.abs(convertUnits(12000, "Btu/h") - 1) < 1e-9,
-            "IP Tons scaling"
-          );
+          prefEnergyIP = 'kBTU';
+          console.assert(Math.abs(convertUnits(1055.06, 'J') - 1) < 1e-3, 'IP kBTU scaling');
+          prefPowerIP = 'Tons';
+          console.assert(Math.abs(convertUnits(12000, 'Btu/h') - 1) < 1e-9, 'IP Tons scaling');
           isIP = _oldIP;
           prefEnergySI = _esi;
           prefEnergyIP = _eip;
           prefPowerIP = _pip;
-          console.info("Self-tests passed");
+          console.info('Self-tests passed');
         } catch (e) {
-          console.warn("Self-tests failed", e);
+          console.warn('Self-tests failed', e);
         }
       })();
     </script>
