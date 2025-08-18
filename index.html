@@ -155,15 +155,7 @@
             <strong>Signals</strong
             ><span id="meta-count" class="text-muted dark:text-muted-dark"></span>
           </div>
-          <button
-            id="btn-signals-collapse"
-            type="button"
-            class="px-2 py-1 text-xs border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
-            aria-expanded="true"
-            aria-controls="signals-body"
-          >
-            Hide
-          </button>
+          <!-- Collapse toggle removed -->
         </div>
         <div id="signals-body" class="p-3 flex flex-col gap-2 overflow-auto">
           <div
@@ -2290,28 +2282,7 @@
       }
       enableDropZone($('drop'));
 
-      $('btn-signals-collapse').addEventListener('click', () => {
-        const body = $('signals-body');
-        const btn = $('btn-signals-collapse');
-        const hidden = body.classList.toggle('hidden');
-        btn.setAttribute('aria-expanded', String(!hidden));
-        btn.textContent = hidden ? 'Show' : 'Hide';
-        localStorage.setItem(COLLAPSE_KEY, hidden ? '1' : '0');
-      });
-      (function restoreSignalsCollapse() {
-        const v = localStorage.getItem(COLLAPSE_KEY);
-        const body = $('signals-body');
-        const btn = $('btn-signals-collapse');
-        if (v === '1') {
-          body.classList.add('hidden');
-          btn.setAttribute('aria-expanded', 'false');
-          btn.textContent = 'Show';
-        } else {
-          body.classList.remove('hidden');
-          btn.setAttribute('aria-expanded', 'true');
-          btn.textContent = 'Hide';
-        }
-      })();
+      // Signals section always visible; collapse feature removed.
 
       async function handleFile(file) {
         await readDbFile(file);
