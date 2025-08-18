@@ -1,21 +1,45 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class',
   content: ['./index.html'],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        bg: '#ffffff',
+        'bg-dark': '#0f1418',
+        panel: '#ffffff',
+        'panel-dark': '#151a20',
+        'panel-2': '#f3f6fb',
+        'panel-2-dark': '#0f141a',
+        text: '#0b1220',
+        'text-dark': '#e6eef7',
+        muted: '#5b6b7f',
+        'muted-dark': '#9fb0c3',
+        accent: '#2563eb',
+        'accent-dark': '#5aa5ff',
+        'accent-strong': '#1d4ed8',
+        'accent-strong-dark': '#377df5',
+        'accent-2': '#16a34a',
+        'accent-2-dark': '#7bd389',
+        danger: '#dc2626',
+        'danger-dark': '#ff6b6b',
+        border: '#e2e8f0',
+        'border-dark': '#223042',
+        code: '#eef2f7',
+  'code-dark': '#0b0f14',
+  // Chart palette (light / dark pairs where needed)
+  'chart-1': '#2563eb',
+  'chart-2': '#16a34a',
+  'chart-3': '#9333ea',
+  'chart-4': '#dc2626',
+  'chart-5': '#f59e0b',
+  'chart-6': '#0891b2',
+  'chart-7': '#64748b',
+  'chart-8': '#4f46e5',
+  'chart-9': '#059669',
+  'chart-10': '#d946ef'
+      },
+    },
   },
-  // Explicit safelist of arbitrary value utilities referencing CSS vars
-  safelist: [
-    'bg-[var(--bg)]',
-    'bg-[var(--code)]',
-    'bg-[var(--panel)]',
-    'bg-[var(--panel-2)]',
-    'bg-[var(--accent-strong)]',
-    'bg-[var(--accent-2)]',
-    'bg-[var(--danger)]',
-    'text-[var(--text)]',
-    'text-[var(--muted)]',
-    'text-[var(--danger)]',
-    'border-[var(--border)]'
-  ],
+  plugins: [],
 };

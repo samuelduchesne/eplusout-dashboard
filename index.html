@@ -21,62 +21,7 @@
     </script>
     <!-- Tailwind CSS compiled locally -->
     <link rel="stylesheet" href="dist/tailwind.css" />
-    <style>
-      :root {
-        --bg: #ffffff;
-        --panel: #ffffff;
-        --panel-2: #f3f6fb;
-        --text: #0b1220;
-        --muted: #5b6b7f;
-        --accent: #2563eb;
-        --accent-strong: #1d4ed8;
-        --accent-2: #16a34a;
-        --danger: #dc2626;
-        --border: #e2e8f0;
-        --code: #eef2f7;
-        --chart-grid: #e5e7eb;
-        --chart-axis: #334155;
-        --chart-line: #2563eb;
-        --chart-bar: #16a34a;
-        --chart-tooltip-bg: rgba(255, 255, 255, 0.98);
-      }
-      :root[data-theme='dark'] {
-        --bg: #0f1418;
-        --panel: #151a20;
-        --panel-2: #0f141a;
-        --text: #e6eef7;
-        --muted: #9fb0c3;
-        --accent: #5aa5ff;
-        --accent-strong: #377df5;
-        --accent-2: #7bd389;
-        --danger: #ff6b6b;
-        --border: #223042;
-        --code: #0b0f14;
-        --chart-grid: #2a384a;
-        --chart-axis: #9fb0c3;
-        --chart-line: #5aa5ff;
-        --chart-bar: #7bd389;
-        --chart-tooltip-bg: rgba(20, 25, 32, 0.95);
-      }
-      .icon-sun {
-        display: none;
-      }
-      .icon-moon {
-        display: block;
-      }
-      :root[data-theme='light'] .icon-sun {
-        display: block;
-      }
-      :root[data-theme='light'] .icon-moon {
-        display: none;
-      }
-      :root[data-theme='light'] header {
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(246, 249, 255, 0.95));
-      }
-      :root[data-theme='dark'] header {
-        background: linear-gradient(180deg, rgba(18, 24, 33, 0.9), rgba(12, 17, 23, 0.9));
-      }
-    </style>
+    <!-- Removed legacy CSS variables; using Tailwind semantic classes -->
     <script>
       window.__LIB_URLS__ = {
         d3: 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js',
@@ -85,22 +30,26 @@
       };
     </script>
   </head>
-  <body class="bg-[var(--bg)] text-[var(--text)] h-screen flex flex-col">
-    <header class="px-4 py-3 border-b border-[var(--border)] sticky top-0 z-10 backdrop-blur-sm">
+  <body
+    class="h-screen flex flex-col bg-bg text-text dark:bg-bg-dark dark:text-text-dark transition-colors"
+  >
+    <header
+      class="px-4 py-3 border-b border-border dark:border-border-dark sticky top-0 z-10 backdrop-blur-sm bg-white/95 dark:bg-[#121821]/90"
+    >
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div class="flex flex-col flex-1 min-w-0">
           <h1 class="text-base font-semibold tracking-wide truncate">
             EnergyPlus eplusout.sql Dashboard
           </h1>
-          <span class="text-xs text-[var(--muted)]"
+          <span class="text-xs text-muted dark:text-muted-dark"
             >Drop
-            <span class="bg-[var(--code)] px-1 py-0.5 rounded">eplusout.sql</span>
+            <span class="px-1 py-0.5 rounded bg-code dark:bg-code-dark">eplusout.sql</span>
             to explore variables & meters.</span
           >
         </div>
         <div class="flex flex-nowrap gap-2 overflow-x-auto items-center">
           <label
-            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)] cursor-pointer"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded cursor-pointer bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
           >
             <input id="file-input" type="file" accept=".sql,.sqlite,.db" class="hidden" />Open
             eplusout.sql
@@ -109,7 +58,7 @@
             id="btn-export"
             type="button"
             disabled
-            class="px-3 py-1.5 text-sm rounded-md bg-[var(--accent-strong)] text-white border border-[var(--accent-strong)] disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-3 py-1.5 text-sm rounded-md border disabled:opacity-50 disabled:cursor-not-allowed text-white bg-accent-strong dark:bg-accent-strong-dark border-accent-strong dark:border-accent-strong-dark"
           >
             Export CSV
           </button>
@@ -118,7 +67,7 @@
             type="button"
             aria-label="Toggle dark mode"
             title="Toggle dark mode"
-            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)]"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
           >
             <svg
               viewBox="0 0 24 24"
@@ -145,7 +94,7 @@
             type="button"
             aria-label="Toggle units"
             title="Toggle SI/IP units"
-            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)]"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
           >
             SI
           </button>
@@ -154,7 +103,7 @@
             type="button"
             aria-label="Unit settings"
             title="Unit settings"
-            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)]"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
           >
             <svg
               viewBox="0 0 24 24"
@@ -177,18 +126,19 @@
 
     <main class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-3 p-2 sm:p-3 flex-1 overflow-auto">
       <section
-        class="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--panel)] overflow-hidden min-h-0 order-1 lg:order-none"
+        class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-1 lg:order-none"
       >
         <div
-          class="flex justify-between items-center px-3 py-2 border-b border-[var(--border)] bg-[var(--panel-2)]"
+          class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark"
         >
           <div class="flex items-center gap-2">
-            <strong>Signals</strong><span id="meta-count" class="text-[var(--muted)]"></span>
+            <strong>Signals</strong
+            ><span id="meta-count" class="text-muted dark:text-muted-dark"></span>
           </div>
           <button
             id="btn-signals-collapse"
             type="button"
-            class="px-2 py-1 text-xs border rounded bg-[var(--panel)] border-[var(--border)] hover:bg-[var(--panel-2)]"
+            class="px-2 py-1 text-xs border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
             aria-expanded="true"
             aria-controls="signals-body"
           >
@@ -198,19 +148,19 @@
         <div id="signals-body" class="p-3 flex flex-col gap-2 overflow-auto">
           <div
             id="drop"
-            class="border-2 border-dashed border-[var(--border)] rounded p-3 text-center text-[var(--muted)] bg-[var(--panel)]"
+            class="border-2 border-dashed rounded p-3 text-center bg-panel dark:bg-panel-dark border-border dark:border-border-dark text-muted dark:text-muted-dark"
           >
             Drag & drop
-            <span class="bg-[var(--code)] px-1 rounded">eplusout.sql</span> here
+            <span class="px-1 rounded bg-code dark:bg-code-dark">eplusout.sql</span> here
           </div>
           <input
             type="text"
             id="search"
             placeholder="Search name/group/key/units…"
             disabled
-            class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+            class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
           />
-          <label class="flex items-center gap-2 text-xs text-[var(--muted)] select-none"
+          <label class="flex items-center gap-2 text-xs text-muted dark:text-muted-dark select-none"
             ><input id="fav-only" type="checkbox" class="h-3.5 w-3.5" />
             <span>Favorites only (double‑click items to ★/☆)</span></label
           >
@@ -218,7 +168,7 @@
             <select
               id="filter-freq"
               disabled
-              class="flex-1 border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+              class="flex-1 border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
             >
               <option value="">Any frequency</option>
               <option value="Hourly">Hourly</option>
@@ -227,7 +177,7 @@
             <select
               id="filter-meter"
               disabled
-              class="flex-1 border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+              class="flex-1 border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
             >
               <option value="">Vars & Meters</option>
               <option value="1">Meters only</option>
@@ -237,7 +187,7 @@
           <select
             id="filter-group"
             disabled
-            class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+            class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
           >
             <option value="">Any index group</option>
           </select>
@@ -245,32 +195,34 @@
             id="dictionary"
             size="12"
             multiple
-            class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+            class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
             disabled
           ></select>
-          <div class="text-xs text-[var(--muted)] mt-2">
+          <div class="text-xs text-muted dark:text-muted-dark mt-2">
             Tip: Choose an entry to plot. Hourly → line; Monthly → bars.
           </div>
         </div>
       </section>
 
       <section
-        class="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--panel)] overflow-hidden min-h-0 order-2 lg:order-none"
+        class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-2 lg:order-none"
       >
         <div
-          class="flex justify-between items-center px-3 py-2 border-b border-[var(--border)] bg-[var(--panel-2)]"
+          class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark"
         >
           <strong id="series-title">Series</strong
-          ><span id="units" class="text-[var(--muted)]"></span>
+          ><span id="units" class="text-muted dark:text-muted-dark"></span>
         </div>
         <div class="p-3 flex flex-col gap-3 overflow-auto">
-          <div id="series-meta" class="relative text-xs text-[var(--muted)]">
+          <div id="series-meta" class="relative text-xs text-muted dark:text-muted-dark">
             <div id="series-meta-entries" class="grid grid-cols-[auto_1fr] gap-x-2 pr-10"></div>
           </div>
           <div class="flex items-center justify-between flex-wrap gap-2">
             <div class="flex items-center gap-3 flex-wrap">
-              <div class="inline-flex rounded border border-[var(--border)] overflow-hidden">
-                <button id="view-time" class="px-2 py-1 text-xs bg-[var(--panel-2)]">
+              <div
+                class="inline-flex rounded border border-border dark:border-border-dark overflow-hidden"
+              >
+                <button id="view-time" class="px-2 py-1 text-xs bg-panel-2 dark:bg-panel-2-dark">
                   Time Series
                 </button>
                 <button id="view-ldc" class="px-2 py-1 text-xs">Load Duration</button>
@@ -281,20 +233,20 @@
               </label>
             </div>
             <div
-              class="flex items-center gap-2 ml-auto text-sm text-[var(--muted)]"
+              class="flex items-center gap-2 ml-auto text-sm text-muted dark:text-muted-dark"
               id="toolbar-actions"
             >
               <!-- Zoom always enabled (button removed) -->
               <!-- tariff button will be injected here if present -->
             </div>
           </div>
-          <div id="zoom-hint" class="text-xs text-[var(--muted)] hidden">
+          <div id="zoom-hint" class="text-xs text-muted dark:text-muted-dark hidden">
             Drag on the mini-map to zoom. Double-tap to reset.
           </div>
           <div id="legend" class="flex flex-wrap gap-2 items-center"></div>
           <div
             id="insights"
-            class="rounded-md border border-[var(--border)] bg-[var(--panel-2)] p-3 text-sm"
+            class="rounded-md border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-3 text-sm"
           ></div>
           <div id="kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2"></div>
           <div
@@ -310,21 +262,27 @@
     <div id="units-backdrop" class="fixed inset-0 bg-black/50 hidden z-40"></div>
     <div id="units-modal" class="fixed inset-0 hidden z-50 grid place-items-center p-4">
       <div
-        class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-xl"
+        class="w-full max-w-md rounded-xl border border-border dark:border-border-dark bg-panel dark:bg-panel-dark shadow-xl"
       >
-        <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+        <div
+          class="flex items-center justify-between px-4 py-3 border-b border-border dark:border-border-dark"
+        >
           <h3 class="text-sm font-semibold">Unit Settings</h3>
-          <button id="units-close" class="p-1 rounded hover:bg-[var(--panel-2)]" aria-label="Close">
+          <button
+            id="units-close"
+            class="p-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+            aria-label="Close"
+          >
             ✕
           </button>
         </div>
         <div class="p-4 grid gap-4 text-sm">
           <div>
-            <div class="text-xs text-[var(--muted)] mb-1">SI (metric)</div>
+            <div class="text-xs text-muted dark:text-muted-dark mb-1">SI (metric)</div>
             <label class="block mb-1">Energy base unit</label>
             <select
               id="sel-si-energy"
-              class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
             >
               <option value="J">J</option>
               <option value="kWh">kWh</option>
@@ -333,18 +291,18 @@
             <label class="block mt-3 mb-1">Temperature unit</label>
             <select
               id="sel-si-temp"
-              class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
             >
               <option value="C">C</option>
               <option value="K">K</option>
             </select>
           </div>
           <div>
-            <div class="text-xs text-[var(--muted)] mb-1">IP (US customary)</div>
+            <div class="text-xs text-muted dark:text-muted-dark mb-1">IP (US customary)</div>
             <label class="block mb-1">Energy base unit</label>
             <select
               id="sel-ip-energy"
-              class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
             >
               <option value="BTU">BTU</option>
               <option value="kBTU">kBTU</option>
@@ -353,7 +311,7 @@
             <label class="block mt-3 mb-1">Temperature unit</label>
             <select
               id="sel-ip-temp"
-              class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
             >
               <option value="F">F</option>
             </select>
@@ -362,18 +320,20 @@
             <label class="block mb-1">Power base unit (IP)</label>
             <select
               id="sel-ip-power"
-              class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
             >
               <option value="Btu/h">Btu/h</option>
               <option value="Tons">Tons</option>
             </select>
-            <div class="text-xs text-[var(--muted)] mt-1">1 Ton = 12,000 Btu/h</div>
+            <div class="text-xs text-muted dark:text-muted-dark mt-1">1 Ton = 12,000 Btu/h</div>
           </div>
         </div>
-        <div class="px-4 py-3 border-t border-[var(--border)] flex justify-end gap-2">
+        <div
+          class="px-4 py-3 border-t border-border dark:border-border-dark flex justify-end gap-2"
+        >
           <button
             id="units-save"
-            class="px-3 py-1.5 text-sm rounded bg-[var(--accent-strong)] text-white"
+            class="px-3 py-1.5 text-sm rounded text-white bg-accent-strong dark:bg-accent-strong-dark"
           >
             Save
           </button>
@@ -399,7 +359,10 @@
             : 'light';
       }
       function applyTheme(t) {
+        // Maintain legacy data-theme attribute (for remaining CSS variable usages)
         document.documentElement.setAttribute('data-theme', t);
+        // Ensure Tailwind dark: variants work
+        document.documentElement.classList.toggle('dark', t === 'dark');
         const b = document.getElementById('btn-theme');
         if (b) {
           const lbl = t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
@@ -471,8 +434,29 @@
       }
 
       const $ = (id) => document.getElementById(id);
-      const cssVar = (name) =>
-        getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      // Chart theme colors (replaces legacy cssVar helper)
+      function chartColors() {
+        const dark = document.documentElement.classList.contains('dark');
+        return dark
+          ? {
+              axis: '#9fb0c3',
+              grid: '#223042',
+              tooltipBg: 'rgba(20,25,32,0.95)',
+              text: '#e6eef7',
+              border: '#223042',
+              accent: '#2563eb',
+              accentStrong: '#1d4ed8',
+            }
+          : {
+              axis: '#334155',
+              grid: 'rgb(229 231 235 / 1)',
+              tooltipBg: 'rgba(255,255,255,0.98)',
+              text: '#0b1220',
+              border: '#e2e8f0',
+              accent: '#2563eb',
+              accentStrong: '#1d4ed8',
+            };
+      }
       function toObjects(result) {
         if (!result || !result[0]) return [];
         const cols = result[0].columns;
@@ -911,17 +895,18 @@
         return rows.join('\n');
       }
 
+      // Chart palette derived from Tailwind color tokens (light theme values defined in tailwind.config.js)
       const palette = [
-        '#2563eb',
-        '#7c3aed',
-        '#16a34a',
-        '#ef4444',
-        '#f59e0b',
-        '#06b6d4',
-        '#d946ef',
-        '#10b981',
-        '#e11d48',
-        '#3b82f6',
+        '#2563eb', // chart-1 / accent
+        '#16a34a', // chart-2
+        '#9333ea', // chart-3
+        '#dc2626', // chart-4
+        '#f59e0b', // chart-5
+        '#0891b2', // chart-6
+        '#64748b', // chart-7
+        '#4f46e5', // chart-8
+        '#059669', // chart-9
+        '#d946ef', // chart-10
       ];
 
       let __rendering = false;
@@ -944,7 +929,7 @@
           metaEl.innerHTML = metas
             .map(
               (m) =>
-                `<span class='text-[var(--muted)]'>${
+                `<span class='text-muted dark:text-muted-dark'>${
                   m.IsMeter ? 'Meter' : 'Variable'
                 }:</span><span>${escapeHtml(m.Name)}${
                   m.key ? ` (${escapeHtml(m.key)})` : ''
@@ -1242,7 +1227,9 @@
           kpiItems.push({
             title: 'Peak',
             value: `${kpiFmt(st.max)} ${convertUnitLabel(primary.meta.Units)}
-<span class='block text-[10px] text-[var(--muted)] truncate'>${escapeHtml(whenTxt)}</span>`,
+<span class='block text-[10px] text-muted dark:text-muted-dark truncate'>${escapeHtml(
+              whenTxt,
+            )}</span>`,
             desc: 'Maximum interval value and when it occurred.',
           });
         }
@@ -1262,7 +1249,7 @@
               title: 'Cost (est.)',
               value: `$${kpiFmt(
                 cost.total,
-              )}<span class='block text-[10px] text-[var(--muted)]'>E:$${kpiFmt(
+              )}<span class='block text-[10px] text-muted dark:text-muted-dark'>E:$${kpiFmt(
                 cost.energy,
               )} D:$${kpiFmt(cost.demand)}</span>`,
               desc: 'Simple cost estimate: flat $/kWh energy plus monthly peak demand charges.',
@@ -1275,8 +1262,8 @@
           if (eb) {
             const cls =
               Math.abs(eb.residualPct) > 5
-                ? 'text-[var(--danger)] font-semibold'
-                : 'text-[var(--muted)]';
+                ? 'text-danger dark:text-danger-dark font-semibold'
+                : 'text-muted dark:text-muted-dark';
             kpiItems.push({
               title: 'Elec Balance',
               value: `<span class='${cls}'>${kpiFmt(eb.residualPct, {
@@ -1291,14 +1278,14 @@
           .map(
             (
               k,
-            ) => `<div class="relative group p-2 rounded-md border border-[var(--border)] bg-[var(--panel-2)] flex flex-col min-w-[110px]" data-tip="${escapeHtml(
+            ) => `<div class="relative group p-2 rounded-md border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark flex flex-col min-w-[110px]" data-tip="${escapeHtml(
               k.desc || '',
             )}">
             <span class="flex items-center justify-between gap-1">
-              <span class="text-[10px] uppercase tracking-wide text-[var(--muted)]">${escapeHtml(
+              <span class="text-[10px] uppercase tracking-wide text-muted dark:text-muted-dark">${escapeHtml(
                 k.title,
               )}</span>
-              <button type="button" class="kpi-help text-[10px] w-4 h-4 leading-none inline-flex items-center justify-center border border-[var(--border)] rounded cursor-help" aria-label="Info" tabindex="0">?</button>
+              <button type="button" class="kpi-help text-[10px] w-4 h-4 leading-none inline-flex items-center justify-center border border-border dark:border-border-dark rounded cursor-help" aria-label="Info" tabindex="0">?</button>
             </span>
             <span class="text-sm leading-tight mt-0.5">${k.value}</span>
           </div>`,
@@ -1314,14 +1301,8 @@
         if (!kpiTooltipEl) {
           kpiTooltipEl = document.createElement('div');
           kpiTooltipEl.id = 'kpi-tooltip';
-          kpiTooltipEl.className = 'pointer-events-none text-xs max-w-[200px] z-40';
-          kpiTooltipEl.style.position = 'fixed';
-          kpiTooltipEl.style.background = 'var(--panel)';
-          kpiTooltipEl.style.border = '1px solid var(--border)';
-          kpiTooltipEl.style.padding = '6px 8px';
-          kpiTooltipEl.style.borderRadius = '6px';
-          kpiTooltipEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-          kpiTooltipEl.style.display = 'none';
+          kpiTooltipEl.className =
+            'pointer-events-none text-xs max-w-[200px] z-40 fixed hidden px-2.5 py-1.5 rounded-md border border-border dark:border-border-dark bg-panel dark:bg-panel-dark shadow-lg';
           document.body.appendChild(kpiTooltipEl);
         }
         return kpiTooltipEl;
@@ -1334,10 +1315,10 @@
         const left = Math.min(window.innerWidth - 220, rect.left);
         tip.style.top = (top < 8 ? rect.bottom + 8 : top) + 'px';
         tip.style.left = left + 'px';
-        tip.style.display = 'block';
+        tip.classList.remove('hidden');
       }
       function hideKpiTooltip() {
-        if (kpiTooltipEl) kpiTooltipEl.style.display = 'none';
+        if (kpiTooltipEl) kpiTooltipEl.classList.add('hidden');
         kpiActiveBtn = null;
       }
       function attachKpiTooltips() {
@@ -1396,7 +1377,7 @@
           `<div class='contents'>${cols
             .map(
               (c) =>
-                `<div class="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">${c}</div>`,
+                `<div class="text-[10px] font-semibold uppercase tracking-wide text-muted dark:text-muted-dark">${c}</div>`,
             )
             .join('')}</div>`,
         ];
@@ -1559,47 +1540,48 @@
         if (!container) return;
         const btn = document.createElement('button');
         btn.id = 'tariff-btn';
-        btn.className = 'px-2 py-1 text-xs border rounded bg-[var(--panel-2)]';
+        btn.className =
+          'px-2 py-1 text-xs border rounded bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark';
         btn.textContent = '$';
         btn.title = 'Tariff settings';
         container.appendChild(btn);
         const pop = document.createElement('div');
         pop.id = 'tariff-pop';
         pop.className =
-          'hidden z-50 w-64 border border-[var(--border)] rounded-md bg-[var(--panel)] shadow-lg p-3 text-xs';
+          'hidden z-50 w-64 border border-border dark:border-border-dark rounded-md bg-panel dark:bg-panel-dark shadow-lg p-3 text-xs';
         pop.style.position = 'fixed';
-        pop.innerHTML = `<div class='flex justify-between items-center mb-1'><strong class='text-xs'>Tariff</strong><button id='tariff-close' class='px-1 rounded hover:bg-[var(--panel-2)]' aria-label='Close'>✕</button></div>
+        pop.innerHTML = `<div class='flex justify-between items-center mb-1'><strong class='text-xs'>Tariff</strong><button id='tariff-close' class='px-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark' aria-label='Close'>✕</button></div>
         <div class='space-y-2'>
         <label class='block' data-tip='Electricity volumetric charge ($/kWh). Applied to total annual electric kWh.'>
           <span class='flex items-center justify-between'>
             <span>Electricity ($/kWh)</span>
-            <button type='button' class='kpi-help ml-2 cursor-help select-none text-[var(--muted)] px-1 rounded hover:bg-[var(--panel-2)]'>?</button>
+            <button type='button' class='kpi-help ml-2 cursor-help select-none text-muted dark:text-muted-dark px-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark'>?</button>
           </span>
-          <input id='tariff-energy-elec' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-[var(--panel-2)] border-[var(--border)]' value='${rateElec}'>
+          <input id='tariff-energy-elec' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark' value='${rateElec}'>
         </label>
         <label class='block' data-tip='District heating volumetric charge ($/kWh equivalent). Applied to total annual DistrictHeating kWh.'>
           <span class='flex items-center justify-between'>
             <span>District Heating ($/kWh)</span>
-            <button type='button' class='kpi-help ml-2 cursor-help select-none text-[var(--muted)] px-1 rounded hover:bg-[var(--panel-2)]'>?</button>
+            <button type='button' class='kpi-help ml-2 cursor-help select-none text-muted dark:text-muted-dark px-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark'>?</button>
           </span>
-          <input id='tariff-energy-dh' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-[var(--panel-2)] border-[var(--border)]' value='${rateDH}'>
+          <input id='tariff-energy-dh' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark' value='${rateDH}'>
         </label>
         <label class='block' data-tip='District cooling volumetric charge ($/kWh equivalent). Applied to total annual DistrictCooling kWh.'>
           <span class='flex items-center justify-between'>
             <span>District Cooling ($/kWh)</span>
-            <button type='button' class='kpi-help ml-2 cursor-help select-none text-[var(--muted)] px-1 rounded hover:bg-[var(--panel-2)]'>?</button>
+            <button type='button' class='kpi-help ml-2 cursor-help select-none text-muted dark:text-muted-dark px-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark'>?</button>
           </span>
-          <input id='tariff-energy-dc' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-[var(--panel-2)] border-[var(--border)]' value='${rateDC}'>
+          <input id='tariff-energy-dc' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark' value='${rateDC}'>
         </label>
         <label class='block' data-tip="Monthly demand charge for electricity: each month's highest hourly kW times this rate, summed over all months.">
           <span class='flex items-center justify-between'>
             <span>Demand Rate ($/kW-mo)</span>
-            <button type='button' class='kpi-help ml-2 cursor-help select-none text-[var(--muted)] px-1 rounded hover:bg-[var(--panel-2)]'>?</button>
+            <button type='button' class='kpi-help ml-2 cursor-help select-none text-muted dark:text-muted-dark px-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark'>?</button>
           </span>
-          <input id='tariff-demand' type='number' step='0.01' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-[var(--panel-2)] border-[var(--border)]' value='${tariffDemandRate}'>
+          <input id='tariff-demand' type='number' step='0.01' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark' value='${tariffDemandRate}'>
         </label>
         </div>
-  <div class='flex justify-end gap-2 mt-3'><button id='tariff-save' class='px-3 py-1.5 rounded bg-[var(--accent-strong)] text-white text-xs'>Save</button></div>`;
+  <div class='flex justify-end gap-2 mt-3'><button id='tariff-save' class='px-3 py-1.5 rounded bg-accent-strong dark:bg-accent-strong-dark text-white text-xs'>Save</button></div>`;
         // attach KPI-style tooltips for tariff help buttons
         setTimeout(() => {
           attachKpiTooltips();
@@ -1689,11 +1671,15 @@
         };
         const w = width - m.left - m.right,
           h = height - m.top - m.bottom;
-        const axisColor = cssVar('--chart-axis'),
-          gridColor = cssVar('--chart-grid'),
-          tooltipBg = cssVar('--chart-tooltip-bg'),
-          textColor = cssVar('--text'),
-          borderColor = cssVar('--border');
+        const {
+          axis: axisColor,
+          grid: gridColor,
+          tooltipBg,
+          text: textColor,
+          border: borderColor,
+          accent,
+          accentStrong,
+        } = chartColors();
         const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
         const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
         const peaks = new Map();
@@ -1827,9 +1813,9 @@
               });
             const bG = g.append('g').attr('class', 'brush').call(brush);
             bG.selectAll('.selection')
-              .attr('fill', cssVar('--accent'))
+              .attr('fill', accent)
               .attr('fill-opacity', 0.15)
-              .attr('stroke', cssVar('--accent-strong'));
+              .attr('stroke', accentStrong);
             $('zoom-hint').classList.remove('hidden');
           } else {
             $('zoom-hint').classList.add('hidden');
@@ -1901,7 +1887,9 @@
                   `<div><strong>${d.label}</strong></div><div><span style='color:${d.color}'>${
                     d.name
                   }</span> — ${fmt(d.y)} ${d.units || ''}${
-                    normalize ? ` <span class='text-[var(--muted)]'>(raw ${fmt(d.raw)})</span>` : ''
+                    normalize
+                      ? ` <span class='text-muted dark:text-muted-dark'>(raw ${fmt(d.raw)})</span>`
+                      : ''
                   }</div>`,
                 );
             })
@@ -2037,18 +2025,18 @@
               });
             const bz = g.append('g').attr('class', 'band-zoom').call(drag);
             bz.selectAll('.selection')
-              .attr('fill', cssVar('--accent'))
+              .attr('fill', accent)
               .attr('fill-opacity', 0.15)
-              .attr('stroke', cssVar('--accent-strong'));
+              .attr('stroke', accentStrong);
           }
         }
         const leg = $('legend');
         leg.innerHTML = '';
         series.forEach((s) => {
           const item = document.createElement('button');
-          item.className = 'text-xs px-2 py-1 rounded border';
-          item.style.borderColor = cssVar('--border');
-          item.style.background = s.visible === false ? 'transparent' : 'var(--panel-2)';
+          item.className =
+            'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors';
+          if (s.visible !== false) item.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
           item.innerHTML = `<span style="display:inline-block;width:10px;height:10px;background:${s.color};border-radius:2px;margin-right:6px;vertical-align:middle"></span>${s.meta.Name}`;
           item.onclick = () => {
             const v = selected.get(s.id);
@@ -2082,8 +2070,15 @@
         const m = { top: 16, right: 24, bottom: 40, left: 56 },
           w = width - m.left - m.right,
           h = height - m.top - m.bottom;
-        const axisColor = cssVar('--chart-axis'),
-          gridColor = cssVar('--chart-grid');
+        const {
+          axis: axisColor,
+          grid: gridColor,
+          text: textColor,
+          border: borderColor,
+          tooltipBg,
+          accent,
+          accentStrong,
+        } = chartColors();
         const normalize = $('ldc-normalize')?.checked === true;
 
         const curves = series
@@ -2152,9 +2147,7 @@
             .attr('opacity', 0.6);
         });
 
-        const textColor = cssVar('--text'),
-          borderColor = cssVar('--border'),
-          tooltipBg = cssVar('--chart-tooltip-bg');
+        // textColor, borderColor, tooltipBg already from chartColors()
         const tooltip = d3
           .select(container)
           .append('div')
@@ -2205,9 +2198,9 @@
         leg.innerHTML = '';
         curves.forEach((s) => {
           const item = document.createElement('button');
-          item.className = 'text-xs px-2 py-1 rounded border';
-          item.style.borderColor = cssVar('--border');
-          item.style.background = s.visible === false ? 'transparent' : 'var(--panel-2)';
+          item.className =
+            'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors';
+          if (s.visible !== false) item.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
           item.innerHTML = `<span style=\"display:inline-block;width:10px;height:10px;background:${s.color};border-radius:2px;margin-right:6px;vertical-align:middle\"></span>${s.meta.Name}`;
           item.onclick = () => {
             const v = selected.get(s.id);
@@ -2239,16 +2232,16 @@
         const highlight = () =>
           el.classList.add(
             'ring-2',
-            'ring-[var(--accent)]',
+            'ring-accent dark:ring-accent-dark',
             'ring-offset-2',
-            'ring-offset-[var(--panel)]',
+            'ring-offset-panel dark:ring-offset-panel-dark',
           );
         const unhighlight = () =>
           el.classList.remove(
             'ring-2',
-            'ring-[var(--accent)]',
+            'ring-accent dark:ring-accent-dark',
             'ring-offset-2',
-            'ring-offset-[var(--panel)]',
+            'ring-offset-panel dark:ring-offset-panel-dark',
           );
         ['dragenter', 'dragover'].forEach((evt) =>
           el.addEventListener(evt, (e) => {
@@ -2406,15 +2399,15 @@
         chkNorm = $('ldc-normalize');
       btnTime?.addEventListener('click', () => {
         viewMode = 'time';
-        btnTime.classList.add('bg-[var(--panel-2)]');
-        btnLdc?.classList.remove('bg-[var(--panel-2)]');
+        btnTime.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden'); // LDC view (no time zoom)
         renderAll();
       });
       btnLdc?.addEventListener('click', () => {
         viewMode = 'ldc';
-        btnLdc.classList.add('bg-[var(--panel-2)]');
-        btnTime?.classList.remove('bg-[var(--panel-2)]');
+        btnLdc.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden');
         renderAll();
       });
