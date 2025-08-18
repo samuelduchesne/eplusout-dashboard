@@ -332,6 +332,14 @@
               <option value="kWh">kWh</option>
               <option value="MWh">MWh</option>
             </select>
+            <label class="block mt-3 mb-1">Temperature unit</label>
+            <select
+              id="sel-si-temp"
+              class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+            >
+              <option value="C">C</option>
+              <option value="K">K</option>
+            </select>
           </div>
           <div>
             <div class="text-xs text-[var(--muted)] mb-1">IP (US customary)</div>
@@ -343,6 +351,13 @@
               <option value="BTU">BTU</option>
               <option value="kBTU">kBTU</option>
               <option value="MMBTU">MMBTU</option>
+            </select>
+            <label class="block mt-3 mb-1">Temperature unit</label>
+            <select
+              id="sel-ip-temp"
+              class="w-full border rounded px-2 py-1 bg-[var(--panel-2)] border-[var(--border)]"
+            >
+              <option value="F">F</option>
             </select>
           </div>
           <div>
@@ -374,6 +389,8 @@
       const FAVORITES_KEY = 'eplus_favs';
       const SELECT_KEY = 'eplus_selected_ids';
       const COLLAPSE_KEY = 'eplus_signals_collapsed';
+      const TEMP_SI_KEY = 'eplus_temp_si';
+      const TEMP_IP_KEY = 'eplus_temp_ip';
 
       function getPreferredTheme() {
         const s = localStorage.getItem(THEME_KEY);
@@ -568,11 +585,18 @@
       const selSiEnergy = $('sel-si-energy');
       const selIpEnergy = $('sel-ip-energy');
       const selIpPower = $('sel-ip-power');
+      // Temperature prefs
+      let prefTempSI = localStorage.getItem(TEMP_SI_KEY) || 'C'; // C or K
+      let prefTempIP = localStorage.getItem(TEMP_IP_KEY) || 'F'; // F (future: R)
 
       function showUnits() {
         selSiEnergy.value = prefEnergySI;
         selIpEnergy.value = prefEnergyIP;
         selIpPower.value = prefPowerIP;
+        const siTempSel = $('sel-si-temp');
+        const ipTempSel = $('sel-ip-temp');
+        if (siTempSel) siTempSel.value = prefTempSI;
+        if (ipTempSel) ipTempSel.value = prefTempIP;
         unitsModal.classList.remove('hidden');
         unitsBackdrop.classList.remove('hidden');
       }
@@ -587,9 +611,15 @@
         prefEnergySI = selSiEnergy.value;
         prefEnergyIP = selIpEnergy.value;
         prefPowerIP = selIpPower.value;
+        const siTempSel = $('sel-si-temp');
+        const ipTempSel = $('sel-ip-temp');
+        if (siTempSel) prefTempSI = siTempSel.value;
+        if (ipTempSel) prefTempIP = ipTempSel.value;
         localStorage.setItem(ENERGY_SI_KEY, prefEnergySI);
         localStorage.setItem(ENERGY_IP_KEY, prefEnergyIP);
         localStorage.setItem(POWER_IP_KEY, prefPowerIP);
+        localStorage.setItem(TEMP_SI_KEY, prefTempSI);
+        localStorage.setItem(TEMP_IP_KEY, prefTempIP);
         hideUnits();
         renderAll();
       });
@@ -613,6 +643,15 @@
           u.includes('ton')
         )
           return 'power';
+        if (
+          u === 'c' ||
+          u.includes('celsius') ||
+          u === 'k' ||
+          u.includes('kelvin') ||
+          u === 'f' ||
+          u.includes('fahrenheit')
+        )
+          return 'temperature';
         return 'other';
       }
       function toJoules(value, units) {
@@ -650,6 +689,15 @@
             if (prefPowerIP === 'Tons') return v / 12000;
             return v;
           }
+          if (kind === 'temperature') {
+            // Incoming likely C; already converted above. If preference IP temp differs (future), handle here.
+            if (prefTempIP === 'F') {
+              if (/c|celsius/.test(String(units).toLowerCase())) return (value * 9) / 5 + 32;
+              if (/k|kelvin/.test(String(units).toLowerCase()))
+                return ((value - 273.15) * 9) / 5 + 32;
+            }
+            return value;
+          }
           return __orig_convertUnits(value, units);
         } else {
           if (kind === 'energy') {
@@ -658,6 +706,16 @@
             if (prefEnergySI === 'kWh') return J / 3.6e6;
             if (prefEnergySI === 'MWh') return J / 3.6e9;
             return J;
+          }
+          if (kind === 'temperature') {
+            const ul = String(units).toLowerCase();
+            let cVal;
+            if (ul === 'c' || ul.includes('celsius')) cVal = value;
+            else if (ul === 'k' || ul.includes('kelvin')) cVal = value - 273.15;
+            else if (ul === 'f' || ul.includes('fahrenheit')) cVal = ((value - 32) * 5) / 9;
+            else cVal = value;
+            if (prefTempSI === 'K') return cVal + 273.15;
+            return cVal; // C
           }
           return __orig_convertUnits(value, units);
         }
@@ -670,9 +728,11 @@
           if (u === 'c' || u.includes('celsius')) return 'F';
           if (kind === 'energy') return prefEnergyIP;
           if (kind === 'power') return prefPowerIP === 'Tons' ? 'tons' : 'Btu/h';
+          if (kind === 'temperature') return prefTempIP;
           return __orig_convertUnitLabel(units);
         } else {
           if (kind === 'energy') return prefEnergySI;
+          if (kind === 'temperature') return prefTempSI;
           return __orig_convertUnitLabel(units);
         }
       }
@@ -685,10 +745,12 @@
           // left IP, right SI
           if (kind === 'energy') return prefEnergySI;
           if (kind === 'power') return 'W';
+          if (kind === 'temperature') return prefTempSI;
         } else {
           // left SI, right IP
           if (kind === 'energy') return prefEnergyIP;
           if (kind === 'power') return prefPowerIP === 'Tons' ? 'tons' : 'Btu/h';
+          if (kind === 'temperature') return prefTempIP;
         }
         return '';
       }
@@ -735,6 +797,23 @@
             const W = v;
             if (prefPowerIP === 'Tons') return W / 0.29307107 / 12000; // W -> Btu/h -> tons
             return W / 0.29307107; // Btu/h
+          }
+        }
+        if (kind === 'temperature') {
+          if (isIP) {
+            // IP displayed -> SI opposite prefer C or K
+            let c;
+            if (prefTempIP === 'F') c = ((v - 32) * 5) / 9;
+            else c = v; // future other scales
+            if (prefTempSI === 'K') return c + 273.15;
+            return c;
+          } else {
+            // SI displayed -> IP opposite (F)
+            let c;
+            if (prefTempSI === 'K') c = v - 273.15;
+            else c = v;
+            if (prefTempIP === 'F') return (c * 9) / 5 + 32;
+            return c;
           }
         }
         return v; // other kinds not converted
@@ -1576,11 +1655,23 @@
         const width = rect.width,
           height = rect.height;
         const metas = [...selected.values()].map((v) => v.meta);
-        const consistentUnits = metas.length && metas.every((m) => m.Units === metas[0].Units);
-        const primaryMeta = consistentUnits ? metas[0] : null;
+        let consistentUnits = metas.length && metas.every((m) => m.Units === metas[0].Units);
+        let primaryMeta = consistentUnits ? metas[0] : null;
+        if (!primaryMeta && metas.length) {
+          // Fallback: choose first if all share same unit kind (energy/power/temperature)
+          const k0 = unitKind(metas[0].Units);
+          if (
+            ['energy', 'power', 'temperature'].includes(k0) &&
+            metas.every((m) => unitKind(m.Units) === k0)
+          ) {
+            primaryMeta = metas[0];
+          }
+        }
         const normalize = opts.normalize === true;
         const showSecondary =
-          !normalize && primaryMeta && ['energy', 'power'].includes(unitKind(primaryMeta.Units));
+          !normalize &&
+          primaryMeta &&
+          ['energy', 'power', 'temperature'].includes(unitKind(primaryMeta.Units));
         const m = {
           top: 16,
           right: showSecondary ? 68 : 24,
@@ -1636,10 +1727,40 @@
           )
             x.domain(currentXDomain);
           else currentXDomain = null;
-          const gx = g
-            .append('g')
-            .attr('transform', `translate(0,${h})`)
-            .call(d3.axisBottom(x).ticks(6));
+          // More frequent month ticks with responsive skipping
+          const allMonths = d3.timeMonth.range(
+            d3.timeMonth.floor(fullDomain[0]),
+            d3.timeMonth.offset(fullDomain[1], 1),
+          );
+          let monthStep = 1;
+          if (w < 420) monthStep = 2; // skip every other month on small width
+          if (w < 320) monthStep = 3; // skip more on very narrow
+          const monthTicks = allMonths.filter((_, i) => i % monthStep === 0);
+          const gx = g.append('g').attr('transform', `translate(0,${h})`);
+          function applyMonthAxis() {
+            const spanMs = x.domain()[1] - x.domain()[0];
+            const days = spanMs / 86400000;
+            // If zoomed in to < 40 days, switch to default ticks for readability
+            if (days < 40) {
+              gx.call(d3.axisBottom(x).ticks(w < 480 ? (w < 360 ? 4 : 6) : 8));
+              return;
+            }
+            const allMonths = d3.timeMonth.range(
+              d3.timeMonth.floor(x.domain()[0]),
+              d3.timeMonth.offset(x.domain()[1], 1),
+            );
+            let monthStep = 1;
+            if (w < 420) monthStep = 2;
+            if (w < 320) monthStep = 3;
+            const monthTicks = allMonths.filter((_, i) => i % monthStep === 0);
+            gx.call(
+              d3
+                .axisBottom(x)
+                .tickValues(monthTicks)
+                .tickFormat((d) => d3.timeFormat('%b')(d)),
+            );
+          }
+          applyMonthAxis();
           const gy = g.append('g').call(d3.axisLeft(y).ticks(6));
           if (showSecondary) {
             const oppLabel = convertUnitLabelOpposite(primaryMeta.Units);
@@ -1647,11 +1768,9 @@
               .axisRight(y)
               .ticks(6)
               .tickFormat((t) => fmt(convertDisplayedToOpposite(t, primaryMeta.Units)));
-            g.append('g')
-              .attr('transform', `translate(${w},0)`)
-              .call(axisR)
-              .selectAll('text')
-              .attr('fill', axisColor);
+            const gyR = g.append('g').attr('transform', `translate(${w},0)`).call(axisR);
+            gyR.selectAll('path,line').attr('stroke', axisColor);
+            gyR.selectAll('text').attr('fill', axisColor);
             if (oppLabel) {
               g.append('text')
                 .attr('x', w)
@@ -1703,7 +1822,7 @@
             $('zoom-hint').classList.add('hidden');
           }
           function redraw() {
-            gx.call(d3.axisBottom(x).ticks(6));
+            applyMonthAxis();
             gx.selectAll('path,line').attr('stroke', axisColor);
             gx.selectAll('text').attr('fill', axisColor);
             g.selectAll('path.series').remove();
@@ -1785,18 +1904,53 @@
             .domain(series.map((s) => String(s.id)))
             .range([0, x.bandwidth()])
             .padding(0.05);
-          const gx = g.append('g').attr('transform', `translate(0,${h})`).call(d3.axisBottom(x));
+          // Monthly bars: show all months but skip on very small widths to avoid overlap
+          const rawMonthLabels = series[0]?.points.map((p) => p.xLabel) || [];
+          const monthLabelFmt = (raw) => {
+            if (!raw) return raw;
+            const m = raw.match(/-M(\d{2})/i);
+            if (m) {
+              const idx = parseInt(m[1], 10);
+              if (idx >= 1 && idx <= 12) return d3.timeFormat('%b')(new Date(2000, idx - 1, 1));
+            }
+            // Fallback: if raw already looks like a month name, abbreviate
+            const lower = raw.toLowerCase();
+            const monthNames = [
+              'jan',
+              'feb',
+              'mar',
+              'apr',
+              'may',
+              'jun',
+              'jul',
+              'aug',
+              'sep',
+              'oct',
+              'nov',
+              'dec',
+            ];
+            const found = monthNames.find((mn) => lower.startsWith(mn));
+            if (found) return found.charAt(0).toUpperCase() + found.slice(1, 3); // Jan, Feb...
+            return raw;
+          };
+          const monthLabels = rawMonthLabels;
+          let step = 1;
+          if (w < 420) step = 2;
+          if (w < 320) step = 3;
+          const shown = monthLabels.filter((_, i) => i % step === 0);
+          const gx = g
+            .append('g')
+            .attr('transform', `translate(0,${h})`)
+            .call(d3.axisBottom(x).tickValues(shown).tickFormat(monthLabelFmt));
           const gy = g.append('g').call(d3.axisLeft(y).ticks(6));
           if (showSecondary) {
             const axisR = d3
               .axisRight(y)
               .ticks(6)
               .tickFormat((t) => fmt(convertDisplayedToOpposite(t, primaryMeta.Units)));
-            g.append('g')
-              .attr('transform', `translate(${w},0)`)
-              .call(axisR)
-              .selectAll('text')
-              .attr('fill', axisColor);
+            const gyR = g.append('g').attr('transform', `translate(${w},0)`).call(axisR);
+            gyR.selectAll('path,line').attr('stroke', axisColor);
+            gyR.selectAll('text').attr('fill', axisColor);
             if (convertUnitLabelOpposite(primaryMeta.Units)) {
               g.append('text')
                 .attr('x', w)
