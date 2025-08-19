@@ -748,6 +748,17 @@
       // scatter pairing state: store chosen x and y series ids (from currently selected list order)
       let scatterPair = null; // {x:id,y:id}
       let scatterShowRegression = true;
+      // Degree-day temperature response state (scatter view only)
+      let scatterShowDegDay = false; // whether panel visible
+      let scatterDegDayBaseTemp = 18; // balance temperature (C or displayed unit)
+      let scatterDegDayPeriod = 'daily'; // 'daily' | 'monthly'
+      let scatterDegDayMode = 'both'; // 'heating' | 'cooling' | 'both'
+      // Time-series temperature response (degree-day) overlay state
+      let tempRespEnabled = false;
+      let tempRespBaseTemp = 18; // same interpretation as scatter (display scale)
+      let tempRespPeriod = 'daily'; // daily or monthly aggregation for fitting when hourly baseFreq
+      let tempRespMode = 'both';
+      let tempRespModel = null; // cache of last model {intercept,hCoeff,cCoeff,r2,useH,useC,predSeriesId,predPoints,energyUnits,label}
       // Preserve current hourly x-domain across redraws (zoom + resize)
       let currentXDomain = null;
 
@@ -2011,18 +2022,238 @@
           gy.selectAll('path,line').attr('stroke', axisColor);
           gx.selectAll('text').attr('fill', axisColor);
           gy.selectAll('text').attr('fill', axisColor);
-          for (const s of series) {
-            const line = d3
-              .line()
-              .x((d) => x(d.x))
-              .y((d) => y(normVal(convertUnits(d.y, s.meta.Units), s)));
+          function drawSeries() {
+            for (const s of series) {
+              const line = d3
+                .line()
+                .x((d) => x(d.x))
+                .y((d) => y(normVal(convertUnits(d.y, s.meta.Units), s)));
+              g.append('path')
+                .datum(s.points)
+                .attr('fill', 'none')
+                .attr('stroke-width', 1.8)
+                .attr('stroke', s.color)
+                .attr('class', 'series')
+                .attr('d', line);
+            }
+          }
+          drawSeries();
+
+          // Temperature response model (degree-day) overlay if enabled
+          function computeTempResponseModel() {
+            tempRespModel = null;
+            // Need at least one energy series and one temperature series
+            const temps = series.filter((s) => unitKind(s.meta.Units) === 'temperature');
+            const energies = series.filter((s) => unitKind(s.meta.Units) === 'energy');
+            if (!tempRespEnabled || !temps.length || !energies.length) return;
+            const tempSeries = temps[0];
+            const energySeries = energies[0];
+            // Build daily or monthly aggregates of energy and average temperature
+            const toC = (val) => {
+              if (isIP && prefTempIP === 'F') return ((val - 32) * 5) / 9;
+              if (!isIP && prefTempSI === 'K') return val - 273.15;
+              return val;
+            };
+            const tempVals = tempSeries.points.map((p) => ({
+              x: p.x,
+              tDisp: convertUnits(p.y, tempSeries.meta.Units),
+            }));
+            const energyVals = energySeries.points.map((p) => ({
+              x: p.x,
+              eDisp: convertUnits(p.y, energySeries.meta.Units),
+            }));
+            const useMonthly = tempRespPeriod === 'monthly';
+            const groupTemps = new Map();
+            function keyFromDate(ms) {
+              const d = new Date(ms);
+              if (useMonthly) return d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1);
+              return d.toISOString().slice(0, 10);
+            }
+            tempVals.forEach((r) => {
+              const k = keyFromDate(r.x);
+              let g = groupTemps.get(k);
+              if (!g) {
+                g = { temps: [], xFirst: r.x };
+                groupTemps.set(k, g);
+              }
+              g.temps.push(r.tDisp);
+            });
+            const groupEnergy = new Map();
+            energyVals.forEach((r) => {
+              const k = keyFromDate(r.x);
+              groupEnergy.set(k, (groupEnergy.get(k) || 0) + r.eDisp);
+            });
+            const rows = [];
+            groupTemps.forEach((v, k) => {
+              if (!groupEnergy.has(k)) return; // need both
+              const avgTempDisp = v.temps.reduce((a, b) => a + b, 0) / v.temps.length;
+              // compute HDD/CDD relative to base
+              const avgC = toC(avgTempDisp);
+              const baseC = toC(tempRespBaseTemp);
+              let hddC = Math.max(0, baseC - avgC);
+              let cddC = Math.max(0, avgC - baseC);
+              if (isIP && prefTempIP === 'F') {
+                hddC = (hddC * 9) / 5;
+                cddC = (cddC * 9) / 5;
+              }
+              if (!tempRespMode.includes('heat')) hddC = tempRespMode === 'cooling' ? 0 : hddC;
+              if (!tempRespMode.includes('cool')) cddC = tempRespMode === 'heating' ? 0 : cddC;
+              rows.push({
+                key: k,
+                HDD: hddC,
+                CDD: cddC,
+                energy: groupEnergy.get(k),
+                xFirst: v.xFirst,
+              });
+            });
+            if (rows.length < 3) return; // need a few points
+            // Fit E = b + h*HDD + c*CDD with subsets per mode
+            const useH = tempRespMode === 'heating' || tempRespMode === 'both';
+            const useC = tempRespMode === 'cooling' || tempRespMode === 'both';
+            const X = [];
+            const Y = [];
+            rows.forEach((r) => {
+              const row = [1];
+              if (useH) row.push(r.HDD);
+              if (useC) row.push(r.CDD);
+              X.push(row);
+              Y.push(r.energy);
+            });
+            const mCols = X[0].length;
+            const XtX = Array.from({ length: mCols }, () => Array(mCols).fill(0));
+            const XtY = Array(mCols).fill(0);
+            for (let i = 0; i < X.length; i++) {
+              const row = X[i];
+              const yv = Y[i];
+              for (let a = 0; a < mCols; a++) {
+                XtY[a] += row[a] * yv;
+                for (let b = 0; b < mCols; b++) XtX[a][b] += row[a] * row[b];
+              }
+            }
+            function solve(A, b) {
+              const n = A.length;
+              for (let i = 0; i < n; i++) {
+                let max = i;
+                for (let k = i + 1; k < n; k++)
+                  if (Math.abs(A[k][i]) > Math.abs(A[max][i])) max = k;
+                if (max !== i) {
+                  [A[i], A[max]] = [A[max], A[i]];
+                  [b[i], b[max]] = [b[max], b[i]];
+                }
+                const piv = A[i][i];
+                if (Math.abs(piv) < 1e-12) return null;
+                for (let j = i; j < n; j++) A[i][j] /= piv;
+                b[i] /= piv;
+                for (let k = 0; k < n; k++)
+                  if (k !== i) {
+                    const f = A[k][i];
+                    if (f !== 0) {
+                      for (let j = i; j < n; j++) A[k][j] -= f * A[i][j];
+                      b[k] -= f * b[i];
+                    }
+                  }
+              }
+              return b;
+            }
+            const coeffs = solve(XtX, XtY);
+            if (!coeffs) return;
+            let idx = 0;
+            const intercept = coeffs[idx++];
+            let hCoeff = null,
+              cCoeff = null;
+            if (useH) hCoeff = coeffs[idx++];
+            if (useC) cCoeff = coeffs[idx++];
+            const meanY = Y.reduce((a, b) => a + b, 0) / Y.length;
+            let ssTot = 0,
+              ssRes = 0;
+            for (let i = 0; i < rows.length; i++) {
+              let yhat = intercept;
+              if (useH) yhat += hCoeff * rows[i].HDD;
+              if (useC) yhat += cCoeff * rows[i].CDD;
+              ssTot += (rows[i].energy - meanY) ** 2;
+              ssRes += (rows[i].energy - yhat) ** 2;
+            }
+            const r2 = ssTot ? 1 - ssRes / ssTot : 0;
+            const hourlyPred = [];
+            const energyPerKey = new Map();
+            rows.forEach((r) => {
+              let pred = intercept;
+              if (useH) pred += (hCoeff || 0) * r.HDD;
+              if (useC) pred += (cCoeff || 0) * r.CDD;
+              energyPerKey.set(r.key, pred);
+            });
+            const countsPerKey = new Map();
+            tempVals.forEach((t) => {
+              const key = keyFromDate(t.x);
+              countsPerKey.set(key, (countsPerKey.get(key) || 0) + 1);
+            });
+            tempVals.forEach((t) => {
+              const key = keyFromDate(t.x);
+              const total = energyPerKey.get(key);
+              const cnt = countsPerKey.get(key) || 1;
+              if (total != null) hourlyPred.push({ x: t.x, y: total / cnt });
+            });
+            tempRespModel = {
+              intercept,
+              hCoeff,
+              cCoeff,
+              r2,
+              useH,
+              useC,
+              predPoints: hourlyPred,
+              energyUnits: convertUnitLabel(energySeries.meta.Units),
+              label: `TempResp(${energySeries.meta.Name})`,
+            };
+          }
+          computeTempResponseModel();
+          if (tempRespModel) {
             g.append('path')
-              .datum(s.points)
+              .datum(tempRespModel.predPoints)
               .attr('fill', 'none')
-              .attr('stroke-width', 1.8)
-              .attr('stroke', s.color)
-              .attr('class', 'series')
-              .attr('d', line);
+              .attr('stroke', palette[3])
+              .attr('stroke-width', 1.4)
+              .attr('stroke-dasharray', '5,3')
+              .attr('class', 'series temp-response')
+              .attr(
+                'd',
+                d3
+                  .line()
+                  .x((d) => x(d.x))
+                  .y((d) => y(normVal(d.y, { id: '__pred' }))),
+              );
+          }
+          // Legend (hourly time-series)
+          const hourlyLeg = $('legend');
+          if (hourlyLeg) {
+            hourlyLeg.innerHTML = '';
+            series.forEach((s) => {
+              const item = document.createElement('button');
+              item.className =
+                'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors';
+              if (s.visible !== false) item.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+              item.innerHTML = `<span style="display:inline-block;width:10px;height:10px;background:${s.color};border-radius:2px;margin-right:6px;vertical-align:middle"></span>${s.meta.Name}`;
+              item.onclick = () => {
+                const v = selected.get(s.id);
+                v.visible = !v.visible;
+                selected.set(s.id, v);
+                renderAll();
+              };
+              hourlyLeg.appendChild(item);
+            });
+            const temps = series.filter((s) => unitKind(s.meta.Units) === 'temperature');
+            const energies = series.filter((s) => unitKind(s.meta.Units) === 'energy');
+            if (temps.length && energies.length) {
+              const btn = document.createElement('button');
+              btn.className =
+                'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors';
+              if (tempRespEnabled) btn.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+              btn.innerHTML = `<span style="display:inline-block;width:10px;height:10px;background:${palette[3]};border-radius:2px;margin-right:6px;vertical-align:middle"></span>Temp Response`;
+              btn.onclick = () => {
+                tempRespEnabled = !tempRespEnabled;
+                renderAll();
+              };
+              hourlyLeg.appendChild(btn);
+            }
           }
           if (zoomEnabled) {
             const brush = d3
@@ -2069,6 +2300,23 @@
                     .line()
                     .x((p) => x(p.x))
                     .y((p) => y(normVal(convertUnits(p.y, s.meta.Units), s))),
+                );
+            }
+            if (tempRespModel) {
+              g.selectAll('path.temp-response').remove();
+              g.append('path')
+                .datum(tempRespModel.predPoints)
+                .attr('fill', 'none')
+                .attr('stroke', palette[3])
+                .attr('stroke-width', 1.4)
+                .attr('stroke-dasharray', '5,3')
+                .attr('class', 'series temp-response')
+                .attr(
+                  'd',
+                  d3
+                    .line()
+                    .x((d) => x(d.x))
+                    .y((d) => y(normVal(d.y, { id: '__pred' }))),
                 );
             }
           }
@@ -2134,6 +2382,60 @@
               tooltip.style('left', left + 'px').style('top', top + 'px');
             })
             .on('mouseleave', () => tooltip.style('display', 'none'));
+          // Inject legend item & controls for temp response
+          if (series.length && tempRespEnabled) {
+            const insights = $('insights');
+            const existing = document.getElementById('temp-resp-panel');
+            if (!existing) {
+              const panel = document.createElement('div');
+              panel.id = 'temp-resp-panel';
+              panel.className =
+                'mt-2 p-2 border border-border dark:border-border-dark rounded bg-panel-2 dark:bg-panel-2-dark flex flex-wrap gap-2 items-end text-[11px]';
+              panel.innerHTML = `<label class='flex flex-col'>Base T<input type='number' step='0.5' id='tr-base' class='mt-0.5 w-20 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark' value='${tempRespBaseTemp}'/></label>
+              <label class='flex flex-col'>Period<select id='tr-period' class='mt-0.5 w-24 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark'><option value='daily' ${
+                tempRespPeriod === 'daily' ? 'selected' : ''
+              }>Daily</option><option value='monthly' ${
+                tempRespPeriod === 'monthly' ? 'selected' : ''
+              }>Monthly</option></select></label>
+              <label class='flex flex-col'>Mode<select id='tr-mode' class='mt-0.5 w-28 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark'><option value='heating' ${
+                tempRespMode === 'heating' ? 'selected' : ''
+              }>Heating</option><option value='cooling' ${
+                tempRespMode === 'cooling' ? 'selected' : ''
+              }>Cooling</option><option value='both' ${
+                tempRespMode === 'both' ? 'selected' : ''
+              }>Heat+Cool</option></select></label>
+              <div id='tr-summary' class='flex-1 text-xs'></div>`;
+              insights.appendChild(panel);
+              panel.querySelector('#tr-base').addEventListener('change', (e) => {
+                tempRespBaseTemp = parseFloat(e.target.value) || tempRespBaseTemp;
+                renderAll();
+              });
+              panel.querySelector('#tr-period').addEventListener('change', (e) => {
+                tempRespPeriod = e.target.value;
+                renderAll();
+              });
+              panel.querySelector('#tr-mode').addEventListener('change', (e) => {
+                tempRespMode = e.target.value;
+                renderAll();
+              });
+            }
+            const summary = document.getElementById('tr-summary');
+            if (summary) {
+              if (tempRespModel) {
+                const parts = [];
+                if (tempRespModel.useH) parts.push(`h=${fmt(tempRespModel.hCoeff)}`);
+                if (tempRespModel.useC) parts.push(`c=${fmt(tempRespModel.cCoeff)}`);
+                summary.innerHTML = `E = b + ${parts.join(' + ')} (R² ${tempRespModel.r2.toFixed(
+                  3,
+                )})`;
+              } else {
+                summary.textContent = 'No model (need energy & temperature series).';
+              }
+            }
+          } else {
+            const p = document.getElementById('temp-resp-panel');
+            if (p) p.remove();
+          }
         } else {
           const x = d3
             .scaleBand()
@@ -2286,9 +2588,173 @@
           };
           leg.appendChild(item);
         });
+        // Temperature response legend toggle (time series only, hourly base)
+        if (viewMode === 'time' && baseFreq === 'Hourly') {
+          const temps = series.filter((s) => unitKind(s.meta.Units) === 'temperature');
+          const energies = series.filter((s) => unitKind(s.meta.Units) === 'energy');
+          if (temps.length && energies.length) {
+            const btn = document.createElement('button');
+            btn.className =
+              'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors';
+            if (tempRespEnabled) btn.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+            btn.innerHTML = `<span style="display:inline-block;width:10px;height:10px;background:${palette[3]};border-radius:2px;margin-right:6px;vertical-align:middle"></span>Temp Response`;
+            btn.onclick = () => {
+              tempRespEnabled = !tempRespEnabled;
+              renderAll();
+            };
+            leg.appendChild(btn);
+          }
+        }
       }
 
       function renderScatter(series) {
+        // Temperature response / degree day regression helper functions
+        function computeDegreeDays(pointsTemp, baseTempC, freq) {
+          // pointsTemp: hourly or monthly temperature points (converted already to current display units, which could be C or F)
+          // We convert to Celsius internally for HDD/CDD math then return aggregated periods with HDD/CDD in degree-days of the display unit scale.
+          if (!pointsTemp.length) return [];
+          const isHourly = baseFreq === 'Hourly';
+          const useMonthly = freq === 'monthly' || !isHourly;
+          const toC = (val) => {
+            // detect current display unit via prefTemp* flags
+            if (isIP && prefTempIP === 'F') return ((val - 32) * 5) / 9;
+            if (!isIP && prefTempSI === 'K') return val - 273.15;
+            return val; // already C
+          };
+
+          // group key: day (UTC) or month label
+          const groups = new Map();
+          for (const p of pointsTemp) {
+            if (isHourly) {
+              const d = new Date(p.x);
+              let key;
+              if (useMonthly) key = d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1);
+              else key = d.toISOString().slice(0, 10); // YYYY-MM-DD
+              let g = groups.get(key);
+              if (!g) {
+                g = { temps: [], label: key, firstX: p.x, hours: 0 };
+                groups.set(key, g);
+              }
+              g.temps.push(p.yDisplayTemp);
+              g.hours += 1;
+            } else {
+              // Monthly temps assumed typical average => create synthetic one entry
+              const key = p.xLabel;
+              let g = groups.get(key);
+              if (!g) {
+                g = { temps: [], label: key, firstX: p.xLabel, hours: 0 };
+                groups.set(key, g);
+              }
+              g.temps.push(p.yDisplayTemp);
+              g.hours += 1; // number of monthly records (may be 1)
+            }
+          }
+          const rows = [];
+          groups.forEach((g) => {
+            if (!g.temps.length) return;
+            // For hourly we approximate daily average temperature
+            // HDD/CDD using baseTempC; positive difference only
+            const tempsC = g.temps.map(toC);
+            let avgC = tempsC.reduce((a, b) => a + b, 0) / tempsC.length;
+            let hddC = Math.max(0, baseTempC - avgC);
+            let cddC = Math.max(0, avgC - baseTempC);
+            // Convert degree-day units back to displayed temperature unit if needed
+            function back(valC) {
+              if (isIP && prefTempIP === 'F') return (valC * 9) / 5; // C difference to F difference
+              if (!isIP && prefTempSI === 'K') return valC; // deg C same magnitude as K difference
+              return valC; // C
+            }
+            rows.push({
+              key: g.label,
+              avgTempDisplay: g.temps.reduce((a, b) => a + b, 0) / g.temps.length,
+              HDD: back(hddC),
+              CDD: back(cddC),
+              hours: g.hours || (useMonthly ? 720 : 24),
+              firstX: g.firstX,
+            });
+          });
+          return rows.sort((a, b) => (a.firstX > b.firstX ? 1 : -1));
+        }
+        function fitEnergyVsDegreeDays(energyRows, ddRows, mode) {
+          // Join on key; energyRows energy sum per period, ddRows includes HDD/CDD and hours
+          const ddMap = new Map(ddRows.map((r) => [r.key, r]));
+          const joined = [];
+          energyRows.forEach((er) => {
+            const dd = ddMap.get(er.key);
+            if (!dd) return;
+            const hours = dd.hours || 24;
+            const days = hours / 24;
+            joined.push({ key: er.key, energy: er.energy, HDD: dd.HDD, CDD: dd.CDD, hours, days });
+          });
+          if (!joined.length) return null;
+          const useH = mode === 'heating' || mode === 'both';
+          const useC = mode === 'cooling' || mode === 'both';
+          // Design matrix columns: days, HDD?, CDD?  (Model: E = b*days + h*HDD + c*CDD)
+          const X = [];
+          const Y = [];
+          joined.forEach((r) => {
+            const row = [r.days];
+            if (useH) row.push(r.HDD);
+            if (useC) row.push(r.CDD);
+            X.push(row);
+            Y.push(r.energy);
+          });
+          const m = X[0].length;
+          const XtX = Array.from({ length: m }, () => Array(m).fill(0));
+          const XtY = Array(m).fill(0);
+          for (let i = 0; i < X.length; i++) {
+            const row = X[i];
+            const yv = Y[i];
+            for (let a = 0; a < m; a++) {
+              XtY[a] += row[a] * yv;
+              for (let b = 0; b < m; b++) XtX[a][b] += row[a] * row[b];
+            }
+          }
+          function solve(A, b) {
+            const n = A.length;
+            for (let i = 0; i < n; i++) {
+              let max = i;
+              for (let k = i + 1; k < n; k++) if (Math.abs(A[k][i]) > Math.abs(A[max][i])) max = k;
+              if (max !== i) {
+                [A[i], A[max]] = [A[max], A[i]];
+                [b[i], b[max]] = [b[max], b[i]];
+              }
+              const piv = A[i][i];
+              if (Math.abs(piv) < 1e-12) return null;
+              for (let j = i; j < n; j++) A[i][j] /= piv;
+              b[i] /= piv;
+              for (let k = 0; k < n; k++)
+                if (k !== i) {
+                  const f = A[k][i];
+                  if (f !== 0) {
+                    for (let j = i; j < n; j++) A[k][j] -= f * A[i][j];
+                    b[k] -= f * b[i];
+                  }
+                }
+            }
+            return b;
+          }
+          const coeffs = solve(XtX, XtY);
+          if (!coeffs) return null;
+          let idx = 0;
+          const bPerDay = coeffs[idx++];
+          let hCoeff = null,
+            cCoeff = null;
+          if (useH) hCoeff = coeffs[idx++];
+          if (useC) cCoeff = coeffs[idx++];
+          const meanY = Y.reduce((a, b) => a + b, 0) / Y.length;
+          let ssTot = 0,
+            ssRes = 0;
+          joined.forEach((r) => {
+            let yhat = bPerDay * r.days;
+            if (useH) yhat += hCoeff * r.HDD;
+            if (useC) yhat += cCoeff * r.CDD;
+            ssTot += (r.energy - meanY) ** 2;
+            ssRes += (r.energy - yhat) ** 2;
+          });
+          const r2 = ssTot ? 1 - ssRes / ssTot : 0;
+          return { bPerDay, hCoeff, cCoeff, r2, useH, useC, points: joined };
+        }
         // Expect at least 2 visible series; use first two as X/Y or user-chosen pair
         const container = $('chart');
         container.innerHTML = '';
@@ -2497,6 +2963,118 @@
               }`
             : 'Insufficient variance for regression';
         $('insights').innerHTML = `Scatter (${points.length} pts) — ${statsHtml}`;
+        // Degree day temperature response optional panel (when one axis appears to be temperature & the other energy)
+        const tempAxis =
+          unitKind(sx.meta.Units) === 'temperature'
+            ? 'x'
+            : unitKind(sy.meta.Units) === 'temperature'
+              ? 'y'
+              : null;
+        const energyAxis =
+          unitKind(sx.meta.Units) === 'energy'
+            ? 'x'
+            : unitKind(sy.meta.Units) === 'energy'
+              ? 'y'
+              : null;
+        let degDayModel = null;
+        if (tempAxis && energyAxis) {
+          try {
+            // Build period aggregates of energy and temperatures
+            const isHourly = baseFreq === 'Hourly';
+            // Choose temperature series and energy series objects
+            const tempSeries = tempAxis === 'x' ? sx : sy;
+            const energySeries = energyAxis === 'x' ? sx : sy;
+            // Extract converted values
+            const tempPts = tempSeries.points.map((p) => ({
+              x: p.x,
+              xLabel: p.xLabel,
+              yDisplayTemp: convertUnits(p.y, tempSeries.meta.Units),
+            }));
+            // Energy per interval (convert to preferred unit label energy unit) -> we'll keep in display energy unit
+            const energyPts = energySeries.points.map((p) => ({
+              x: p.x,
+              xLabel: p.xLabel,
+              val: convertUnits(p.y, energySeries.meta.Units),
+            }));
+            const ddRows = computeDegreeDays(tempPts, scatterDegDayBaseTemp, scatterDegDayPeriod);
+            // Aggregate energy by same period key
+            const energyAggMap = new Map();
+            const useMonthly = scatterDegDayPeriod === 'monthly' || baseFreq !== 'Hourly';
+            if (baseFreq === 'Hourly') {
+              energyPts.forEach((p) => {
+                const d = new Date(p.x);
+                const key = useMonthly
+                  ? d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1)
+                  : d.toISOString().slice(0, 10);
+                const cur = energyAggMap.get(key) || 0;
+                energyAggMap.set(key, cur + p.val);
+              });
+            } else {
+              energyPts.forEach((p) => {
+                const key = p.xLabel;
+                const cur = energyAggMap.get(key) || 0;
+                energyAggMap.set(key, cur + p.val);
+              });
+            }
+            const energyRows = Array.from(energyAggMap.entries()).map(([key, energy]) => ({
+              key,
+              energy,
+            }));
+            degDayModel = fitEnergyVsDegreeDays(energyRows, ddRows, scatterDegDayMode);
+            if (degDayModel && scatterShowDegDay) {
+              // Add overlay line(s) for energy vs temperature (convert to scatter axis units)
+              // We'll sample a range of avg temps from ddRows
+              const temps = ddRows.map((r) => r.avgTempDisplay);
+              if (temps.length) {
+                const tMin = Math.min(...temps),
+                  tMax = Math.max(...temps);
+                const sample = d3.range(0, 26).map((i) => tMin + (i / 25) * (tMax - tMin));
+                // compute HDD/CDD for each sample relative to base
+                function ddFromTemp(avg) {
+                  const toC = (val) => {
+                    if (isIP && prefTempIP === 'F') return ((val - 32) * 5) / 9;
+                    if (!isIP && prefTempSI === 'K') return val - 273.15;
+                    return val;
+                  };
+                  const avgC = toC(avg);
+                  const baseC = toC(scatterDegDayBaseTemp);
+                  let hddC = Math.max(0, baseC - avgC);
+                  let cddC = Math.max(0, avgC - baseC);
+                  if (isIP && prefTempIP === 'F') {
+                    hddC = (hddC * 9) / 5;
+                    cddC = (cddC * 9) / 5;
+                  }
+                  const HDD = scatterDegDayMode === 'cooling' ? 0 : hddC;
+                  const CDD = scatterDegDayMode === 'heating' ? 0 : cddC;
+                  // For daily sample days =1. Model: E_day = b*days + h*HDD + c*CDD => average hourly = E_day / (24*days) = (b + h*HDD + c*CDD)/24
+                  let eDay = degDayModel.bPerDay * 1; // days=1
+                  if (degDayModel.useH) eDay += (degDayModel.hCoeff || 0) * HDD;
+                  if (degDayModel.useC) eDay += (degDayModel.cCoeff || 0) * CDD;
+                  const eHourly = eDay / 24; // match hourly scatter y scale
+                  return { avg, e: eHourly };
+                }
+                const overlay = sample.map(ddFromTemp);
+                // Map avg temp to x or y depending which axis is temperature
+                const linePts = overlay.map((o) =>
+                  tempAxis === 'x' ? { x: o.avg, y: o.e } : { x: o.e, y: o.avg },
+                );
+                const lineGen = d3
+                  .line()
+                  .x((d) => (tempAxis === 'x' ? xScale(d.x) : xScale(d.x)))
+                  .y((d) => (tempAxis === 'x' ? yScale(d.y) : yScale(d.y)));
+                g.append('path')
+                  .datum(linePts)
+                  .attr('fill', 'none')
+                  .attr('stroke', palette[2])
+                  .attr('stroke-width', 1.4)
+                  .attr('stroke-dasharray', '6,3')
+                  .attr('d', lineGen);
+              }
+            }
+          } catch (e) {
+            console.warn('Degree-day model failed', e);
+          }
+        }
         // legend includes clickable X/Y swap and choose pair
         const leg = $('legend');
         leg.innerHTML = '';
@@ -2548,6 +3126,88 @@
           },
           scatterShowRegression,
         );
+        if (tempAxis && energyAxis) {
+          // degree-day toggle button
+          const ddBtn = button(
+            'Deg Days',
+            () => {
+              scatterShowDegDay = !scatterShowDegDay;
+              ddBtn.classList.toggle('bg-panel-2');
+              ddBtn.classList.toggle('dark:bg-panel-2-dark');
+              renderAll();
+            },
+            scatterShowDegDay,
+          );
+        }
+        // If degree-day panel requested and available
+        if (scatterShowDegDay && tempAxis && energyAxis) {
+          const panel = document.createElement('div');
+          panel.className =
+            'mt-2 p-2 border border-border dark:border-border-dark rounded bg-panel-2 dark:bg-panel-2-dark flex flex-wrap gap-2 items-end text-[11px]';
+          panel.innerHTML = `<label class='flex flex-col'>Base T
+            <input type='number' step='0.5' id='dd-base' class='mt-0.5 w-20 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark' value='${scatterDegDayBaseTemp}' />
+          </label>
+          <label class='flex flex-col'>Period
+            <select id='dd-period' class='mt-0.5 w-24 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark'>
+              <option value='daily' ${
+                scatterDegDayPeriod === 'daily' ? 'selected' : ''
+              }>Daily</option>
+              <option value='monthly' ${
+                scatterDegDayPeriod === 'monthly' ? 'selected' : ''
+              }>Monthly</option>
+            </select>
+          </label>
+          <label class='flex flex-col'>Mode
+            <select id='dd-mode' class='mt-0.5 w-28 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark'>
+              <option value='heating' ${
+                scatterDegDayMode === 'heating' ? 'selected' : ''
+              }>Heating</option>
+              <option value='cooling' ${
+                scatterDegDayMode === 'cooling' ? 'selected' : ''
+              }>Cooling</option>
+              <option value='both' ${
+                scatterDegDayMode === 'both' ? 'selected' : ''
+              }>Heat+Cool</option>
+            </select>
+          </label>
+          <div id='dd-summary' class='flex-1 text-xs'></div>
+          <div class='text-[10px] absolute right-1 top-1 cursor-pointer select-none group' id='dd-help' aria-label='Degree-day model help' style='z-index:10;'>
+            <span class='inline-block w-4 h-4 leading-4 text-center rounded-full bg-accent text-white font-medium'>?</span>
+            <div class='hidden group-hover:block absolute z-10 right-0 mt-1 w-64 p-2 text-[10px] leading-snug bg-panel dark:bg-panel-dark border border-border dark:border-border-dark rounded shadow'>
+              <strong>Model:</strong> E = b*days + h*HDD + c*CDD<br/>
+              b: baseload energy per day (same energy units as E/day).<br/>
+              HDD / CDD: heating / cooling degree-days for the chosen base temperature and aggregation period, in current temperature difference units (°C·day or °F·day).<br/>
+              h, c: incremental energy per degree-day (energy / (°·day)).<br/>
+              For daily periods the dashed line shows predicted <em>hourly average</em> (divide daily prediction by 24) so it aligns with hourly scatter points.<br/>
+              R²: variance explained by the model using summed period energies.
+            </div>
+          </div>`;
+          $('insights').appendChild(panel);
+          // Ensure positioning context
+          panel.style.position = 'relative';
+          panel.querySelector('#dd-base').addEventListener('change', (e) => {
+            scatterDegDayBaseTemp = parseFloat(e.target.value) || scatterDegDayBaseTemp;
+            renderAll();
+          });
+          panel.querySelector('#dd-period').addEventListener('change', (e) => {
+            scatterDegDayPeriod = e.target.value;
+            renderAll();
+          });
+          panel.querySelector('#dd-mode').addEventListener('change', (e) => {
+            scatterDegDayMode = e.target.value;
+            renderAll();
+          });
+          if (degDayModel) {
+            const parts = [];
+            if (degDayModel.useH) parts.push(`h=${fmt(degDayModel.hCoeff)}`);
+            if (degDayModel.useC) parts.push(`c=${fmt(degDayModel.cCoeff)}`);
+            panel.querySelector('#dd-summary').innerHTML =
+              `Temp response: E = b*days + ${parts.join(' + ')} (R² ${degDayModel.r2.toFixed(3)})`;
+          } else {
+            panel.querySelector('#dd-summary').textContent =
+              'No degree-day model (insufficient data).';
+          }
+        }
       }
 
       function toLDC(points, units, normalize) {
