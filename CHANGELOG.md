@@ -5,9 +5,16 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 <!-- Keep upcoming changes here. Use subsections Added/Changed/Fixed/Removed when populated. -->
-Minor: Signals panel can now be resized horizontally on large screens via a draggable handle between panels; width persists across sessions.
 
-<!-- Keep upcoming changes here. Use subsections Added/Changed/Fixed/Removed when populated. -->
+### Added
+
+- Zones quick-pick buttons under the Signals list: click a zone to auto-load Zone Mean Air Temperature + Thermostat Heating/Cooling Setpoint Temperatures for that zone (Hourly), replacing the current chart selection.
+
+### Changed
+
+- Minor: Signals panel can now be resized horizontally on large screens via a draggable handle between panels; width persists across sessions.
+
+
 
 ## [0.2.0] - 2025-08-19
 
