@@ -152,8 +152,12 @@
       </div>
     </header>
 
-    <main class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-3 p-2 sm:p-3 flex-1 overflow-auto">
+    <main
+      id="main-grid"
+      class="grid grid-cols-1 lg:grid-cols-[360px_12px_1fr] gap-3 lg:gap-0 p-2 sm:p-3 flex-1 overflow-auto"
+    >
       <section
+        id="signals-panel"
         class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-1 lg:order-none"
       >
         <div
@@ -223,6 +227,15 @@
           </div>
         </div>
       </section>
+
+      <!-- Vertical resizer (visible on lg+) -->
+      <div
+        id="signals-resizer"
+        class="hidden lg:block cursor-col-resize select-none touch-none"
+        aria-hidden="true"
+      >
+        <div class="h-full w-px bg-border dark:bg-border-dark mx-auto"></div>
+      </div>
 
       <section
         class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-2 lg:order-none"
@@ -4198,6 +4211,104 @@
               renderAll();
             }
           });
+        });
+      })();
+
+      (function () {
+        // Sidebar horizontal resizer (Signals panel)
+        const KEY = 'eplus_signals_width_px';
+        const mainEl = document.getElementById('main-grid');
+        const leftEl = document.getElementById('signals-panel');
+        const handle = document.getElementById('signals-resizer');
+        if (!mainEl || !leftEl || !handle) return;
+
+        function isLg() {
+          // Tailwind lg breakpoint: 1024px
+          return window.innerWidth >= 1024;
+        }
+
+        function clamp(n, a, b) {
+          return Math.min(b, Math.max(a, n));
+        }
+
+        let stored = parseInt(localStorage.getItem(KEY) || '360', 10);
+        if (!Number.isFinite(stored) || stored < 100) stored = 360;
+
+        function applyColumns(w) {
+          if (!isLg()) {
+            mainEl.style.removeProperty('grid-template-columns');
+            return;
+          }
+          const gutter = 12; // px width for the draggable column visual (thin line centered)
+          mainEl.style.gridTemplateColumns = `${Math.round(w)}px ${gutter}px 1fr`;
+        }
+
+        function maxWidth() {
+          // Leave at least 360px for the chart side on large screens
+          return Math.max(260, window.innerWidth - 360 - 32); // subtract paddings a bit
+        }
+
+        function minWidth() {
+          return 220;
+        }
+
+        // Initialize
+        applyColumns(stored);
+
+        // Drag logic
+        let startX = 0;
+        let startW = 0;
+        let dragging = false;
+
+        function onMove(ev) {
+          if (!dragging) return;
+          const isTouch = !!ev.touches;
+          const x = isTouch ? ev.touches[0].clientX : ev.clientX;
+          if (isTouch && typeof ev.preventDefault === 'function') ev.preventDefault();
+          const dx = x - startX;
+          const w = clamp(startW + dx, minWidth(), maxWidth());
+          applyColumns(w);
+        }
+
+        function onUp() {
+          if (!dragging) return;
+          dragging = false;
+          document.body.classList.remove('select-none', 'cursor-col-resize');
+          // Persist current width by reading computed from left panel rect
+          const rect = leftEl.getBoundingClientRect();
+          const w = Math.round(rect.width);
+          localStorage.setItem(KEY, String(w));
+          stored = w;
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+          window.removeEventListener('touchmove', onMove);
+          window.removeEventListener('touchend', onUp);
+          window.removeEventListener('touchcancel', onUp);
+        }
+
+        handle.addEventListener('mousedown', (e) => {
+          if (!isLg()) return;
+          dragging = true;
+          startX = e.clientX;
+          startW = leftEl.getBoundingClientRect().width;
+          document.body.classList.add('select-none', 'cursor-col-resize');
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        });
+        handle.addEventListener('touchstart', (e) => {
+          if (!isLg()) return;
+          dragging = true;
+          startX = e.touches[0].clientX;
+          startW = leftEl.getBoundingClientRect().width;
+          document.body.classList.add('select-none', 'cursor-col-resize');
+          window.addEventListener('touchmove', onMove, { passive: false });
+          window.addEventListener('touchend', onUp);
+          window.addEventListener('touchcancel', onUp);
+        });
+
+        // Re-apply when viewport changes
+        window.addEventListener('resize', () => {
+          applyColumns(stored);
         });
       })();
 

@@ -5,6 +5,9 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 <!-- Keep upcoming changes here. Use subsections Added/Changed/Fixed/Removed when populated. -->
+Minor: Signals panel can now be resized horizontally on large screens via a draggable handle between panels; width persists across sessions.
+
+<!-- Keep upcoming changes here. Use subsections Added/Changed/Fixed/Removed when populated. -->
 
 ## [0.2.0] - 2025-08-19
 
