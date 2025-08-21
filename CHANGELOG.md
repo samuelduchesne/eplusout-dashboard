@@ -6,11 +6,16 @@ All notable changes to this project will be documented here.
 
 <!-- Keep upcoming changes here. Use subsections Added/Changed/Fixed/Removed when populated. -->
 
-### Added
+### Added (Unreleased)
 
 - Zones quick-pick buttons under the Signals list: click a zone to auto-load Zone Mean Air Temperature + Thermostat Heating/Cooling Setpoint Temperatures for that zone (Hourly), replacing the current chart selection.
+- Time view now groups selected series by original SQL units and renders one chart per unit group; zoom is synced across charts and the charts are stacked in a scrollable layout.
 
-### Changed
+### Changed (Unreleased)
+
+### Fixed (Unreleased)
+
+- Signals panel mistakenly displayed raw JavaScript due to a misplaced template block; restored proper filters and removed the injected code.
 
 - Minor: Signals panel can now be resized horizontally on large screens via a draggable handle between panels; width persists across sessions.
 

@@ -192,7 +192,7 @@
             <select
               id="filter-freq"
               disabled
-              class="flex-1 border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
             >
               <option value="">Any frequency</option>
               <option value="Hourly">Hourly</option>
@@ -201,7 +201,7 @@
             <select
               id="filter-meter"
               disabled
-              class="flex-1 border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
             >
               <option value="">Vars & Meters</option>
               <option value="1">Meters only</option>
@@ -291,17 +291,20 @@
           <div id="zoom-hint" class="text-xs text-muted dark:text-muted-dark hidden">
             Drag on the mini-map to zoom. Double-tap to reset.
           </div>
-          <div id="legend" class="flex flex-wrap gap-2 items-center"></div>
-          <div
-            id="insights"
-            class="rounded-md border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-3 text-sm"
-          ></div>
-          <div id="kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2"></div>
-          <div
-            id="chart"
-            class="w-full h-[420px] max-[768px]:h-[300px] max-[480px]:h-[220px] relative"
-          ></div>
-          <div id="stats" class="grid grid-cols-8 gap-2"></div>
+          <div id="single-chart-panel" class="flex flex-col gap-3">
+            <div id="legend" class="flex flex-wrap gap-2 items-center"></div>
+            <div
+              id="insights"
+              class="rounded-md border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-3 text-sm"
+            ></div>
+            <div id="kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2"></div>
+            <div
+              id="chart"
+              class="w-full h-[420px] max-[768px]:h-[300px] max-[480px]:h-[220px] relative"
+            ></div>
+            <div id="stats" class="grid grid-cols-8 gap-2"></div>
+          </div>
+          <div id="multi-charts" class="flex flex-col gap-4 hidden"></div>
         </div>
       </section>
     </main>
@@ -1219,20 +1222,83 @@
             );
           } else {
             if (viewMode === 'scatter') {
+              // Scatter view remains single-panel
+              const multi = $('multi-charts');
+              multi?.classList?.add('hidden');
+              $('single-chart-panel')?.classList?.remove('hidden');
               renderScatter(series);
+              renderStats(series);
             } else {
-              renderChart(series, { normalize: normalizeFlag });
-              renderInsights(series);
-              renderKPIs(series);
-              if (normalizeFlag && metas.length) {
-                unitsEl.textContent = '%';
+              // Time series: group by original SQL units string
+              const byUnits = new Map();
+              for (const s of series) {
+                const u = s.meta.Units || '';
+                if (!byUnits.has(u)) byUnits.set(u, []);
+                byUnits.get(u).push(s);
+              }
+              const multi = $('multi-charts');
+              const single = $('single-chart-panel');
+              if (byUnits.size <= 1) {
+                // Single-chart path
+                single?.classList?.remove('hidden');
+                multi?.classList?.add('hidden');
+                renderChart(series, { normalize: normalizeFlag });
+                renderInsights(series);
+                renderKPIs(series);
+                renderStats(series);
+                if (normalizeFlag && metas.length) unitsEl.textContent = '%';
+              } else if (multi) {
+                // Multi-chart path
+                single?.classList?.add('hidden');
+                multi.classList.remove('hidden');
+                multi.innerHTML = '';
+                // Clear top-level KPIs since per-group KPIs are not shown yet
+                const k = $('kpis');
+                if (k) k.innerHTML = '';
+                let groupIdx = 0;
+                for (const [u, arr] of byUnits.entries()) {
+                  groupIdx++;
+                  const panel = document.createElement('div');
+                  panel.className = 'flex flex-col gap-2';
+                  const header = document.createElement('div');
+                  header.className =
+                    'flex items-center justify-between text-xs text-muted dark:text-muted-dark';
+                  header.innerHTML = `<span>Unit group ${groupIdx} • ${
+                    arr.length
+                  } series</span><span>${escapeHtml(convertUnitLabel(u) || u || '')}</span>`;
+                  panel.appendChild(header);
+                  const legend = document.createElement('div');
+                  legend.className = 'flex flex-wrap gap-2 items-center';
+                  panel.appendChild(legend);
+                  const chart = document.createElement('div');
+                  chart.className =
+                    'w-full h-[360px] max-[768px]:h-[280px] max-[480px]:h-[220px] relative';
+                  panel.appendChild(chart);
+                  const insightsEl = document.createElement('div');
+                  insightsEl.className =
+                    'rounded-md border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-2 text-xs';
+                  panel.appendChild(insightsEl);
+                  const statsEl = document.createElement('div');
+                  statsEl.className = 'grid grid-cols-8 gap-2';
+                  panel.appendChild(statsEl);
+                  renderChart(arr, {
+                    normalize: normalizeFlag,
+                    containerEl: chart,
+                    legendEl: legend,
+                  });
+                  renderInsights(arr, insightsEl);
+                  renderStats(arr, statsEl);
+                  multi.appendChild(panel);
+                }
               }
             }
           }
-          renderStats(series); // always refresh stats (even if empty)
-          const has = selected.size > 0;
-          const b = $('btn-export');
-          if (b) b.disabled = !has;
+          // export button state
+          {
+            const has = selected.size > 0;
+            const b = $('btn-export');
+            if (b) b.disabled = !has;
+          }
         } finally {
           __rendering = false;
         }
@@ -1272,8 +1338,8 @@
         }
       }
 
-      function renderInsights(series) {
-        const el = $('insights');
+      function renderInsights(series, targetEl) {
+        const el = targetEl || $('insights');
         if (series.length === 0) {
           el.textContent = '';
           return;
@@ -1632,8 +1698,8 @@
         );
       }
 
-      function renderStats(series) {
-        const el = $('stats');
+      function renderStats(series, targetEl) {
+        const el = targetEl || $('stats');
         if (!el) return;
         if (!series.length) {
           el.innerHTML = '';
@@ -1908,12 +1974,12 @@
 
       async function renderChart(series, opts = {}) {
         await ensureD3();
-        const container = $('chart');
+        const container = opts.containerEl || $('chart');
         container.innerHTML = '';
         const rect = container.getBoundingClientRect();
         const width = rect.width,
           height = rect.height;
-        const metas = [...selected.values()].map((v) => v.meta);
+        const metas = series.map((s) => s.meta);
         let consistentUnits = metas.length && metas.every((m) => m.Units === metas[0].Units);
         let primaryMeta = consistentUnits ? metas[0] : null;
         if (!primaryMeta && metas.length) {
@@ -2249,7 +2315,7 @@
               );
           }
           // Legend (hourly time-series)
-          const hourlyLeg = $('legend');
+          const hourlyLeg = opts.legendEl || $('legend');
           if (hourlyLeg) {
             hourlyLeg.innerHTML = '';
             series.forEach((s) => {
@@ -2298,6 +2364,8 @@
                   currentXDomain = x.domain().slice();
                 }
                 redraw();
+                // trigger global re-render to sync other charts
+                setTimeout(() => renderAll(), 0);
               });
             const bG = g.append('g').attr('class', 'brush').call(brush);
             bG.selectAll('.selection')
@@ -2351,6 +2419,7 @@
             x.domain(fullDomain);
             currentXDomain = null;
             redraw();
+            setTimeout(() => renderAll(), 0);
           });
           const tooltip = d3
             .select(container)
