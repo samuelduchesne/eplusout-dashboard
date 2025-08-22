@@ -1,109 +1,115 @@
-<!-- Use this file to provide workspace-specific custom instructions to Copilot. For more details, visit https://code.visualstudio.com/docs/copilot/copilot-customization#_use-a-githubcopilotinstructionsmd-file -->
-- [ ] Verify that the copilot-instructions.md file in the .github directory is created.
+# EnergyPlus Dashboard
 
-- [ ] Clarify Project Requirements
-	<!-- Ask for project type, language, and frameworks if not specified. Skip if already provided. -->
+EnergyPlus Dashboard is a standalone HTML5 application for visualizing EnergyPlus simulation data. It works entirely offline using client-side JavaScript, Tailwind CSS, and embedded libraries (sql.js, d3).
 
-- [ ] Scaffold the Project
-	<!--
-	Ensure that the previous step has been marked as completed.
-	Call project setup tool with projectType parameter.
-	Run scaffolding command to create project files and folders.
-	Use '.' as the working directory.
-	If no appropriate projectType is available, search documentation using available tools.
-	Otherwise, create the project structure manually using available file creation tools.
-	-->
+**Always reference these instructions first and fallback to search or bash commands only when you encounter unexpected information that does not match the info here.**
 
-- [ ] Customize the Project
-	<!--
-	Verify that all previous steps have been completed successfully and you have marked the step as completed.
-	Develop a plan to modify codebase according to user requirements.
-	Apply modifications using appropriate tools and user-provided references.
-	Skip this step for "Hello World" projects.
-	-->
+## Working Effectively
 
-- [ ] Install Required Extensions
-	<!-- ONLY install extensions provided mentioned in the get_project_setup_info. Skip this step otherwise and mark as completed. -->
+### Bootstrap, Build, and Test the Repository
+- Install dependencies: `npm install` (takes ~7 seconds)
+- Build the project: `npm run build` (takes ~2 seconds, NEVER CANCEL)
+- Format code: `npm run format` (instant, runs Prettier on index.html only)
+- Install pre-commit hooks: `pip install pre-commit && pre-commit install` (one-time setup)
+- Run pre-commit checks: `pre-commit run --all-files` (takes ~3 seconds on first run)
 
-- [ ] Compile the Project
-	<!--
-	Verify that all previous steps have been completed.
-	Install any missing dependencies.
-	Run diagnostics and resolve any issues.
-	Check for markdown files in project folder for relevant instructions on how to do this.
-	-->
+### Development Workflow
+- **Development CSS watch mode**: `npm run dev:css` - watches and rebuilds `dist/tailwind.css` automatically
+- **Production build**: `npm run build` - complete build including version injection, CSS compilation, sample generation, and asset copying
+- **Individual build steps**:
+  - `npm run version:inject` - generates `dist/version.js` with version and changelog
+  - `npm run tailwind` - compiles and minifies CSS
+  - `npm run sample:generate` - creates sample database (`assets/eplusout.sql`)
+  - `npm run assets` - copies assets and vendor libraries to `dist/`
 
-- [ ] Create and Run Task
-	<!--
-	Verify that all previous steps have been completed.
-	Check https://code.visualstudio.com/docs/debugtest/tasks to determine if the project needs a task. If so, use the create_and_run_task to create and launch a task based on package.json, README.md, and project structure.
-	Skip this step otherwise.
-	 -->
+### Run the Application
+- Start local server: `python3 -m http.server 8080` or any static file server
+- Navigate to `http://localhost:8080`
+- The application works entirely offline once loaded
 
-- [ ] Launch the Project
-	<!--
-	Verify that all previous steps have been completed.
-	Prompt user for debug mode, launch only if confirmed.
-	 -->
+## Validation
 
-- [ ] Ensure Documentation is Complete
-	<!--
-	Verify that all previous steps have been completed.
-	Verify that README.md and the copilot-instructions.md file in the .github directory exists and contains current project information.
-	Clean up the copilot-instructions.md file in the .github directory by removing all HTML comments.
-	 -->
+### Manual Validation Scenarios
+**ALWAYS manually validate any changes by running through these complete scenarios:**
 
-<!--
-## Execution Guidelines
-PROGRESS TRACKING:
-- If any tools are available to manage the above todo list, use it to track progress through this checklist.
-- After completing each step, mark it complete and add a summary.
-- Read current todo list status before starting each new step.
+1. **Basic functionality test**:
+   - Start local server and navigate to dashboard
+   - Click "Open eplusout.sql" button
+   - Click "Load Sample" in the modal
+   - Verify data loads and charts render correctly
+   - Verify statistics display (Annual Energy, EUI, Peak, Load Factor, Cost)
 
-COMMUNICATION RULES:
-- Avoid verbose explanations or printing full command outputs.
-- If a step is skipped, state that briefly (e.g. "No extensions needed").
-- Do not explain project structure unless asked.
-- Keep explanations concise and focused.
+2. **Interface interaction test**:
+   - Test signals panel search functionality
+   - Test frequency and type filters (Hourly/Monthly, Vars & Meters)
+   - Test chart type switching (Time Series, Load Duration, Load Balance, Scatter)
+   - Test units toggle (SI/IP)
+   - Test dark/light mode switching
 
-DEVELOPMENT RULES:
-- Use '.' as the working directory unless user specifies otherwise.
-- Avoid adding media or external links unless explicitly requested.
-- Use placeholders only with a note that they should be replaced.
-- Use VS Code API tool only for VS Code extension projects.
-- Once the project is created, it is already opened in Visual Studio Code—do not suggest commands to open this project in Visual Studio again.
-- If the project setup information has additional rules, follow them strictly.
+3. **Data export test**:
+   - Load sample data
+   - Test "Export CSV" button functionality
+   - Test "View HTML Report" button
 
-FOLDER CREATION RULES:
-- Always use the current directory as the project root.
-- If you are running any terminal commands, use the '.' argument to ensure that the current working directory is used ALWAYS.
-- Do not create a new folder unless the user explicitly requests it besides a .vscode folder for a tasks.json file.
-- If any of the scaffolding commands mention that the folder name is not correct, let the user know to create a new folder with the correct name and then reopen it again in vscode.
+### Build Validation
+- Always run `npm run build` before committing changes - build takes ~2 seconds, NEVER CANCEL
+- Always run `npm run format` to ensure code formatting is correct
+- Pre-commit hooks will automatically format `index.html` on commit
 
-EXTENSION INSTALLATION RULES:
-- Only install extension specified by the get_project_setup_info tool. DO NOT INSTALL any other extensions.
+## Critical Timing Information
 
-PROJECT CONTENT RULES:
-- If the user has not specified project details, assume they want a "Hello World" project as a starting point.
-- Avoid adding links of any type (URLs, files, folders, etc.) or integrations that are not explicitly required.
-- Avoid generating images, videos, or any other media files unless explicitly requested.
-- If you need to use any media assets as placeholders, let the user know that these are placeholders and should be replaced with the actual assets later.
-- Ensure all generated components serve a clear purpose within the user's requested workflow.
-- If a feature is assumed but not confirmed, prompt the user for clarification before including it.
-- If you are working on a VS Code extension, use the VS Code API tool with a query to find relevant VS Code API references and samples related to that query.
+**NEVER CANCEL these commands - they complete quickly:**
+- `npm install` - 7 seconds
+- `npm run build` - 2 seconds, NEVER CANCEL, set timeout to 30+ seconds
+- `pre-commit run --all-files` - 3 seconds on first run, instant thereafter
 
-TASK COMPLETION RULES:
-- Your task is complete when:
-  - Project is successfully scaffolded and compiled without errors
-  - copilot-instructions.md file in the .github directory exists in the project
-  - README.md file exists and is up to date
-  - User is provided with clear instructions to debug/launch the project
+## Common Tasks
 
-Before starting a new task in the above plan, update progress in the plan.
--->
-- Work through each checklist item systematically.
-- Keep communication concise and focused.
-- Follow development best practices.
+### Repository Structure
+```
+.
+├── index.html              # Main dashboard application
+├── package.json           # Node.js dependencies and scripts
+├── src.css               # Tailwind CSS source
+├── tailwind.config.js    # Tailwind configuration
+├── dist/                 # Build output directory
+│   ├── tailwind.css     # Compiled CSS
+│   ├── version.js       # Embedded version and changelog
+│   ├── eplusout.sql     # Sample database
+│   └── vendor/          # Bundled libraries (sql.js, d3)
+├── scripts/             # Build scripts
+│   ├── gen-version.js   # Version injection
+│   ├── gen-sample-db.js # Sample database generation
+│   └── copy-assets.js   # Asset copying
+├── assets/              # Static assets
+└── .github/workflows/   # GitHub Actions for deployment
+```
+
+### Key Files to Monitor
+- **Always check `index.html`** after making changes to the main application
+- **Always rebuild (`npm run build`)** after modifying:
+  - `package.json` version field
+  - `CHANGELOG.md`
+  - `src.css`
+  - Any scripts in `scripts/` directory
+- **Always format (`npm run format`)** before committing changes to `index.html`
+
+### GitHub Actions Deployment
+- Deployment happens automatically on push to `main` branch
+- Build process: `npm ci && npm run build`
+- Deploys to GitHub Pages with `index.html` and `dist/` contents
+
+### Dependencies and Libraries
+- **sql.js**: SQLite implementation in WebAssembly for database processing
+- **d3**: Data visualization library for charts and graphs
+- **Tailwind CSS**: Utility-first CSS framework for styling
+- **Prettier**: Code formatting for HTML
+
+### Troubleshooting
+- If Tailwind CSS changes don't appear, run `npm run tailwind` to rebuild
+- If version doesn't update in UI, run `npm run version:inject` and refresh browser
+- If sample data doesn't load, check `dist/eplusout.sql` exists after `npm run build`
+- For offline functionality issues, verify vendor libraries in `dist/vendor/` directory
 
 ## Changelog Maintenance
 
