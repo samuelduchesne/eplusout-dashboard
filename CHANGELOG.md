@@ -4,6 +4,10 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Fixed (Unreleased)
+
+- Load Balance chart now loads correctly when switching between chart types. Fixed "TypeError: Assignment to constant variable" error that prevented Load Balance from rendering on subsequent loads after viewing other chart types.
+
 ### Added (Unreleased)
 
 - "Report issue" button in the header that opens a prefilled GitHub issue with app version, theme, units, and browser details.

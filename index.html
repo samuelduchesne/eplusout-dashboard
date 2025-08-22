@@ -4729,9 +4729,14 @@
           return String(n).padStart(2, '0');
         }
         // Map env-month -> category totals (in Joules, signed)
-        let monthLabelsLocal, catTotals;
+        let monthLabelsLocal, catTotals, missingCached;
         if (__loadBalanceCache) {
-          ({ monthLabels: monthLabelsLocal, catTotals, missing } = __loadBalanceCache);
+          ({
+            monthLabels: monthLabelsLocal,
+            catTotals,
+            missing: missingCached,
+          } = __loadBalanceCache);
+          missing.push(...missingCached);
         } else {
           const monthKeys = new Set();
           const catTotalsLocal = new Map();
@@ -4954,6 +4959,9 @@
         }
         drawLayers(posLayers);
         drawLayers(negLayers);
+        // Track hidden state separately to avoid readonly property issues
+        const hiddenState = new Map();
+
         // Interactive vertical guideline + percentage breakdown tooltip
         let lbTooltip = d3.select(container).select('.lb-tooltip');
         if (lbTooltip.empty()) {
@@ -5011,7 +5019,7 @@
             }
             guide.style('display', 'block').attr('x1', cx).attr('x2', cx);
             // collect active series (respect hidden toggles)
-            const active = catSeries.filter((s) => !s._hidden);
+            const active = catSeries.filter((s) => !hiddenState.get(s.id));
             if (!active.length) {
               lbTooltip.style('display', 'none');
               return;
@@ -5079,16 +5087,17 @@
             s.meta.Name,
           )}`;
           btn.onclick = () => {
-            // toggle
-            if (s._hidden) {
-              s._hidden = false;
+            // toggle using separate hidden state map
+            const isHidden = hiddenState.get(s.id);
+            if (isHidden) {
+              hiddenState.set(s.id, false);
               btn.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
             } else {
-              s._hidden = true;
+              hiddenState.set(s.id, true);
               btn.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
             }
             // Recompute stacks with hidden series filtered
-            const active = catSeries.filter((x) => !x._hidden);
+            const active = catSeries.filter((x) => !hiddenState.get(x.id));
             const keysA = active.map((x) => x.id);
             const monthDataA = monthLabels.map((ml) => {
               const row = { label: ml };
