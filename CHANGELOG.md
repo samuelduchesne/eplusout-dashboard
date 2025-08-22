@@ -6,9 +6,20 @@ All notable changes to this project will be documented here.
 
 ### Added (Unreleased)
 
+
 ### Changed (Unreleased)
 
 ### Fixed (Unreleased)
+
+## [0.3.1] - 2025-08-22
+
+### Added (0.3.1)
+
+- Resampling Aggregation selector next to Resolution: choose how values are aggregated when switching resolution (Auto, Sum, Avg, Max, Min). Auto sums energy units (J/Wh/BTU) and averages other units.
+
+### Fixed (0.3.1)
+
+- Monthly resampling could produce a 13th column due to Date roll-over at 24:00. Grouping now uses EnergyPlus Environment + Month keys (E{env}-M{mm}) to avoid off-by-one issues and ensures exactly 12 months per environment.
 
 ## [0.3.0] - 2025-08-22
 

@@ -367,6 +367,19 @@
                   <option value="annual">Annual</option>
                 </select>
               </label>
+              <label class="ml-2 text-xs inline-flex items-center gap-1">
+                Aggregation:
+                <select
+                  id="resample-agg"
+                  class="px-1 py-0.5 rounded bg-panel-2 dark:bg-panel-2-dark border border-border dark:border-border-dark text-xs"
+                >
+                  <option value="auto">Auto</option>
+                  <option value="sum">Sum</option>
+                  <option value="avg">Avg</option>
+                  <option value="max">Max</option>
+                  <option value="min">Min</option>
+                </select>
+              </label>
             </div>
             <div
               class="flex items-center gap-2 ml-auto text-sm text-muted dark:text-muted-dark"
@@ -1667,6 +1680,7 @@
       let currentXDomain = null;
       // Time resolution resampling state
       let resampleMode = 'original'; // 'original' | 'hourly' | 'monthly' | 'annual'
+      let resampleAgg = 'auto'; // 'auto' | 'sum' | 'avg' | 'max' | 'min'
 
       // No special guards needed with label-for approach
 
@@ -1998,6 +2012,12 @@
           ),
           y: Number(r.value),
           label: timeLabel(r),
+          // carry through grouping fields to avoid Date roll-over issues (e.g., hour 24)
+          env: r.env || 1,
+          month: r.month || 1,
+          day: r.day || 1,
+          hour: r.hour || 0,
+          minute: r.minute || 0,
         }));
       }
       function toMonthlyPoints(rows) {
@@ -2008,17 +2028,20 @@
       }
 
       // Resampling functions for different time resolutions
-      function resamplePoints(points, fromFreq, toFreq, units) {
+      function resamplePoints(points, fromFreq, toFreq, units, aggMode = 'auto') {
         if (fromFreq === toFreq || toFreq === 'original') return points;
         if (!points || points.length === 0) return points;
 
-        // Determine aggregation method based on units
-        const isEnergy =
-          units &&
-          (units.toLowerCase().includes('j') ||
-            units.toLowerCase().includes('wh') ||
-            units.toLowerCase().includes('btu'));
-        const aggregateFunc = isEnergy ? 'sum' : 'average';
+        // Determine aggregation method
+        let aggregateFunc = aggMode;
+        if (!aggregateFunc || aggregateFunc === 'auto') {
+          const isEnergy =
+            units &&
+            (units.toLowerCase().includes('j') ||
+              units.toLowerCase().includes('wh') ||
+              units.toLowerCase().includes('btu'));
+          aggregateFunc = isEnergy ? 'sum' : 'avg';
+        }
 
         if (fromFreq === 'Hourly') {
           if (toFreq === 'monthly') return resampleHourlyToMonthly(points, aggregateFunc);
@@ -2031,98 +2054,103 @@
       }
 
       function resampleHourlyToMonthly(points, aggregateFunc) {
-        const groups = new Map();
-
+        const groups = new Map(); // key: E{env}-M{mm}
         for (const p of points) {
-          if (!Number.isFinite(p.x)) continue;
-          const date = new Date(p.x);
-          const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
-
-          if (!groups.has(key)) {
-            groups.set(key, { values: [], firstDate: date });
+          const env = p.env || 1;
+          const mm = String(p.month || 1).padStart(2, '0');
+          const key = `E${env}-M${mm}`;
+          let g = groups.get(key);
+          if (!g) {
+            g = { values: [], ord: (env - 1) * 12 + (parseInt(mm) - 1), firstX: p.x };
+            groups.set(key, g);
           }
-          groups.get(key).values.push(p.y);
+          g.values.push(p.y);
+          if (p.x < g.firstX) g.firstX = p.x;
         }
-
         const result = [];
-        for (const [key, group] of groups) {
-          const value =
-            aggregateFunc === 'sum'
-              ? group.values.reduce((a, b) => a + b, 0)
-              : group.values.reduce((a, b) => a + b, 0) / group.values.length;
-
-          result.push({
-            xLabel: key,
-            y: value,
-            x: group.firstDate.getTime(),
-          });
+        // sort by env then month using ord; fall back to firstX
+        const entries = [...groups.entries()].sort((a, b) => {
+          const oa = a[1].ord ?? a[1].firstX;
+          const ob = b[1].ord ?? b[1].firstX;
+          return oa - ob;
+        });
+        for (const [key, g] of entries) {
+          const value = aggregateValues(g.values, aggregateFunc);
+          result.push({ xLabel: key, y: value, x: g.firstX });
         }
-
-        return result.sort((a, b) => a.x - b.x);
+        return result;
       }
 
       function resampleHourlyToAnnual(points, aggregateFunc) {
-        const groups = new Map();
-
+        const groups = new Map(); // key: E{env}
         for (const p of points) {
-          if (!Number.isFinite(p.x)) continue;
-          const date = new Date(p.x);
-          const key = String(date.getUTCFullYear());
-
-          if (!groups.has(key)) {
-            groups.set(key, { values: [], firstDate: date });
+          const env = p.env || 1;
+          const key = `E${env}`;
+          let g = groups.get(key);
+          if (!g) {
+            g = { values: [], ord: env - 1, firstX: p.x };
+            groups.set(key, g);
           }
-          groups.get(key).values.push(p.y);
+          g.values.push(p.y);
+          if (p.x < g.firstX) g.firstX = p.x;
         }
-
-        const result = [];
-        for (const [key, group] of groups) {
-          const value =
-            aggregateFunc === 'sum'
-              ? group.values.reduce((a, b) => a + b, 0)
-              : group.values.reduce((a, b) => a + b, 0) / group.values.length;
-
-          result.push({
-            xLabel: key,
-            y: value,
-            x: group.firstDate.getTime(),
-          });
-        }
-
-        return result.sort((a, b) => a.x - b.x);
+        const entries = [...groups.entries()].sort((a, b) => (a[1].ord ?? 0) - (b[1].ord ?? 0));
+        const result = entries.map(([key, g]) => ({
+          xLabel: key,
+          y: aggregateValues(g.values, aggregateFunc),
+          x: g.firstX,
+        }));
+        return result;
       }
 
       function resampleMonthlyToAnnual(points, aggregateFunc) {
         const groups = new Map();
-
         for (const p of points) {
-          // For monthly data, extract year from xLabel (format: "E1-M01", "E1-M02", etc.)
-          const match = p.xLabel && p.xLabel.match(/E(\d+)-M(\d+)/);
-          if (!match) continue;
-
-          const env = match[1];
-          const key = `E${env}`;
-
-          if (!groups.has(key)) {
-            groups.set(key, { values: [] });
+          // Prefer env carried over; else parse from label
+          let env = p.env;
+          if (!env) {
+            const match = p.xLabel && p.xLabel.match(/E(\d+)-M(\d+)/);
+            if (!match) continue;
+            env = Number(match[1]) || 1;
           }
-          groups.get(key).values.push(p.y);
+          const key = `E${env}`;
+          let g = groups.get(key);
+          if (!g) {
+            g = { values: [], ord: env - 1 };
+            groups.set(key, g);
+          }
+          g.values.push(p.y);
         }
+        const entries = [...groups.entries()].sort((a, b) => (a[1].ord ?? 0) - (b[1].ord ?? 0));
+        return entries.map(([key, g]) => ({
+          xLabel: key,
+          y: aggregateValues(g.values, aggregateFunc),
+        }));
+      }
 
-        const result = [];
-        for (const [key, group] of groups) {
-          const value =
-            aggregateFunc === 'sum'
-              ? group.values.reduce((a, b) => a + b, 0)
-              : group.values.reduce((a, b) => a + b, 0) / group.values.length;
-
-          result.push({
-            xLabel: key,
-            y: value,
-          });
+      function aggregateValues(values, mode) {
+        if (!values || values.length === 0) return 0;
+        let sum = 0;
+        let min = Infinity;
+        let max = -Infinity;
+        for (const v of values) {
+          const n = Number(v) || 0;
+          sum += n;
+          if (n < min) min = n;
+          if (n > max) max = n;
         }
-
-        return result;
+        switch (mode) {
+          case 'sum':
+            return sum;
+          case 'avg':
+            return sum / values.length;
+          case 'min':
+            return min;
+          case 'max':
+            return max;
+          default:
+            return sum / values.length; // fallback to average
+        }
       }
 
       function exportCSV(seriesMap) {
@@ -2203,7 +2231,13 @@
           const visibleEntries = [...selected.entries()].filter(([, v]) => v.visible !== false);
           const series = visibleEntries.map(([id, v], i) => {
             // Apply resampling to the points
-            const resampledPoints = resamplePoints(v.points, baseFreq, resampleMode, v.meta.Units);
+            const resampledPoints = resamplePoints(
+              v.points,
+              baseFreq,
+              resampleMode,
+              v.meta.Units,
+              resampleAgg,
+            );
             return {
               id,
               meta: v.meta,
@@ -5456,10 +5490,21 @@
 
       // Resampling mode event listener
       const resampleSelect = $('resample-mode');
+      const resampleAggSelect = $('resample-agg');
+      function updateResampleAggEnabled() {
+        if (!resampleAggSelect) return;
+        resampleAggSelect.disabled = resampleMode === 'original';
+      }
       resampleSelect?.addEventListener('change', () => {
         resampleMode = resampleSelect.value;
+        updateResampleAggEnabled();
         renderAll();
       });
+      resampleAggSelect?.addEventListener('change', () => {
+        resampleAgg = resampleAggSelect.value;
+        renderAll();
+      });
+      updateResampleAggEnabled();
 
       function restoreSelection() {
         try {
