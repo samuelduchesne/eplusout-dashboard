@@ -24,10 +24,11 @@
     <link rel="stylesheet" href="dist/tailwind.css" />
     <!-- Removed legacy CSS variables; using Tailwind semantic classes -->
     <script>
+      // Prefer local vendor copies (built into dist/vendor via build script); fall back to CDN if missing.
       window.__LIB_URLS__ = {
-        d3: 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js',
-        sqljs: 'https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js',
-        sqlwasm: 'https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.wasm',
+        d3: 'dist/vendor/d3.min.js',
+        sqljs: 'dist/vendor/sql-wasm.js',
+        sqlwasm: 'dist/vendor/sql-wasm.wasm',
       };
     </script>
   </head>
@@ -207,12 +208,17 @@
         <div class="p-4 flex flex-col gap-4 flex-1 overflow-hidden">
           <div
             id="open-drop"
-            class="flex-1 min-h-[12rem] flex items-center justify-center text-center border-2 border-dashed rounded-md border-border dark:border-border-dark bg-panel-2/40 dark:bg-panel-2-dark/40 cursor-pointer overflow-hidden"
+            class="flex-1 min-h-[12rem] text-center border-2 border-dashed rounded-md border-border dark:border-border-dark bg-panel-2/40 dark:bg-panel-2-dark/40 overflow-hidden"
           >
-            <div>
-              <div class="text-sm font-medium mb-1">Drag & drop your eplusout.sql here</div>
-              <div class="text-xs text-muted dark:text-muted-dark">or click to choose a file</div>
-            </div>
+            <label
+              for="file-input"
+              class="block w-full h-full grid place-items-center cursor-pointer select-none"
+            >
+              <div>
+                <div class="text-sm font-medium mb-1">Drag & drop your eplusout.sql here</div>
+                <div class="text-xs text-muted dark:text-muted-dark">or click to choose a file</div>
+              </div>
+            </label>
             <input id="file-input" type="file" accept=".sql,.sqlite,.db" class="hidden" />
           </div>
           <div class="mt-0 flex items-center justify-between">
@@ -1647,6 +1653,8 @@
       let tempRespModel = null; // cache of last model {intercept,hCoeff,cCoeff,r2,useH,useC,predSeriesId,predPoints,energyUnits,label}
       // Preserve current hourly x-domain across redraws (zoom + resize)
       let currentXDomain = null;
+
+      // No special guards needed with label-for approach
 
       let isIP = localStorage.getItem(UNITS_KEY) === 'IP' ? true : false;
       const btnUnits = $('btn-units');
@@ -4938,11 +4946,21 @@
       $('btn-open')?.addEventListener('click', showOpen);
       $('open-close')?.addEventListener('click', hideOpen);
       $('open-backdrop')?.addEventListener('click', hideOpen);
+      $('file-input').addEventListener('click', (e) => {
+        // Ensure same-file re-selection triggers change on all browsers
+        try {
+          e.target.value = '';
+        } catch {}
+      });
       $('file-input').addEventListener('change', async (e) => {
-        const f = e.target.files[0];
-        if (f) {
+        try {
+          const f = e.target.files && e.target.files[0];
+          if (!f) return; // cancelled
           await handleFile(f);
           hideOpen();
+        } catch (err) {
+          console.warn('File load failed', err);
+          alert('Failed to open database: ' + (err && err.message ? err.message : String(err)));
         }
       });
       $('btn-load-sample')?.addEventListener('click', async () => {
@@ -5015,10 +5033,7 @@
             await handleFile(f);
           }
         });
-        el.addEventListener('click', () => {
-          const fi = $('file-input');
-          if (fi) fi.click();
-        });
+        // Clicking handled by <label for="file-input">; no JS click needed here
       }
       // Initialize modal dropzone (no-op if element not yet in DOM)
       enableDropZone($('open-drop'));
