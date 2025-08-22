@@ -1,8 +1,21 @@
+<!-- markdownlint-disable MD024 -->
 # Changelog
 
 All notable changes to this project will be documented here.
 
 ## [Unreleased]
+
+### Added
+
+- HTML Report viewer: new button in header opens a modal with comprehensive EnergyPlus report data including Building Summary, Annual Building Utility Performance Summary, HVAC Sizing Summary, Component Sizing Summary, and Energy Meters Summary with professional table formatting and copy-to-clipboard functionality for each data table.
+
+### Fixed
+
+- HTML Report: Copy CSV buttons now work reliably on all tables. Replaced fragile inline onclick with delegated handler and added clipboard fallback for file:// and non-secure contexts.
+
+### Changed
+
+- HTML Report: “Copy CSV” replaced by a single “Copy” button that writes rich clipboard data (text/html table + text/plain TSV). This improves pasting into Excel, Google Sheets, Notion, and Markdown-capable tools; falls back to TSV-only where rich clipboard is unavailable.
 
 <!-- Keep upcoming changes here. Use subsections Added/Changed/Fixed/Removed when populated. -->
 

@@ -71,6 +71,30 @@
             Export CSV
           </button>
           <button
+            id="btn-html-report"
+            type="button"
+            disabled
+            aria-label="View HTML Report"
+            title="View HTML Report"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded disabled:opacity-50 disabled:cursor-not-allowed bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+          >
+            <!-- Document report icon -->
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="size-6"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5"
+              />
+            </svg>
+          </button>
+          <button
             id="btn-theme"
             type="button"
             aria-label="Toggle dark mode"
@@ -438,6 +462,71 @@
       </div>
     </div>
 
+    <!-- HTML Report Modal -->
+    <div
+      id="html-report-backdrop"
+      class="hidden fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm z-40"
+    ></div>
+    <div
+      id="html-report-modal"
+      class="hidden fixed z-50 top-[5%] left-1/2 -translate-x-1/2 w-[min(1200px,95%)] max-h-[85%] flex flex-col rounded-lg overflow-hidden border border-border dark:border-border-dark bg-panel dark:bg-panel-dark shadow-lg focus:outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="html-report-title"
+      tabindex="-1"
+    >
+      <div
+        class="flex items-center justify-between px-4 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark rounded-t-lg"
+      >
+        <h2 id="html-report-title" class="font-semibold text-sm">EnergyPlus HTML Report</h2>
+        <button
+          type="button"
+          class="p-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-dark"
+          aria-label="Close"
+          onclick="hideHtmlReport()"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            class="w-5 h-5"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="flex flex-1 overflow-hidden">
+        <!-- Table of Contents Sidebar -->
+        <div
+          id="html-report-toc"
+          class="w-64 border-r border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-4 overflow-y-auto"
+        >
+          <h3
+            class="text-xs font-semibold text-muted dark:text-muted-dark mb-3 uppercase tracking-wide"
+          >
+            Table of Contents
+          </h3>
+          <nav id="html-report-nav" class="space-y-1">
+            <!-- TOC links will be populated here -->
+          </nav>
+        </div>
+        <!-- Report Content -->
+        <div
+          id="html-report-body"
+          class="flex-1 px-4 py-3 overflow-auto text-text dark:text-text-dark text-sm leading-relaxed"
+        >
+          <div class="text-center py-8 text-muted dark:text-muted-dark">Generating report...</div>
+        </div>
+      </div>
+      <div
+        class="px-4 py-2 border-t border-border dark:border-border-dark flex justify-end text-[10px] text-muted dark:text-muted-dark"
+      >
+        <span>Press Esc to close</span>
+      </div>
+    </div>
+
     <script>
       const THEME_KEY = 'eplus_theme';
       const UNITS_KEY = 'eplus_units_mode';
@@ -578,13 +667,32 @@
         document.getElementById('changelog-backdrop')?.classList.add('hidden');
         document.getElementById('changelog-modal')?.classList.add('hidden');
       }
+      function showHtmlReport() {
+        const backdrop = document.getElementById('html-report-backdrop');
+        const modal = document.getElementById('html-report-modal');
+        if (!backdrop || !modal) return;
+        backdrop.classList.remove('hidden');
+        modal.classList.remove('hidden');
+        // Generate report content
+        generateHtmlReport();
+        modal.focus();
+      }
+      function hideHtmlReport() {
+        document.getElementById('html-report-backdrop')?.classList.add('hidden');
+        document.getElementById('html-report-modal')?.classList.add('hidden');
+      }
       document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') hideChangelog();
+        if (e.key === 'Escape') {
+          hideChangelog();
+          hideHtmlReport();
+        }
       });
       document.addEventListener('click', (e) => {
         if (e.target.id === 'changelog-backdrop') hideChangelog();
+        if (e.target.id === 'html-report-backdrop') hideHtmlReport();
       });
       document.getElementById('app-version')?.addEventListener('click', showChangelog);
+      document.getElementById('btn-html-report')?.addEventListener('click', showHtmlReport);
       function applyTheme(t) {
         // Maintain legacy data-theme attribute (for remaining CSS variable usages)
         document.documentElement.setAttribute('data-theme', t);
@@ -617,6 +725,624 @@
         if (media.addEventListener) media.addEventListener('change', systemListener);
         else if (media.addListener) media.addListener(systemListener); // Safari <14 fallback
       } catch {}
+
+      function copyToClipboard(text, button) {
+        const showResult = (ok) => {
+          const originalText = button?.textContent ?? '';
+          if (button) {
+            button.textContent = ok ? 'Copied!' : 'Copy failed';
+            if (ok) button.classList.add('bg-accent', 'text-white', 'dark:bg-accent-dark');
+            setTimeout(() => {
+              button.textContent = originalText || 'Copy';
+              if (ok) button.classList.remove('bg-accent', 'text-white', 'dark:bg-accent-dark');
+            }, 1500);
+          }
+        };
+        // Preferred modern API (requires secure context such as http://localhost or https)
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard
+            .writeText(text)
+            .then(() => showResult(true))
+            .catch(() => {
+              // Fallback below if navigator.clipboard fails
+              try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'absolute';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                const ok = document.execCommand('copy');
+                ta.remove();
+                showResult(!!ok);
+              } catch {
+                showResult(false);
+              }
+            });
+          return;
+        }
+        // Legacy fallback for file:// or non-secure contexts
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'absolute';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          ta.remove();
+          showResult(!!ok);
+        } catch {
+          showResult(false);
+        }
+      }
+
+      // Rich clipboard write: HTML + TSV with fallback to plain TSV
+      async function copyRich(tsv, html, button) {
+        const show = (ok) => {
+          const originalText = button?.textContent ?? '';
+          if (!button) return;
+          button.textContent = ok ? 'Copied!' : 'Copy failed';
+          if (ok) button.classList.add('bg-accent', 'text-white', 'dark:bg-accent-dark');
+          setTimeout(() => {
+            button.textContent = originalText || 'Copy';
+            if (ok) button.classList.remove('bg-accent', 'text-white', 'dark:bg-accent-dark');
+          }, 1500);
+        };
+        try {
+          if (
+            window.isSecureContext &&
+            navigator.clipboard &&
+            typeof navigator.clipboard.write === 'function' &&
+            typeof window.ClipboardItem === 'function'
+          ) {
+            const item = new ClipboardItem({
+              'text/html': new Blob([html], { type: 'text/html' }),
+              'text/plain': new Blob([tsv], { type: 'text/plain' }),
+            });
+            await navigator.clipboard.write([item]);
+            show(true);
+            return;
+          }
+          // fallback to writeText if available
+          if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(tsv);
+            show(true);
+            return;
+          }
+        } catch {}
+        // legacy fallback via textarea (TSV only)
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = tsv;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'absolute';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          ta.remove();
+          show(!!ok);
+        } catch {
+          show(false);
+        }
+      }
+
+      // Safe Base64 for Unicode strings (for embedding CSV in data-* attributes)
+      function b64EncodeUnicode(str) {
+        try {
+          return btoa(unescape(encodeURIComponent(str)));
+        } catch (e) {
+          // Fallback via TextEncoder
+          const bytes = new TextEncoder().encode(str);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          return btoa(binary);
+        }
+      }
+      function b64DecodeUnicode(b64) {
+        try {
+          return decodeURIComponent(escape(atob(b64)));
+        } catch (e) {
+          const binary = atob(b64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          return new TextDecoder().decode(bytes);
+        }
+      }
+
+      function generateTableWithCopy(title, data, columns) {
+        if (!data || data.length === 0) {
+          return `<div class="mb-6">
+            <h3 class="text-base font-semibold mb-3">${escapeHtml(title)}</h3>
+            <p class="text-muted dark:text-muted-dark text-sm">No data available</p>
+          </div>`;
+        }
+
+        const tableId = title.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const headers = columns || Object.keys(data[0]);
+
+        // Generate TSV content for copying (safer across locales)
+        const tsvRow = (row) =>
+          headers.map((col) => String(row[col] ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t');
+        const tsvContent = [headers.join('\t'), ...data.map(tsvRow)].join('\n');
+        const tsvB64 = b64EncodeUnicode(tsvContent);
+
+        // Generate minimal HTML table for rich clipboard
+        let htmlTable = '<table><thead><tr>';
+        for (const h of headers) htmlTable += '<th>' + escapeHtml(h) + '</th>';
+        htmlTable += '</tr></thead><tbody>';
+        for (const row of data) {
+          htmlTable += '<tr>';
+          for (const col of headers)
+            htmlTable += '<td>' + escapeHtml(String(row[col] ?? '')) + '</td>';
+          htmlTable += '</tr>';
+        }
+        htmlTable += '</tbody></table>';
+        const htmlB64 = b64EncodeUnicode(htmlTable);
+
+        let html = `<div class="mb-6" id="${tableId}">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-base font-semibold">${escapeHtml(title)}</h3>
+            <button type="button" data-tsvb64="${tsvB64}" data-htmlb64="${htmlB64}"
+              class="btn-copy-csv px-2 py-1 text-xs border rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark border-border dark:border-border-dark transition-colors"
+            >
+              Copy
+            </button>
+          </div>
+          <div class="overflow-x-auto border border-border dark:border-border-dark rounded">
+            <table class="w-full text-sm">
+              <thead class="bg-panel-2 dark:bg-panel-2-dark">
+                <tr>`;
+
+        headers.forEach((header) => {
+          html += `<th class="px-3 py-2 text-left border-b border-border dark:border-border-dark font-medium">${escapeHtml(
+            header,
+          )}</th>`;
+        });
+
+        html += `</tr>
+              </thead>
+              <tbody>`;
+
+        data.forEach((row, i) => {
+          const bgClass = i % 2 === 0 ? 'bg-white dark:bg-bg-dark' : 'bg-panel dark:bg-panel-dark';
+          html += `<tr class="${bgClass}">`;
+          headers.forEach((col) => {
+            const value = row[col] || '';
+            html += `<td class="px-3 py-2 border-b border-border dark:border-border-dark">${escapeHtml(
+              String(value),
+            )}</td>`;
+          });
+          html += '</tr>';
+        });
+
+        html += `</tbody>
+            </table>
+          </div>
+        </div>`;
+
+        return html;
+      }
+
+      // Delegate Copy clicks anywhere in the document (handles dynamic content)
+      document.addEventListener('click', (e) => {
+        const btn = e.target && e.target.closest && e.target.closest('button.btn-copy-csv');
+        if (!btn) return;
+        const tsvB64 = btn.getAttribute('data-tsvb64') || '';
+        const htmlB64 = btn.getAttribute('data-htmlb64') || '';
+        let tsv = '',
+          html = '';
+        try {
+          tsv = b64DecodeUnicode(tsvB64);
+        } catch {}
+        try {
+          html = b64DecodeUnicode(htmlB64);
+        } catch {}
+        copyRich(tsv, html, btn);
+      });
+
+      function generateHtmlReport() {
+        if (!db) {
+          document.getElementById('html-report-body').innerHTML =
+            '<div class="text-center py-8 text-danger dark:text-danger-dark">No database loaded. Please load an eplusout.sql file first.</div>';
+          return;
+        }
+
+        try {
+          const sections = [];
+          const tocItems = [];
+
+          // Building Summary Section
+          const buildingSummary = generateBuildingSummary();
+          if (buildingSummary.content) {
+            sections.push(buildingSummary.content);
+            tocItems.push(buildingSummary.toc);
+          }
+
+          // Annual Building Utility Performance Summary
+          const utilityPerformance = generateUtilityPerformanceSummary();
+          if (utilityPerformance.content) {
+            sections.push(utilityPerformance.content);
+            tocItems.push(utilityPerformance.toc);
+          }
+
+          // HVAC Sizing Summary
+          const hvacSizing = generateHvacSizingSummary();
+          if (hvacSizing.content) {
+            sections.push(hvacSizing.content);
+            tocItems.push(hvacSizing.toc);
+          }
+
+          // Component Sizing Summary
+          const componentSizing = generateComponentSizingSummary();
+          if (componentSizing.content) {
+            sections.push(componentSizing.content);
+            tocItems.push(componentSizing.toc);
+          }
+
+          // Energy Meters Summary
+          const energyMeters = generateEnergyMetersSummary();
+          if (energyMeters.content) {
+            sections.push(energyMeters.content);
+            tocItems.push(energyMeters.toc);
+          }
+
+          // Update TOC with collapsible sub-headers
+          function renderToc(items) {
+            let html = '';
+            for (const it of items) {
+              const hasKids = Array.isArray(it.children) && it.children.length > 0;
+              const toggle = hasKids
+                ? `<button type="button" class="toc-toggle mr-1 inline-flex items-center justify-center w-4 h-4 text-muted dark:text-muted-dark" aria-expanded="false" aria-label="Expand">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path d="M7 5l6 5-6 5V5z"/></svg>
+                   </button>`
+                : '';
+              html += `<div class="toc-item flex items-center ${
+                hasKids ? '' : 'pl-4'
+              }">\n${toggle}\n<a href="#${it.id}" data-target="${
+                it.id
+              }" class="flex-1 block px-2 py-1 text-xs hover:bg-panel dark:hover:bg-panel-dark rounded transition-colors">${escapeHtml(
+                it.title,
+              )}</a>\n</div>`;
+              if (hasKids) {
+                html += `<div class="toc-children hidden pl-7">`;
+                for (const ch of it.children) {
+                  html += `<a href="#${ch.id}" data-target="${
+                    ch.id
+                  }" class="block px-2 py-1 text-xs hover:bg-panel dark:hover:bg-panel-dark rounded transition-colors">${escapeHtml(
+                    ch.title,
+                  )}</a>`;
+                }
+                html += `</div>`;
+              }
+            }
+            return html;
+          }
+
+          const navEl = document.getElementById('html-report-nav');
+          navEl.innerHTML = renderToc(tocItems);
+          // TOC interactions: toggle and smooth scroll
+          navEl.addEventListener('click', (ev) => {
+            const toggleBtn = ev.target.closest && ev.target.closest('button.toc-toggle');
+            if (toggleBtn) {
+              const item = toggleBtn.parentElement; // .toc-item
+              const kids = item && item.nextElementSibling;
+              if (kids && kids.classList.contains('toc-children')) {
+                const expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+                toggleBtn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                kids.classList.toggle('hidden', expanded);
+                const svg = toggleBtn.querySelector('svg');
+                if (svg) svg.style.transform = expanded ? '' : 'rotate(90deg)';
+              }
+              ev.preventDefault();
+              return;
+            }
+            const a = ev.target.closest && ev.target.closest('a[data-target]');
+            if (a) {
+              ev.preventDefault();
+              const id = a.getAttribute('data-target');
+              const target = document.getElementById(id);
+              if (target) target.scrollIntoView({ behavior: 'smooth' });
+            }
+          });
+
+          // Update main content
+          const reportBody = document.getElementById('html-report-body');
+          if (sections.length === 0) {
+            reportBody.innerHTML =
+              '<div class="text-center py-8 text-muted dark:text-muted-dark">No tabular report data found in this database.</div>';
+          } else {
+            reportBody.innerHTML = sections.join('');
+          }
+        } catch (error) {
+          console.error('Error generating HTML report:', error);
+          document.getElementById('html-report-body').innerHTML =
+            `<div class="text-center py-8 text-danger dark:text-danger-dark">Error generating report: ${escapeHtml(
+              error.message,
+            )}</div>`;
+        }
+      }
+
+      function generateBuildingSummary() {
+        try {
+          const results = db.exec(`
+            SELECT TableName, RowName, ColumnName, Value, Units, ReportForString
+            FROM TabularDataWithStrings 
+            WHERE ReportName = 'AnnualBuildingUtilityPerformanceSummary'
+              AND TableName = 'Building Area'
+            ORDER BY RowName, ColumnName
+          `);
+
+          if (!results[0] || !results[0].values.length) {
+            return { content: '', toc: null };
+          }
+
+          const data = results[0].values.map((row) => ({
+            Description: row[1], // RowName
+            Value: row[3], // Value
+            Units: row[4] || '', // Units
+          }));
+
+          const content = `<div class="mb-8" id="building-summary">
+            <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Building Summary</h2>
+            ${generateTableWithCopy('Building Area', data, ['Description', 'Value', 'Units'])}
+          </div>`;
+
+          return {
+            content,
+            toc: { id: 'building-summary', title: 'Building Summary' },
+          };
+        } catch (error) {
+          console.warn('Error generating building summary:', error);
+          return { content: '', toc: null };
+        }
+      }
+
+      function generateUtilityPerformanceSummary() {
+        try {
+          const results = db.exec(`
+            SELECT TableName, RowName, ColumnName, Value, Units
+            FROM TabularDataWithStrings 
+            WHERE ReportName = 'AnnualBuildingUtilityPerformanceSummary'
+              AND TableName IN ('End Uses', 'End Uses By Subcategory')
+            ORDER BY TableName, RowName, ColumnName
+          `);
+
+          if (!results[0] || !results[0].values.length) {
+            return { content: '', toc: null };
+          }
+
+          const endUsesData = results[0].values
+            .filter((row) => row[0] === 'End Uses')
+            .map((row) => ({
+              'End Use': row[1], // RowName
+              Category: row[2], // ColumnName
+              Value: row[3], // Value
+              Units: row[4] || '', // Units
+            }));
+
+          const subCategoryData = results[0].values
+            .filter((row) => row[0] === 'End Uses By Subcategory')
+            .map((row) => ({
+              'End Use': row[1], // RowName
+              Subcategory: row[2], // ColumnName
+              Value: row[3], // Value
+              Units: row[4] || '', // Units
+            }));
+
+          const sectionId = 'utility-performance';
+          let content = `<div class="mb-8" id="${sectionId}">
+            <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Annual Building Utility Performance Summary</h2>`;
+          const children = [];
+
+          if (endUsesData.length > 0) {
+            const subId = `${sectionId}--end-uses`;
+            content += `<div id="${subId}">`;
+            content += generateTableWithCopy('End Uses', endUsesData, [
+              'End Use',
+              'Category',
+              'Value',
+              'Units',
+            ]);
+            content += `</div>`;
+            children.push({ id: subId, title: 'End Uses' });
+          }
+
+          if (subCategoryData.length > 0) {
+            const subId2 = `${sectionId}--end-uses-by-subcategory`;
+            content += `<div id="${subId2}">`;
+            content += generateTableWithCopy('End Uses By Subcategory', subCategoryData, [
+              'End Use',
+              'Subcategory',
+              'Value',
+              'Units',
+            ]);
+            content += `</div>`;
+            children.push({ id: subId2, title: 'End Uses By Subcategory' });
+          }
+
+          content += '</div>';
+
+          return {
+            content,
+            toc: { id: sectionId, title: 'Utility Performance Summary', children },
+          };
+        } catch (error) {
+          console.warn('Error generating utility performance summary:', error);
+          return { content: '', toc: null };
+        }
+      }
+
+      function generateHvacSizingSummary() {
+        try {
+          const results = db.exec(`
+            SELECT TableName, RowName, ColumnName, Value, Units
+            FROM TabularDataWithStrings 
+            WHERE ReportName = 'HVACSizingSummary'
+            ORDER BY TableName, RowName, ColumnName
+          `);
+
+          if (!results[0] || !results[0].values.length) {
+            return { content: '', toc: null };
+          }
+
+          // Group by table name
+          const tables = {};
+          results[0].values.forEach((row) => {
+            const tableName = row[0];
+            if (!tables[tableName]) tables[tableName] = [];
+            tables[tableName].push({
+              Component: row[1], // RowName
+              Property: row[2], // ColumnName
+              Value: row[3], // Value
+              Units: row[4] || '', // Units
+            });
+          });
+
+          const sectionId = 'hvac-sizing';
+          let content = `<div class="mb-8" id="${sectionId}">
+            <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">HVAC Sizing Summary</h2>`;
+
+          const children = [];
+          Object.entries(tables).forEach(([tableName, data]) => {
+            const subId = `${sectionId}--${tableName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+            content += `<div id="${subId}">`;
+            content += generateTableWithCopy(tableName, data, [
+              'Component',
+              'Property',
+              'Value',
+              'Units',
+            ]);
+            content += `</div>`;
+            children.push({ id: subId, title: tableName });
+          });
+
+          content += '</div>';
+
+          return {
+            content,
+            toc: { id: sectionId, title: 'HVAC Sizing Summary', children },
+          };
+        } catch (error) {
+          console.warn('Error generating HVAC sizing summary:', error);
+          return { content: '', toc: null };
+        }
+      }
+
+      function generateComponentSizingSummary() {
+        try {
+          const results = db.exec(`
+            SELECT TableName, RowName, ColumnName, Value, Units
+            FROM TabularDataWithStrings 
+            WHERE ReportName = 'ComponentSizingSummary'
+            ORDER BY TableName, RowName, ColumnName
+          `);
+
+          if (!results[0] || !results[0].values.length) {
+            return { content: '', toc: null };
+          }
+
+          // Group by table name
+          const tables = {};
+          results[0].values.forEach((row) => {
+            const tableName = row[0];
+            if (!tables[tableName]) tables[tableName] = [];
+            tables[tableName].push({
+              Component: row[1], // RowName
+              Property: row[2], // ColumnName
+              Value: row[3], // Value
+              Units: row[4] || '', // Units
+            });
+          });
+
+          const sectionId = 'component-sizing';
+          let content = `<div class="mb-8" id="${sectionId}">
+            <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Component Sizing Summary</h2>`;
+
+          const children = [];
+          Object.entries(tables).forEach(([tableName, data]) => {
+            const subId = `${sectionId}--${tableName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+            content += `<div id="${subId}">`;
+            content += generateTableWithCopy(tableName, data, [
+              'Component',
+              'Property',
+              'Value',
+              'Units',
+            ]);
+            content += `</div>`;
+            children.push({ id: subId, title: tableName });
+          });
+
+          content += '</div>';
+
+          return {
+            content,
+            toc: { id: sectionId, title: 'Component Sizing Summary', children },
+          };
+        } catch (error) {
+          console.warn('Error generating component sizing summary:', error);
+          return { content: '', toc: null };
+        }
+      }
+
+      function generateEnergyMetersSummary() {
+        try {
+          const results = db.exec(`
+            SELECT Name, Type, Units, 
+                   COUNT(*) as DataPoints,
+                   MIN(rd.Value) as MinValue,
+                   MAX(rd.Value) as MaxValue,
+                   AVG(rd.Value) as AvgValue,
+                   SUM(rd.Value) as TotalValue
+            FROM ReportDataDictionary rdd
+            LEFT JOIN ReportData rd ON rdd.ReportDataDictionaryIndex = rd.ReportDataDictionaryIndex
+            WHERE rdd.IsMeter = 1 
+              AND rdd.ReportingFrequency = 'Hourly'
+            GROUP BY rdd.ReportDataDictionaryIndex, Name, Type, Units
+            ORDER BY Name
+          `);
+
+          if (!results[0] || !results[0].values.length) {
+            return { content: '', toc: null };
+          }
+
+          const data = results[0].values.map((row) => ({
+            'Meter Name': row[0],
+            Type: row[1],
+            Units: row[2] || '',
+            'Data Points': row[3] || 0,
+            'Min Value': row[4] ? Number(row[4]).toFixed(2) : 'N/A',
+            'Max Value': row[5] ? Number(row[5]).toFixed(2) : 'N/A',
+            'Avg Value': row[6] ? Number(row[6]).toFixed(2) : 'N/A',
+            'Total Value': row[7] ? Number(row[7]).toFixed(2) : 'N/A',
+          }));
+
+          const content = `<div class="mb-8" id="energy-meters">
+            <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Energy Meters Summary</h2>
+            ${generateTableWithCopy('Energy Meters', data, [
+              'Meter Name',
+              'Type',
+              'Units',
+              'Data Points',
+              'Min Value',
+              'Max Value',
+              'Avg Value',
+              'Total Value',
+            ])}
+          </div>`;
+
+          return {
+            content,
+            toc: { id: 'energy-meters', title: 'Energy Meters Summary' },
+          };
+        } catch (error) {
+          console.warn('Error generating energy meters summary:', error);
+          return { content: '', toc: null };
+        }
+      }
 
       function loadExternalScript(url) {
         return new Promise((res, rej) => {
@@ -4119,6 +4845,9 @@
         populateDictionaryList();
         populateZoneQuick();
         restoreSelection();
+        // Enable HTML report button now that database is loaded
+        const btnHtmlReport = $('btn-html-report');
+        if (btnHtmlReport) btnHtmlReport.disabled = false;
         // If nothing selected from previous session, auto-select the first meter
         if (selected.size === 0) {
           const firstMeter = list.find((d) => d.IsMeter == 1);
