@@ -7,32 +7,16 @@ All notable changes to this project will be documented here.
 
 ### Added
 
+- Zones quick-pick buttons under the Signals list: click a zone to auto-load Zone Mean Air Temperature + Thermostat Heating/Cooling Setpoint Temperatures for that zone (Hourly), replacing the current chart selection.
+- Charts now group selected series by original units and render one chart per unit group; zoom is synced across charts and the charts are stacked in a scrollable layout.
 - HTML Report viewer: new button in header opens a modal with comprehensive EnergyPlus report data including Building Summary, Annual Building Utility Performance Summary, HVAC Sizing Summary, Component Sizing Summary, and Energy Meters Summary with professional table formatting and copy-to-clipboard functionality for each data table.
 
 ### Fixed
 
 - HTML Report: Copy CSV buttons now work reliably on all tables. Replaced fragile inline onclick with delegated handler and added clipboard fallback for file:// and non-secure contexts.
-
-### Changed
-
 - HTML Report: “Copy CSV” replaced by a single “Copy” button that writes rich clipboard data (text/html table + text/plain TSV). This improves pasting into Excel, Google Sheets, Notion, and Markdown-capable tools; falls back to TSV-only where rich clipboard is unavailable.
-
-<!-- Keep upcoming changes here. Use subsections Added/Changed/Fixed/Removed when populated. -->
-
-### Added (Unreleased)
-
-- Zones quick-pick buttons under the Signals list: click a zone to auto-load Zone Mean Air Temperature + Thermostat Heating/Cooling Setpoint Temperatures for that zone (Hourly), replacing the current chart selection.
-- Time view now groups selected series by original SQL units and renders one chart per unit group; zoom is synced across charts and the charts are stacked in a scrollable layout.
-
-### Changed (Unreleased)
-
-### Fixed (Unreleased)
-
 - Signals panel mistakenly displayed raw JavaScript due to a misplaced template block; restored proper filters and removed the injected code.
-
 - Minor: Signals panel can now be resized horizontally on large screens via a draggable handle between panels; width persists across sessions.
-
-
 
 ## [0.2.0] - 2025-08-19
 
