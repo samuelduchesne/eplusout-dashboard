@@ -10,6 +10,7 @@ All notable changes to this project will be documented here.
 - Charts now group selected series by original units and render one chart per unit group; zoom is synced across charts and the charts are stacked in a scrollable layout.
 - HTML Report viewer: new button in header opens a modal with comprehensive EnergyPlus report data including Building Summary, Annual Building Utility Performance Summary, HVAC Sizing Summary, Component Sizing Summary, and Energy Meters Summary with professional table formatting and copy-to-clipboard functionality for each data table.
 - Built-in sample database: added a "Load Sample" button in the header. The build now generates a small sample `eplusout.sql` and copies it into `dist/` so users can explore the dashboard immediately without providing a file.
+- Signal resampling: added Resolution dropdown control that allows resampling signals to different time resolutions (Original/Hourly/Monthly/Annual). Energy values are summed when aggregating to coarser time steps, while temperature and other non-energy values are averaged. This enables viewing hourly data as monthly totals or annual summaries.
 - Open workflow redesigned: the "Open eplusout.sql" button now opens a modal with a large drag & drop zone (or click to pick) and includes a "Load Sample" action inside the modal.
 
 ### Fixed

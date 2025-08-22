@@ -355,6 +355,15 @@
                 <input id="ldc-normalize" type="checkbox" class="align-middle" />
                 Normalize to peak
               </label>
+              <label class="ml-2 text-xs inline-flex items-center gap-1">
+                Resolution:
+                <select id="resample-mode" class="px-1 py-0.5 rounded bg-panel-2 dark:bg-panel-2-dark border border-border dark:border-border-dark text-xs">
+                  <option value="original">Original</option>
+                  <option value="hourly">Hourly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="annual">Annual</option>
+                </select>
+              </label>
             </div>
             <div
               class="flex items-center gap-2 ml-auto text-sm text-muted dark:text-muted-dark"
@@ -1653,6 +1662,8 @@
       let tempRespModel = null; // cache of last model {intercept,hCoeff,cCoeff,r2,useH,useC,predSeriesId,predPoints,energyUnits,label}
       // Preserve current hourly x-domain across redraws (zoom + resize)
       let currentXDomain = null;
+      // Time resolution resampling state
+      let resampleMode = 'original'; // 'original' | 'hourly' | 'monthly' | 'annual'
 
       // No special guards needed with label-for approach
 
@@ -1993,6 +2004,117 @@
         }));
       }
 
+      // Resampling functions for different time resolutions
+      function resamplePoints(points, fromFreq, toFreq, units) {
+        if (fromFreq === toFreq || toFreq === 'original') return points;
+        if (!points || points.length === 0) return points;
+
+        // Determine aggregation method based on units
+        const isEnergy = units && (units.toLowerCase().includes('j') || units.toLowerCase().includes('wh') || units.toLowerCase().includes('btu'));
+        const aggregateFunc = isEnergy ? 'sum' : 'average';
+
+        if (fromFreq === 'Hourly') {
+          if (toFreq === 'monthly') return resampleHourlyToMonthly(points, aggregateFunc);
+          if (toFreq === 'annual') return resampleHourlyToAnnual(points, aggregateFunc);
+        } else if (fromFreq === 'Monthly') {
+          if (toFreq === 'annual') return resampleMonthlyToAnnual(points, aggregateFunc);
+        }
+
+        return points; // No resampling needed/supported
+      }
+
+      function resampleHourlyToMonthly(points, aggregateFunc) {
+        const groups = new Map();
+        
+        for (const p of points) {
+          if (!Number.isFinite(p.x)) continue;
+          const date = new Date(p.x);
+          const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+          
+          if (!groups.has(key)) {
+            groups.set(key, { values: [], firstDate: date });
+          }
+          groups.get(key).values.push(p.y);
+        }
+
+        const result = [];
+        for (const [key, group] of groups) {
+          const value = aggregateFunc === 'sum' 
+            ? group.values.reduce((a, b) => a + b, 0)
+            : group.values.reduce((a, b) => a + b, 0) / group.values.length;
+          
+          result.push({
+            xLabel: key,
+            y: value,
+            x: group.firstDate.getTime()
+          });
+        }
+
+        return result.sort((a, b) => a.x - b.x);
+      }
+
+      function resampleHourlyToAnnual(points, aggregateFunc) {
+        const groups = new Map();
+        
+        for (const p of points) {
+          if (!Number.isFinite(p.x)) continue;
+          const date = new Date(p.x);
+          const key = String(date.getUTCFullYear());
+          
+          if (!groups.has(key)) {
+            groups.set(key, { values: [], firstDate: date });
+          }
+          groups.get(key).values.push(p.y);
+        }
+
+        const result = [];
+        for (const [key, group] of groups) {
+          const value = aggregateFunc === 'sum' 
+            ? group.values.reduce((a, b) => a + b, 0)
+            : group.values.reduce((a, b) => a + b, 0) / group.values.length;
+          
+          result.push({
+            xLabel: key,
+            y: value,
+            x: group.firstDate.getTime()
+          });
+        }
+
+        return result.sort((a, b) => a.x - b.x);
+      }
+
+      function resampleMonthlyToAnnual(points, aggregateFunc) {
+        const groups = new Map();
+        
+        for (const p of points) {
+          // For monthly data, extract year from xLabel (format: "E1-M01", "E1-M02", etc.)
+          const match = p.xLabel && p.xLabel.match(/E(\d+)-M(\d+)/);
+          if (!match) continue;
+          
+          const env = match[1];
+          const key = `E${env}`;
+          
+          if (!groups.has(key)) {
+            groups.set(key, { values: [] });
+          }
+          groups.get(key).values.push(p.y);
+        }
+
+        const result = [];
+        for (const [key, group] of groups) {
+          const value = aggregateFunc === 'sum' 
+            ? group.values.reduce((a, b) => a + b, 0)
+            : group.values.reduce((a, b) => a + b, 0) / group.values.length;
+          
+          result.push({
+            xLabel: key,
+            y: value
+          });
+        }
+
+        return result;
+      }
+
       function exportCSV(seriesMap) {
         const header =
           baseFreq === 'Hourly'
@@ -2039,7 +2161,11 @@
           const titleEl = $('series-title');
           const metas = [...selected.values()].map((v) => v.meta);
           const normalizeFlag = viewMode === 'time' && $('ldc-normalize')?.checked === true;
-          titleEl.textContent = metas.length ? `${baseFreq} • ${metas.length} series` : 'Series';
+          const resolutionText = resampleMode === 'original' ? baseFreq : 
+            resampleMode === 'hourly' ? 'Hourly' :
+            resampleMode === 'monthly' ? 'Monthly' :
+            resampleMode === 'annual' ? 'Annual' : baseFreq;
+          titleEl.textContent = metas.length ? `${resolutionText} • ${metas.length} series` : 'Series';
           const consistentUnits = metas.every((m) => m.Units === metas[0]?.Units);
           unitsEl.textContent = metas.length
             ? consistentUnits
@@ -2057,13 +2183,17 @@
             )
             .join('');
           const visibleEntries = [...selected.entries()].filter(([, v]) => v.visible !== false);
-          const series = visibleEntries.map(([id, v], i) => ({
-            id,
-            meta: v.meta,
-            color: palette[i % palette.length],
-            points: v.points,
-            visible: v.visible !== false,
-          }));
+          const series = visibleEntries.map(([id, v], i) => {
+            // Apply resampling to the points
+            const resampledPoints = resamplePoints(v.points, baseFreq, resampleMode, v.meta.Units);
+            return {
+              id,
+              meta: v.meta,
+              color: palette[i % palette.length],
+              points: resampledPoints,
+              visible: v.visible !== false,
+            };
+          });
           if (viewMode === 'ldc') {
             if (baseFreq !== 'Hourly') {
               $('legend').innerHTML = '';
@@ -5300,6 +5430,13 @@
       });
       chkNorm?.addEventListener('change', () => {
         // Always re-render; normalization now applies to both time & LDC views
+        renderAll();
+      });
+
+      // Resampling mode event listener
+      const resampleSelect = $('resample-mode');
+      resampleSelect?.addEventListener('change', () => {
+        resampleMode = resampleSelect.value;
         renderAll();
       });
 
