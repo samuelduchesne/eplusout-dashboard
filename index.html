@@ -179,15 +179,24 @@
     </header>
 
     <!-- Open Database Modal -->
-    <div id="open-backdrop" class="hidden fixed inset-0 bg-black/40 dark:bg-black/60"></div>
-    <div id="open-modal" class="hidden fixed inset-0 flex items-center justify-center p-4">
+    <div
+      id="open-backdrop"
+      class="hidden fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm z-40"
+    ></div>
+    <div
+      id="open-modal"
+      class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="open-title"
+    >
       <div
         class="w-[min(96vw,56rem)] aspect-square max-h-[90vh] rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark shadow-xl flex flex-col"
       >
         <div
           class="flex items-center justify-between px-4 py-3 border-b border-border dark:border-border-dark"
         >
-          <h2 class="text-base font-semibold">Open eplusout.sql</h2>
+          <h2 id="open-title" class="text-base font-semibold">Open eplusout.sql</h2>
           <button
             id="open-close"
             class="text-sm px-2 py-1 border rounded bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
@@ -226,7 +235,7 @@
     >
       <section
         id="signals-panel"
-        class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-1 lg:order-none"
+        class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-1 lg:order-none z-0"
       >
         <div
           class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark"
@@ -238,13 +247,6 @@
           <!-- Collapse toggle removed -->
         </div>
         <div id="signals-body" class="p-3 flex flex-col gap-2 overflow-auto">
-          <div
-            id="drop"
-            class="border-2 border-dashed rounded p-3 text-center bg-panel dark:bg-panel-dark border-border dark:border-border-dark text-muted dark:text-muted-dark"
-          >
-            Drag & drop
-            <span class="px-1 rounded bg-code dark:bg-code-dark">eplusout.sql</span> here
-          </div>
           <input
             type="text"
             id="search"
@@ -745,6 +747,11 @@
       });
       document.getElementById('app-version')?.addEventListener('click', showChangelog);
       document.getElementById('btn-html-report')?.addEventListener('click', showHtmlReport);
+      // Open modal Esc + backdrop close
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') hideOpen();
+      });
+      document.getElementById('open-backdrop')?.addEventListener('click', hideOpen);
       // HTML Report TOC mobile resize
       (function () {
         const KEY = 'eplus_htmlreport_toc_h_px';
@@ -4917,12 +4924,16 @@
       function showOpen() {
         $('open-modal')?.classList.remove('hidden');
         $('open-backdrop')?.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        $('main-grid')?.setAttribute('inert', '');
         // Ensure dropzone is initialized (id: open-drop)
         enableDropZone($('open-drop'));
       }
       function hideOpen() {
         $('open-modal')?.classList.add('hidden');
         $('open-backdrop')?.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+        $('main-grid')?.removeAttribute('inert');
       }
       $('btn-open')?.addEventListener('click', showOpen);
       $('open-close')?.addEventListener('click', hideOpen);

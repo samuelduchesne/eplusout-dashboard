@@ -20,6 +20,7 @@ All notable changes to this project will be documented here.
 - Signals panel mistakenly displayed raw JavaScript due to a misplaced template block; restored proper filters and removed the injected code.
 - Minor: Signals panel can now be resized horizontally on large screens via a draggable handle between panels; width persists across sessions.
 - HTML Report TOC (mobile): improved resizer behavior with better default height (260px) and clamped range; only applies stored height on mobile and clears explicit sizing on desktop to ensure full-height sidebar.
+- Open modal: increased z-index and backdrop blur, locked background scroll, and added Esc/backdrop close to prevent Signals filters from bleeding through.
 
 ## [0.2.0] - 2025-08-19
 
