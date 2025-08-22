@@ -10,6 +10,8 @@ All notable changes to this project will be documented here.
 - Zones quick-pick buttons under the Signals list: click a zone to auto-load Zone Mean Air Temperature + Thermostat Heating/Cooling Setpoint Temperatures for that zone (Hourly), replacing the current chart selection.
 - Charts now group selected series by original units and render one chart per unit group; zoom is synced across charts and the charts are stacked in a scrollable layout.
 - HTML Report viewer: new button in header opens a modal with comprehensive EnergyPlus report data including Building Summary, Annual Building Utility Performance Summary, HVAC Sizing Summary, Component Sizing Summary, and Energy Meters Summary with professional table formatting and copy-to-clipboard functionality for each data table.
+- Built-in sample database: added a "Load Sample" button in the header. The build now generates a small sample `eplusout.sql` and copies it into `dist/` so users can explore the dashboard immediately without providing a file.
+- Open workflow redesigned: the "Open eplusout.sql" button now opens a modal with a large drag & drop zone (or click to pick) and includes a "Load Sample" action inside the modal.
 
 ### Fixed
 
@@ -17,6 +19,7 @@ All notable changes to this project will be documented here.
 - HTML Report: “Copy CSV” replaced by a single “Copy” button that writes rich clipboard data (text/html table + text/plain TSV). This improves pasting into Excel, Google Sheets, Notion, and Markdown-capable tools; falls back to TSV-only where rich clipboard is unavailable.
 - Signals panel mistakenly displayed raw JavaScript due to a misplaced template block; restored proper filters and removed the injected code.
 - Minor: Signals panel can now be resized horizontally on large screens via a draggable handle between panels; width persists across sessions.
+- HTML Report TOC (mobile): improved resizer behavior with better default height (260px) and clamped range; only applies stored height on mobile and clears explicit sizing on desktop to ensure full-height sidebar.
 
 ## [0.2.0] - 2025-08-19
 

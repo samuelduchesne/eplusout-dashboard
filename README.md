@@ -14,6 +14,10 @@ This project is a standalone HTML dashboard that works entirely offline. It incl
 
 Just open the `index.html` file in your browser. No server or internet connection is needed.
 
+- Click "Load Sample" in the header to load a small built-in `eplusout.sql` for a quick tour.
+- The sample is generated during the build and copied to `dist/eplusout.sql`.
+- If the button reports an error, run the build once to create the sample.
+
 ## Customization
 
 
@@ -39,7 +43,8 @@ Scripts:
 
 - `npm run dev:css` – watch & rebuild `dist/tailwind.css`
 - `npm run tailwind` – one-off production build (minified)
-- `npm run build` – alias for the production Tailwind build
+- `npm run sample:generate` – generate a small sample `assets/eplusout.sql`
+- `npm run build` – production build (inject version, compile Tailwind, generate sample, copy assets)
 
 Source file: `src.css` (contains `@tailwind` directives)
 

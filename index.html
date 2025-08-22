@@ -56,12 +56,14 @@
           >
         </div>
         <div class="flex flex-nowrap gap-2 overflow-x-auto items-center">
-          <label
-            class="px-2.5 py-1.5 text-sm shrink-0 border rounded cursor-pointer bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+          <button
+            id="btn-open"
+            type="button"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+            title="Open eplusout.sql"
           >
-            <input id="file-input" type="file" accept=".sql,.sqlite,.db" class="hidden" />
             Open eplusout.sql
-          </label>
+          </button>
           <button
             id="btn-export"
             type="button"
@@ -175,6 +177,48 @@
         </div>
       </div>
     </header>
+
+    <!-- Open Database Modal -->
+    <div id="open-backdrop" class="hidden fixed inset-0 bg-black/40 dark:bg-black/60"></div>
+    <div id="open-modal" class="hidden fixed inset-0 flex items-center justify-center p-4">
+      <div
+        class="w-[min(96vw,56rem)] aspect-square max-h-[90vh] rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark shadow-xl flex flex-col"
+      >
+        <div
+          class="flex items-center justify-between px-4 py-3 border-b border-border dark:border-border-dark"
+        >
+          <h2 class="text-base font-semibold">Open eplusout.sql</h2>
+          <button
+            id="open-close"
+            class="text-sm px-2 py-1 border rounded bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+          >
+            Close
+          </button>
+        </div>
+        <div class="p-4 flex flex-col gap-4 flex-1 overflow-hidden">
+          <div
+            id="open-drop"
+            class="flex-1 min-h-[12rem] flex items-center justify-center text-center border-2 border-dashed rounded-md border-border dark:border-border-dark bg-panel-2/40 dark:bg-panel-2-dark/40 cursor-pointer overflow-hidden"
+          >
+            <div>
+              <div class="text-sm font-medium mb-1">Drag & drop your eplusout.sql here</div>
+              <div class="text-xs text-muted dark:text-muted-dark">or click to choose a file</div>
+            </div>
+            <input id="file-input" type="file" accept=".sql,.sqlite,.db" class="hidden" />
+          </div>
+          <div class="mt-0 flex items-center justify-between">
+            <div class="text-xs text-muted dark:text-muted-dark">Accepted: .sql, .sqlite, .db</div>
+            <button
+              id="open-load-sample"
+              type="button"
+              class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+            >
+              Load Sample
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <main
       id="main-grid"
@@ -497,25 +541,33 @@
           </svg>
         </button>
       </div>
-      <div class="flex flex-1 overflow-hidden">
+      <div class="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
         <!-- Table of Contents Sidebar -->
         <div
           id="html-report-toc"
-          class="w-64 border-r border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-4 overflow-y-auto"
+          class="w-full md:w-64 md:border-r border-b md:border-b-0 border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-4 flex flex-col overflow-hidden min-h-0 md:self-stretch"
         >
           <h3
             class="text-xs font-semibold text-muted dark:text-muted-dark mb-3 uppercase tracking-wide"
           >
             Table of Contents
           </h3>
-          <nav id="html-report-nav" class="space-y-1">
+          <nav id="html-report-nav" class="flex-1 space-y-1 overflow-y-auto">
             <!-- TOC links will be populated here -->
           </nav>
+          <!-- Mobile drag handle to resize TOC height -->
+          <div
+            id="html-report-toc-resizer"
+            class="md:hidden h-3 -mx-4 mt-3 cursor-row-resize flex items-center justify-center select-none"
+            title="Drag to resize"
+          >
+            <div class="h-0.5 w-12 rounded bg-border dark:bg-border-dark"></div>
+          </div>
         </div>
         <!-- Report Content -->
         <div
           id="html-report-body"
-          class="flex-1 px-4 py-3 overflow-auto text-text dark:text-text-dark text-sm leading-relaxed"
+          class="flex-1 px-4 py-3 overflow-auto text-text dark:text-text-dark text-sm leading-relaxed min-h-0"
         >
           <div class="text-center py-8 text-muted dark:text-muted-dark">Generating report...</div>
         </div>
@@ -693,6 +745,78 @@
       });
       document.getElementById('app-version')?.addEventListener('click', showChangelog);
       document.getElementById('btn-html-report')?.addEventListener('click', showHtmlReport);
+      // HTML Report TOC mobile resize
+      (function () {
+        const KEY = 'eplus_htmlreport_toc_h_px';
+        const toc = document.getElementById('html-report-toc');
+        const resizer = document.getElementById('html-report-toc-resizer');
+        if (!toc || !resizer) return;
+        function isMobile() {
+          return window.innerWidth < 768; // md breakpoint
+        }
+        function applyHeight(px) {
+          if (!isMobile()) {
+            toc.style.removeProperty('height');
+            toc.style.removeProperty('maxHeight');
+            return;
+          }
+          const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+          const h = clamp(px, 160, Math.round(window.innerHeight * 0.8));
+          toc.style.height = h + 'px';
+          toc.style.maxHeight = h + 'px';
+        }
+        // Initialize from storage only on mobile
+        if (isMobile()) {
+          const stored = parseInt(localStorage.getItem(KEY) || '260', 10);
+          applyHeight(stored);
+        }
+        let dragging = false;
+        let startY = 0;
+        let startH = 0;
+        function onMove(ev) {
+          if (!dragging) return;
+          const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
+          const dy = y - startY;
+          applyHeight(startH + dy);
+          if (ev.cancelable) ev.preventDefault();
+        }
+        function onUp() {
+          if (!dragging) return;
+          dragging = false;
+          document.body.classList.remove('select-none', 'cursor-row-resize');
+          const h = parseInt(toc.style.height || '0', 10);
+          if (isFinite(h) && h > 0) localStorage.setItem(KEY, String(h));
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+          window.removeEventListener('touchmove', onMove);
+          window.removeEventListener('touchend', onUp);
+          window.removeEventListener('touchcancel', onUp);
+        }
+        function onDown(ev) {
+          if (!isMobile()) return;
+          dragging = true;
+          startY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+          startH = toc.getBoundingClientRect().height;
+          document.body.classList.add('select-none', 'cursor-row-resize');
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+          window.addEventListener('touchmove', onMove, { passive: false });
+          window.addEventListener('touchend', onUp);
+          window.addEventListener('touchcancel', onUp);
+        }
+        resizer.addEventListener('mousedown', onDown);
+        resizer.addEventListener('touchstart', onDown, { passive: true });
+        window.addEventListener('resize', () => {
+          // Remove explicit height on up-breakpoint
+          if (!isMobile()) {
+            toc.style.removeProperty('height');
+            toc.style.removeProperty('maxHeight');
+          } else {
+            const h = parseInt(localStorage.getItem(KEY) || '260', 10);
+            applyHeight(h);
+          }
+        });
+      })();
       function applyTheme(t) {
         // Maintain legacy data-theme attribute (for remaining CSS variable usages)
         document.documentElement.setAttribute('data-theme', t);
@@ -1786,6 +1910,14 @@
       async function readDbFile(file) {
         const SQLMod = await ensureSql();
         const u8 = new Uint8Array(await file.arrayBuffer());
+        db = new SQLMod.Database(u8);
+        return db;
+      }
+      async function readDbUrl(url) {
+        const SQLMod = await ensureSql();
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to fetch database: ' + url);
+        const u8 = new Uint8Array(await res.arrayBuffer());
         db = new SQLMod.Database(u8);
         return db;
       }
@@ -4782,9 +4914,58 @@
         $(id).addEventListener('input', populateDictionaryList),
       );
 
+      function showOpen() {
+        $('open-modal')?.classList.remove('hidden');
+        $('open-backdrop')?.classList.remove('hidden');
+        // Ensure dropzone is initialized (id: open-drop)
+        enableDropZone($('open-drop'));
+      }
+      function hideOpen() {
+        $('open-modal')?.classList.add('hidden');
+        $('open-backdrop')?.classList.add('hidden');
+      }
+      $('btn-open')?.addEventListener('click', showOpen);
+      $('open-close')?.addEventListener('click', hideOpen);
+      $('open-backdrop')?.addEventListener('click', hideOpen);
       $('file-input').addEventListener('change', async (e) => {
         const f = e.target.files[0];
-        if (f) await handleFile(f);
+        if (f) {
+          await handleFile(f);
+          hideOpen();
+        }
+      });
+      $('btn-load-sample')?.addEventListener('click', async () => {
+        try {
+          // Default location when built: dist/eplusout.sql alongside dist/tailwind.css
+          await readDbUrl('dist/eplusout.sql');
+          try {
+            await ensureD3();
+          } catch (e) {
+            console.warn('d3 preload failed', e);
+          }
+          const list = queryDictionary();
+          populateFilters(list);
+          populateDictionaryList();
+          populateZoneQuick();
+          restoreSelection();
+          const btnHtmlReport = $('btn-html-report');
+          if (btnHtmlReport) btnHtmlReport.disabled = false;
+          if (selected.size === 0 && list.length) {
+            const firstMeter = list.find((d) => d.IsMeter == 1) || list[0];
+            if (firstMeter) {
+              const sel = $('dictionary');
+              for (const option of sel.options) {
+                option.selected = Number(option.value) === firstMeter.id;
+              }
+              handleSelectionChange();
+            }
+          }
+        } catch (e) {
+          console.warn('Sample load failed', e);
+          alert(
+            'Could not load sample database. Build the project first or ensure dist/eplusout.sql exists.',
+          );
+        }
       });
 
       function enableDropZone(el) {
@@ -4828,7 +5009,8 @@
           if (fi) fi.click();
         });
       }
-      enableDropZone($('drop'));
+      // Initialize modal dropzone (no-op if element not yet in DOM)
+      enableDropZone($('open-drop'));
 
       // Signals section always visible; collapse feature removed.
 
@@ -4863,6 +5045,40 @@
           }
         }
       }
+      // Load Sample from modal button
+      $('open-load-sample')?.addEventListener('click', async () => {
+        try {
+          await readDbUrl('dist/eplusout.sql');
+          try {
+            await ensureD3();
+          } catch (e) {
+            console.warn('d3 preload failed', e);
+          }
+          const list = queryDictionary();
+          populateFilters(list);
+          populateDictionaryList();
+          populateZoneQuick();
+          restoreSelection();
+          const btnHtmlReport = $('btn-html-report');
+          if (btnHtmlReport) btnHtmlReport.disabled = false;
+          if (selected.size === 0 && list.length) {
+            const firstMeter = list.find((d) => d.IsMeter == 1) || list[0];
+            if (firstMeter) {
+              const sel = $('dictionary');
+              for (const option of sel.options) {
+                option.selected = Number(option.value) === firstMeter.id;
+              }
+              handleSelectionChange();
+            }
+          }
+          hideOpen();
+        } catch (e) {
+          console.warn('Sample load failed', e);
+          alert(
+            'Could not load sample database. Build the project first or ensure dist/eplusout.sql exists.',
+          );
+        }
+      });
       // Build quick-pick buttons for zones to load Temp + Heating/Cooling setpoints
       function populateZoneQuick() {
         try {
