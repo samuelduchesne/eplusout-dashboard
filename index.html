@@ -357,7 +357,10 @@
               </label>
               <label class="ml-2 text-xs inline-flex items-center gap-1">
                 Resolution:
-                <select id="resample-mode" class="px-1 py-0.5 rounded bg-panel-2 dark:bg-panel-2-dark border border-border dark:border-border-dark text-xs">
+                <select
+                  id="resample-mode"
+                  class="px-1 py-0.5 rounded bg-panel-2 dark:bg-panel-2-dark border border-border dark:border-border-dark text-xs"
+                >
                   <option value="original">Original</option>
                   <option value="hourly">Hourly</option>
                   <option value="monthly">Monthly</option>
@@ -2010,7 +2013,11 @@
         if (!points || points.length === 0) return points;
 
         // Determine aggregation method based on units
-        const isEnergy = units && (units.toLowerCase().includes('j') || units.toLowerCase().includes('wh') || units.toLowerCase().includes('btu'));
+        const isEnergy =
+          units &&
+          (units.toLowerCase().includes('j') ||
+            units.toLowerCase().includes('wh') ||
+            units.toLowerCase().includes('btu'));
         const aggregateFunc = isEnergy ? 'sum' : 'average';
 
         if (fromFreq === 'Hourly') {
@@ -2025,12 +2032,12 @@
 
       function resampleHourlyToMonthly(points, aggregateFunc) {
         const groups = new Map();
-        
+
         for (const p of points) {
           if (!Number.isFinite(p.x)) continue;
           const date = new Date(p.x);
           const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
-          
+
           if (!groups.has(key)) {
             groups.set(key, { values: [], firstDate: date });
           }
@@ -2039,14 +2046,15 @@
 
         const result = [];
         for (const [key, group] of groups) {
-          const value = aggregateFunc === 'sum' 
-            ? group.values.reduce((a, b) => a + b, 0)
-            : group.values.reduce((a, b) => a + b, 0) / group.values.length;
-          
+          const value =
+            aggregateFunc === 'sum'
+              ? group.values.reduce((a, b) => a + b, 0)
+              : group.values.reduce((a, b) => a + b, 0) / group.values.length;
+
           result.push({
             xLabel: key,
             y: value,
-            x: group.firstDate.getTime()
+            x: group.firstDate.getTime(),
           });
         }
 
@@ -2055,12 +2063,12 @@
 
       function resampleHourlyToAnnual(points, aggregateFunc) {
         const groups = new Map();
-        
+
         for (const p of points) {
           if (!Number.isFinite(p.x)) continue;
           const date = new Date(p.x);
           const key = String(date.getUTCFullYear());
-          
+
           if (!groups.has(key)) {
             groups.set(key, { values: [], firstDate: date });
           }
@@ -2069,14 +2077,15 @@
 
         const result = [];
         for (const [key, group] of groups) {
-          const value = aggregateFunc === 'sum' 
-            ? group.values.reduce((a, b) => a + b, 0)
-            : group.values.reduce((a, b) => a + b, 0) / group.values.length;
-          
+          const value =
+            aggregateFunc === 'sum'
+              ? group.values.reduce((a, b) => a + b, 0)
+              : group.values.reduce((a, b) => a + b, 0) / group.values.length;
+
           result.push({
             xLabel: key,
             y: value,
-            x: group.firstDate.getTime()
+            x: group.firstDate.getTime(),
           });
         }
 
@@ -2085,15 +2094,15 @@
 
       function resampleMonthlyToAnnual(points, aggregateFunc) {
         const groups = new Map();
-        
+
         for (const p of points) {
           // For monthly data, extract year from xLabel (format: "E1-M01", "E1-M02", etc.)
           const match = p.xLabel && p.xLabel.match(/E(\d+)-M(\d+)/);
           if (!match) continue;
-          
+
           const env = match[1];
           const key = `E${env}`;
-          
+
           if (!groups.has(key)) {
             groups.set(key, { values: [] });
           }
@@ -2102,13 +2111,14 @@
 
         const result = [];
         for (const [key, group] of groups) {
-          const value = aggregateFunc === 'sum' 
-            ? group.values.reduce((a, b) => a + b, 0)
-            : group.values.reduce((a, b) => a + b, 0) / group.values.length;
-          
+          const value =
+            aggregateFunc === 'sum'
+              ? group.values.reduce((a, b) => a + b, 0)
+              : group.values.reduce((a, b) => a + b, 0) / group.values.length;
+
           result.push({
             xLabel: key,
-            y: value
+            y: value,
           });
         }
 
@@ -2161,11 +2171,19 @@
           const titleEl = $('series-title');
           const metas = [...selected.values()].map((v) => v.meta);
           const normalizeFlag = viewMode === 'time' && $('ldc-normalize')?.checked === true;
-          const resolutionText = resampleMode === 'original' ? baseFreq : 
-            resampleMode === 'hourly' ? 'Hourly' :
-            resampleMode === 'monthly' ? 'Monthly' :
-            resampleMode === 'annual' ? 'Annual' : baseFreq;
-          titleEl.textContent = metas.length ? `${resolutionText} • ${metas.length} series` : 'Series';
+          const resolutionText =
+            resampleMode === 'original'
+              ? baseFreq
+              : resampleMode === 'hourly'
+                ? 'Hourly'
+                : resampleMode === 'monthly'
+                  ? 'Monthly'
+                  : resampleMode === 'annual'
+                    ? 'Annual'
+                    : baseFreq;
+          titleEl.textContent = metas.length
+            ? `${resolutionText} • ${metas.length} series`
+            : 'Series';
           const consistentUnits = metas.every((m) => m.Units === metas[0]?.Units);
           unitsEl.textContent = metas.length
             ? consistentUnits
@@ -2982,6 +3000,9 @@
         const rect = container.getBoundingClientRect();
         const width = rect.width,
           height = rect.height;
+        // Determine rendering mode from data shape: hourly points have no xLabel, monthly/annual do.
+        const firstPt = series?.[0]?.points?.[0];
+        const isHourlyEffective = firstPt && !('xLabel' in firstPt);
         const metas = series.map((s) => s.meta);
         let consistentUnits = metas.length && metas.every((m) => m.Units === metas[0].Units);
         let primaryMeta = consistentUnits ? metas[0] : null;
@@ -3003,7 +3024,7 @@
         const m = {
           top: 16,
           right: showSecondary ? 68 : 24,
-          bottom: baseFreq === 'Hourly' ? 56 : 36,
+          bottom: isHourlyEffective ? 56 : 36,
           left: 56,
         };
         const w = width - m.left - m.right,
@@ -3049,7 +3070,7 @@
           .attr('stroke', gridColor)
           .attr('stroke-opacity', 0.35);
         g.select('.grid').select('.domain').remove();
-        if (baseFreq === 'Hourly') {
+        if (isHourlyEffective) {
           const fullDomain = d3.extent(series.flatMap((s) => s.points.map((p) => p.x)));
           const x = d3.scaleUtc().domain(fullDomain).range([0, w]);
           if (
@@ -3686,8 +3707,8 @@
           };
           leg.appendChild(item);
         });
-        // Temperature response legend toggle (time series only, hourly base)
-        if (viewMode === 'time' && baseFreq === 'Hourly') {
+        // Temperature response legend toggle (time series only, hourly resolution)
+        if (viewMode === 'time' && isHourlyEffective) {
           const temps = series.filter((s) => unitKind(s.meta.Units) === 'temperature');
           const energies = series.filter((s) => unitKind(s.meta.Units) === 'energy');
           if (temps.length && energies.length) {

@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
-### Added
+### Added (Unreleased)
 
 - Zones quick-pick buttons under the Signals list: click a zone to auto-load Zone Mean Air Temperature + Thermostat Heating/Cooling Setpoint Temperatures for that zone (Hourly), replacing the current chart selection.
 - Charts now group selected series by original units and render one chart per unit group; zoom is synced across charts and the charts are stacked in a scrollable layout.
@@ -13,7 +13,7 @@ All notable changes to this project will be documented here.
 - Signal resampling: added Resolution dropdown control that allows resampling signals to different time resolutions (Original/Hourly/Monthly/Annual). Energy values are summed when aggregating to coarser time steps, while temperature and other non-energy values are averaged. This enables viewing hourly data as monthly totals or annual summaries.
 - Open workflow redesigned: the "Open eplusout.sql" button now opens a modal with a large drag & drop zone (or click to pick) and includes a "Load Sample" action inside the modal.
 
-### Fixed
+### Fixed (Unreleased)
 
 - HTML Report: Copy CSV buttons now work reliably on all tables. Replaced fragile inline onclick with delegated handler and added clipboard fallback for file:// and non-secure contexts.
 - HTML Report: “Copy CSV” replaced by a single “Copy” button that writes rich clipboard data (text/html table + text/plain TSV). This improves pasting into Excel, Google Sheets, Notion, and Markdown-capable tools; falls back to TSV-only where rich clipboard is unavailable.
@@ -23,6 +23,10 @@ All notable changes to this project will be documented here.
 - Open modal: increased z-index and backdrop blur, locked background scroll, and added Esc/backdrop close to prevent Signals filters from bleeding through.
 - Offline file loading: selecting an eplusout.sql from the Open modal now works without internet. Bundled sql.js (WASM + loader) and d3 locally under dist/vendor and pointed the app to those paths; added error handling around the file picker to surface failures instead of silently doing nothing.
 - Signals: ensured the `#dictionary` multi-select keeps a sensible minimum height so it remains usable when the panel gets crowded.
+
+### Changed (Unreleased)
+
+- Time series charts now render Monthly and Annual resolutions as bar charts, even when the original data is Hourly. The chart decides by the effective resolution (after resampling), not the source frequency.
 
 ## [0.2.0] - 2025-08-19
 
