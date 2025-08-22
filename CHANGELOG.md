@@ -4,6 +4,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **3D Zone Viewer Repositioning**: Moved the 3D zone viewer from the main chart area to a dedicated resizable panel below the signals panel that sticks to the bottom of the window
+- **Enhanced 3D Viewer UX**: Added vertical resize functionality (drag the header to adjust height), close button, and proper panel management when switching between view modes
+- **Improved Layout**: 3D viewer now has its own dedicated space allowing users to view both chart data and zone visualization simultaneously
+
 <!-- Keep upcoming changes here. Use subsections Added/Changed/Fixed/Removed when populated. -->
 
 ## [0.2.0] - 2025-08-19
