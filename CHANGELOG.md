@@ -6,6 +6,11 @@ All notable changes to this project will be documented here.
 
 ### Changed
 
+- **3D Zone Viewer Enhancement**: Enhanced the 3D zone viewer to use actual building surface geometry data queried from EnergyPlus `Surfaces`, `SurfaceClass`, and `SurfaceVertices` tables instead of simple zone labels
+- **Surface-Based 3D Rendering**: 3D viewer now displays actual building surfaces (walls, roofs, floors, windows, etc.) as colored 3D polygons with proper depth sorting and lighting effects
+- **Surface Type Color Coding**: Added color palette for different surface types - walls (brown), roofs (crimson), floors (dark olive green), windows (sky blue), doors (burlywood), ceilings (khaki), shading (medium purple), and internal mass (dim gray)
+- **Improved 3D Graphics**: Added backface culling, surface normal calculations for realistic lighting, and interactive legend showing surface types present in the model
+- **Fallback Support**: Maintains backward compatibility with zone-based display when surface geometry data is not available in the database
 - **3D Zone Viewer Repositioning**: Moved the 3D zone viewer from the main chart area to a dedicated resizable panel below the signals panel that sticks to the bottom of the window
 - **Enhanced 3D Viewer UX**: Added vertical resize functionality (drag the header to adjust height), close button, and proper panel management when switching between view modes
 - **Improved Layout**: 3D viewer now has its own dedicated space allowing users to view both chart data and zone visualization simultaneously

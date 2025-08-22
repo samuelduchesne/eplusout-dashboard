@@ -4032,18 +4032,389 @@
           return;
         }
 
-        // Extract unique zone names from the dictionary
-        const zones = Array.from(
-          new Set(
-            dict.filter((d) => d.IndexGroup && d.IndexGroup.trim()).map((d) => d.IndexGroup.trim()),
-          ),
-        ).sort();
+        // Query surface geometry data using the provided SQL
+        let surfaceData;
+        try {
+          const surfaceQuery = `
+            SELECT
+                Surface.Name,
+                SurfaceClass.Name AS SurfaceType,
+                Surface.ZoneName,
+                Surface.Tilt,
+                Surface.Azimuth,
+                Surface.Area,
+                Vertex.X,
+                Vertex.Y,
+                Vertex.Z
+            FROM
+                Surfaces AS Surface
+            JOIN
+                SurfaceClass ON Surface.SurfaceType = SurfaceClass.SurfaceType
+            JOIN
+                SurfaceVertices AS Vertex ON Surface.SurfaceID = Vertex.SurfaceID
+            ORDER BY
+                Surface.Name, Vertex.VertexIndex`;
+          
+          surfaceData = toObjects(db.exec(surfaceQuery));
+        } catch (error) {
+          // Fallback to zone-based rendering if surface data not available
+          const zones = Array.from(
+            new Set(
+              dict.filter((d) => d.IndexGroup && d.IndexGroup.trim()).map((d) => d.IndexGroup.trim()),
+            ),
+          ).sort();
 
-        if (zones.length === 0) {
-          container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3'>No zone data found in the database.</div>`;
+          if (zones.length === 0) {
+            container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3'>No surface or zone data found in the database.</div>`;
+            return;
+          }
+          
+          // Use fallback zone rendering
+          renderZoneFallback(zones, container);
           return;
         }
 
+        if (!surfaceData || surfaceData.length === 0) {
+          container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3'>No surface geometry data found in the database.</div>`;
+          return;
+        }
+
+        // Group surface vertices by surface name
+        const surfaceMap = new Map();
+        surfaceData.forEach(row => {
+          const surfaceName = row.Name;
+          if (!surfaceMap.has(surfaceName)) {
+            surfaceMap.set(surfaceName, {
+              name: surfaceName,
+              type: row.SurfaceType,
+              zone: row.ZoneName,
+              tilt: row.Tilt,
+              azimuth: row.Azimuth,
+              area: row.Area,
+              vertices: []
+            });
+          }
+          surfaceMap.get(surfaceName).vertices.push({
+            x: Number(row.X),
+            y: Number(row.Y), 
+            z: Number(row.Z)
+          });
+        });
+
+        const surfaces = Array.from(surfaceMap.values());
+        
+        // Surface type color palette
+        const surfaceColors = {
+          'Wall': '#8B4513',           // Brown
+          'Roof': '#DC143C',           // Crimson  
+          'Floor': '#556B2F',          // DarkOliveGreen
+          'Window': '#87CEEB',         // SkyBlue
+          'Door': '#DEB887',           // BurlyWood
+          'Ceiling': '#F0E68C',        // Khaki
+          'Shading': '#9370DB',        // MediumPurple
+          'InternalMass': '#696969',   // DimGray
+          'default': '#708090'          // SlateGray
+        };
+
+        const rect = container.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+
+        // Create HTML5 Canvas for pseudo-3D visualization
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        container.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+
+        // Calculate building center and scale
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        let minZ = Infinity, maxZ = -Infinity;
+        
+        surfaces.forEach(surface => {
+          surface.vertices.forEach(v => {
+            minX = Math.min(minX, v.x);
+            maxX = Math.max(maxX, v.x);
+            minY = Math.min(minY, v.y);
+            maxY = Math.max(maxY, v.y);
+            minZ = Math.min(minZ, v.z);
+            maxZ = Math.max(maxZ, v.z);
+          });
+        });
+
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const centerZ = (minZ + maxZ) / 2;
+        
+        const buildingWidth = Math.max(maxX - minX, maxZ - minZ);
+        const buildingHeight = maxY - minY;
+        const scale = Math.min(width, height) * 0.3 / Math.max(buildingWidth, buildingHeight);
+
+        // Normalize vertices relative to building center
+        surfaces.forEach(surface => {
+          surface.vertices.forEach(v => {
+            v.x = (v.x - centerX) * scale;
+            v.y = (v.y - centerY) * scale;
+            v.z = (v.z - centerZ) * scale;
+          });
+        });
+
+        // 3D simulation variables
+        let rotation = { x: 0, y: 0 };
+        let cameraDistance = Math.max(buildingWidth, buildingHeight) * scale * 1.5;
+
+        // 3D projection function
+        const project3D = (x, y, z) => {
+          // Apply rotation
+          const cosX = Math.cos(rotation.x);
+          const sinX = Math.sin(rotation.x);
+          const cosY = Math.cos(rotation.y);
+          const sinY = Math.sin(rotation.y);
+
+          // Rotate around Y axis (horizontal)
+          const x1 = x * cosY - z * sinY;
+          const z1 = x * sinY + z * cosY;
+
+          // Rotate around X axis (vertical) - constrained
+          const y1 = y * cosX - z1 * sinX;
+          const z2 = y * sinX + z1 * cosX;
+
+          // Project to 2D
+          const perspective = cameraDistance / (cameraDistance + z2 + 200);
+          return {
+            x: width / 2 + x1 * perspective,
+            y: height / 2 + y1 * perspective,
+            depth: z2,
+          };
+        };
+
+        // Calculate surface normal for lighting
+        const calculateNormal = (vertices) => {
+          if (vertices.length < 3) return { x: 0, y: 0, z: 1 };
+          
+          const v1 = vertices[1];
+          const v0 = vertices[0];
+          const v2 = vertices[2];
+          
+          const a = { x: v1.x - v0.x, y: v1.y - v0.y, z: v1.z - v0.z };
+          const b = { x: v2.x - v0.x, y: v2.y - v0.y, z: v2.z - v0.z };
+          
+          const normal = {
+            x: a.y * b.z - a.z * b.y,
+            y: a.z * b.x - a.x * b.z,
+            z: a.x * b.y - a.y * b.x
+          };
+          
+          const length = Math.sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+          if (length > 0) {
+            normal.x /= length;
+            normal.y /= length;
+            normal.z /= length;
+          }
+          
+          return normal;
+        };
+
+        // Render function
+        const render3D = () => {
+          // Clear canvas
+          const isDark = document.documentElement.classList.contains('dark');
+          ctx.fillStyle = isDark ? '#121821' : '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+
+          // Project all surfaces and calculate visibility
+          const projectedSurfaces = surfaces.map(surface => {
+            const projectedVertices = surface.vertices.map(v => project3D(v.x, v.y, v.z));
+            const avgDepth = projectedVertices.reduce((sum, v) => sum + v.depth, 0) / projectedVertices.length;
+            const normal = calculateNormal(surface.vertices);
+            
+            // Simple backface culling - hide surfaces facing away from camera
+            const isVisible = normal.z > -0.1; // Allow some tolerance
+            
+            // Calculate lighting intensity based on normal
+            const lightIntensity = Math.max(0.3, Math.abs(normal.z) * 0.7 + 0.3);
+            
+            return {
+              ...surface,
+              projectedVertices,
+              avgDepth,
+              normal,
+              isVisible,
+              lightIntensity
+            };
+          });
+
+          // Sort by depth (back to front for proper alpha blending)
+          projectedSurfaces.sort((a, b) => a.avgDepth - b.avgDepth);
+
+          // Draw surfaces
+          projectedSurfaces.forEach(surface => {
+            if (!surface.isVisible || surface.projectedVertices.length < 3) return;
+            
+            const baseColor = surfaceColors[surface.type] || surfaceColors.default;
+            
+            // Apply lighting
+            const rgb = hexToRgb(baseColor);
+            const litColor = {
+              r: Math.round(rgb.r * surface.lightIntensity),
+              g: Math.round(rgb.g * surface.lightIntensity),
+              b: Math.round(rgb.b * surface.lightIntensity)
+            };
+            
+            ctx.save();
+            ctx.globalAlpha = 0.8;
+            ctx.fillStyle = `rgb(${litColor.r}, ${litColor.g}, ${litColor.b})`;
+            ctx.strokeStyle = isDark ? '#ffffff' : '#000000';
+            ctx.lineWidth = 0.5;
+            
+            // Draw surface polygon
+            ctx.beginPath();
+            const firstVertex = surface.projectedVertices[0];
+            ctx.moveTo(firstVertex.x, firstVertex.y);
+            
+            for (let i = 1; i < surface.projectedVertices.length; i++) {
+              const vertex = surface.projectedVertices[i];
+              ctx.lineTo(vertex.x, vertex.y);
+            }
+            ctx.closePath();
+            
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+          });
+
+          // Draw legend for surface types
+          const uniqueTypes = [...new Set(surfaces.map(s => s.type))];
+          const legendY = 40;
+          const legendX = 20;
+          
+          ctx.save();
+          ctx.font = '12px Arial, sans-serif';
+          ctx.fillStyle = isDark ? '#e6eef7' : '#0b1220';
+          ctx.textAlign = 'left';
+          
+          uniqueTypes.forEach((type, index) => {
+            const y = legendY + index * 20;
+            const color = surfaceColors[type] || surfaceColors.default;
+            
+            // Draw color square
+            ctx.fillStyle = color;
+            ctx.fillRect(legendX, y - 8, 12, 12);
+            
+            // Draw type label
+            ctx.fillStyle = isDark ? '#e6eef7' : '#0b1220';
+            ctx.fillText(type, legendX + 18, y + 2);
+          });
+
+          // Draw title
+          ctx.font = '14px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('3D Building Surfaces - Drag to rotate, Scroll to zoom', width / 2, 20);
+          ctx.restore();
+        };
+
+        // Helper function to convert hex color to RGB
+        const hexToRgb = (hex) => {
+          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+          } : { r: 128, g: 128, b: 128 };
+        };
+
+        // Mouse interaction
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        const handleMouseDown = (event) => {
+          isDragging = true;
+          const rect = canvas.getBoundingClientRect();
+          lastMouseX = event.clientX - rect.left;
+          lastMouseY = event.clientY - rect.top;
+        };
+
+        const handleMouseMove = (event) => {
+          if (!isDragging) return;
+
+          const rect = canvas.getBoundingClientRect();
+          const mouseX = event.clientX - rect.left;
+          const mouseY = event.clientY - rect.top;
+
+          const deltaX = mouseX - lastMouseX;
+          const deltaY = mouseY - lastMouseY;
+
+          rotation.y += deltaX * 0.01;
+          rotation.x += deltaY * 0.01;
+
+          // Constrain vertical rotation to prevent flipping
+          rotation.x = Math.max(-Math.PI * 0.3, Math.min(Math.PI * 0.3, rotation.x));
+
+          lastMouseX = mouseX;
+          lastMouseY = mouseY;
+
+          render3D();
+        };
+
+        const handleMouseUp = () => {
+          isDragging = false;
+        };
+
+        const handleWheel = (event) => {
+          event.preventDefault();
+          const scale = event.deltaY > 0 ? 1.1 : 0.9;
+          cameraDistance *= scale;
+
+          // Constrain zoom
+          const minDistance = Math.max(buildingWidth, buildingHeight) * scale * 0.5;
+          const maxDistance = Math.max(buildingWidth, buildingHeight) * scale * 5;
+          cameraDistance = Math.max(minDistance, Math.min(maxDistance, cameraDistance));
+
+          render3D();
+        };
+
+        // Event listeners
+        canvas.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('wheel', handleWheel);
+
+        // Handle window resize
+        const handleResize = () => {
+          const rect = container.getBoundingClientRect();
+          canvas.width = rect.width;
+          canvas.height = rect.height;
+          render3D();
+        };
+
+        window.addEventListener('resize', handleResize);
+
+        // Store cleanup function for view changes
+        container._cleanup = () => {
+          window.removeEventListener('resize', handleResize);
+          canvas.removeEventListener('mousedown', handleMouseDown);
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+          canvas.removeEventListener('wheel', handleWheel);
+        };
+
+        // Initial render
+        render3D();
+
+        // Update insights and units
+        const zoneCount = new Set(surfaces.map(s => s.zone)).size;
+        const surfaceTypes = [...new Set(surfaces.map(s => s.type))].sort();
+        $('insights').innerHTML = `Building model: ${surfaces.length} surfaces across ${zoneCount} zones. Surface types: ${surfaceTypes.join(', ')}`;
+        $('units').textContent = 'Surfaces';
+      }
+
+      // Fallback function for zone-based rendering when surface data is not available
+      function renderZoneFallback(zones, container) {
         const rect = container.getBoundingClientRect();
         const width = rect.width;
         const height = rect.height;
@@ -4106,8 +4477,8 @@
         // Render function
         const render3D = () => {
           // Clear canvas
-          ctx.fillStyle =
-            getComputedStyle(document.documentElement).getPropertyValue('--color-bg') || '#ffffff';
+          const isDark = document.documentElement.classList.contains('dark');
+          ctx.fillStyle = isDark ? '#121821' : '#ffffff';
           ctx.fillRect(0, 0, width, height);
 
           // Update zone positions based on rotation
@@ -4127,9 +4498,7 @@
             ctx.save();
             ctx.globalAlpha = alpha;
             ctx.font = `${fontSize}px Arial, sans-serif`;
-            ctx.fillStyle =
-              getComputedStyle(document.documentElement).getPropertyValue('--color-text') ||
-              '#000000';
+            ctx.fillStyle = isDark ? '#e6eef7' : '#0b1220';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
@@ -4139,9 +4508,7 @@
             // Draw a small circle to represent the zone
             ctx.beginPath();
             ctx.arc(zone.x, zone.y + fontSize / 2 + 5, 3 * zone.scale, 0, Math.PI * 2);
-            ctx.fillStyle =
-              getComputedStyle(document.documentElement).getPropertyValue('--color-accent') ||
-              '#007acc';
+            ctx.fillStyle = '#2563eb';
             ctx.fill();
 
             ctx.restore();
@@ -4150,9 +4517,7 @@
           // Draw title
           ctx.save();
           ctx.font = '14px Arial, sans-serif';
-          ctx.fillStyle =
-            getComputedStyle(document.documentElement).getPropertyValue('--color-text') ||
-            '#000000';
+          ctx.fillStyle = isDark ? '#e6eef7' : '#0b1220';
           ctx.textAlign = 'center';
           ctx.fillText('3D Zone Viewer - Drag to rotate, Scroll to zoom', width / 2, 20);
           ctx.restore();
@@ -4236,7 +4601,7 @@
         render3D();
 
         // Update insights and units
-        $('insights').innerHTML = `Found ${zones.length} zones: ${zones.join(', ')}`;
+        $('insights').innerHTML = `Found ${zones.length} zones: ${zones.join(', ')} (using fallback zone display - surface geometry not available)`;
         $('units').textContent = 'Zones';
       }
 
