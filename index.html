@@ -961,21 +961,64 @@
             tocItems.push(energyMeters.toc);
           }
 
-          // Update TOC
-          const tocHtml = tocItems
-            .map(
-              (item) =>
-                `<a href="#${
-                  item.id
-                }" class="block px-2 py-1 text-xs hover:bg-panel dark:hover:bg-panel-dark rounded transition-colors" onclick="document.getElementById('${
-                  item.id
-                }').scrollIntoView({behavior: 'smooth'}); return false;">${escapeHtml(
-                  item.title,
-                )}</a>`,
-            )
-            .join('');
+          // Update TOC with collapsible sub-headers
+          function renderToc(items) {
+            let html = '';
+            for (const it of items) {
+              const hasKids = Array.isArray(it.children) && it.children.length > 0;
+              const toggle = hasKids
+                ? `<button type="button" class="toc-toggle mr-1 inline-flex items-center justify-center w-4 h-4 text-muted dark:text-muted-dark" aria-expanded="false" aria-label="Expand">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path d="M7 5l6 5-6 5V5z"/></svg>
+                   </button>`
+                : '';
+              html += `<div class="toc-item flex items-center ${
+                hasKids ? '' : 'pl-4'
+              }">\n${toggle}\n<a href="#${it.id}" data-target="${
+                it.id
+              }" class="flex-1 block px-2 py-1 text-xs hover:bg-panel dark:hover:bg-panel-dark rounded transition-colors">${escapeHtml(
+                it.title,
+              )}</a>\n</div>`;
+              if (hasKids) {
+                html += `<div class="toc-children hidden pl-7">`;
+                for (const ch of it.children) {
+                  html += `<a href="#${ch.id}" data-target="${
+                    ch.id
+                  }" class="block px-2 py-1 text-xs hover:bg-panel dark:hover:bg-panel-dark rounded transition-colors">${escapeHtml(
+                    ch.title,
+                  )}</a>`;
+                }
+                html += `</div>`;
+              }
+            }
+            return html;
+          }
 
-          document.getElementById('html-report-nav').innerHTML = tocHtml;
+          const navEl = document.getElementById('html-report-nav');
+          navEl.innerHTML = renderToc(tocItems);
+          // TOC interactions: toggle and smooth scroll
+          navEl.addEventListener('click', (ev) => {
+            const toggleBtn = ev.target.closest && ev.target.closest('button.toc-toggle');
+            if (toggleBtn) {
+              const item = toggleBtn.parentElement; // .toc-item
+              const kids = item && item.nextElementSibling;
+              if (kids && kids.classList.contains('toc-children')) {
+                const expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+                toggleBtn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                kids.classList.toggle('hidden', expanded);
+                const svg = toggleBtn.querySelector('svg');
+                if (svg) svg.style.transform = expanded ? '' : 'rotate(90deg)';
+              }
+              ev.preventDefault();
+              return;
+            }
+            const a = ev.target.closest && ev.target.closest('a[data-target]');
+            if (a) {
+              ev.preventDefault();
+              const id = a.getAttribute('data-target');
+              const target = document.getElementById(id);
+              if (target) target.scrollIntoView({ behavior: 'smooth' });
+            }
+          });
 
           // Update main content
           const reportBody = document.getElementById('html-report-body');
@@ -1061,32 +1104,42 @@
               Units: row[4] || '', // Units
             }));
 
-          let content = `<div class="mb-8" id="utility-performance">
+          const sectionId = 'utility-performance';
+          let content = `<div class="mb-8" id="${sectionId}">
             <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Annual Building Utility Performance Summary</h2>`;
+          const children = [];
 
           if (endUsesData.length > 0) {
+            const subId = `${sectionId}--end-uses`;
+            content += `<div id="${subId}">`;
             content += generateTableWithCopy('End Uses', endUsesData, [
               'End Use',
               'Category',
               'Value',
               'Units',
             ]);
+            content += `</div>`;
+            children.push({ id: subId, title: 'End Uses' });
           }
 
           if (subCategoryData.length > 0) {
+            const subId2 = `${sectionId}--end-uses-by-subcategory`;
+            content += `<div id="${subId2}">`;
             content += generateTableWithCopy('End Uses By Subcategory', subCategoryData, [
               'End Use',
               'Subcategory',
               'Value',
               'Units',
             ]);
+            content += `</div>`;
+            children.push({ id: subId2, title: 'End Uses By Subcategory' });
           }
 
           content += '</div>';
 
           return {
             content,
-            toc: { id: 'utility-performance', title: 'Utility Performance Summary' },
+            toc: { id: sectionId, title: 'Utility Performance Summary', children },
           };
         } catch (error) {
           console.warn('Error generating utility performance summary:', error);
@@ -1120,23 +1173,29 @@
             });
           });
 
-          let content = `<div class="mb-8" id="hvac-sizing">
+          const sectionId = 'hvac-sizing';
+          let content = `<div class="mb-8" id="${sectionId}">
             <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">HVAC Sizing Summary</h2>`;
 
+          const children = [];
           Object.entries(tables).forEach(([tableName, data]) => {
+            const subId = `${sectionId}--${tableName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+            content += `<div id="${subId}">`;
             content += generateTableWithCopy(tableName, data, [
               'Component',
               'Property',
               'Value',
               'Units',
             ]);
+            content += `</div>`;
+            children.push({ id: subId, title: tableName });
           });
 
           content += '</div>';
 
           return {
             content,
-            toc: { id: 'hvac-sizing', title: 'HVAC Sizing Summary' },
+            toc: { id: sectionId, title: 'HVAC Sizing Summary', children },
           };
         } catch (error) {
           console.warn('Error generating HVAC sizing summary:', error);
@@ -1170,23 +1229,29 @@
             });
           });
 
-          let content = `<div class="mb-8" id="component-sizing">
+          const sectionId = 'component-sizing';
+          let content = `<div class="mb-8" id="${sectionId}">
             <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Component Sizing Summary</h2>`;
 
+          const children = [];
           Object.entries(tables).forEach(([tableName, data]) => {
+            const subId = `${sectionId}--${tableName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+            content += `<div id="${subId}">`;
             content += generateTableWithCopy(tableName, data, [
               'Component',
               'Property',
               'Value',
               'Units',
             ]);
+            content += `</div>`;
+            children.push({ id: subId, title: tableName });
           });
 
           content += '</div>';
 
           return {
             content,
-            toc: { id: 'component-sizing', title: 'Component Sizing Summary' },
+            toc: { id: sectionId, title: 'Component Sizing Summary', children },
           };
         } catch (error) {
           console.warn('Error generating component sizing summary:', error);
