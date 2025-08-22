@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an idea to improve the dashboard
+labels: [enhancement]
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Please describe the problem you're trying to solve and your proposed solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this feature solve?
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature you'd like.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: e.g. 1.2.3
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

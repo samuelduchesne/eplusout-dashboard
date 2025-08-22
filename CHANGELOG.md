@@ -6,6 +6,9 @@ All notable changes to this project will be documented here.
 
 ### Added (Unreleased)
 
+- "Report issue" button in the header that opens a prefilled GitHub issue with app version, theme, units, and browser details.
+- GitHub issue templates for bug reports and feature requests to standardize submissions.
+
 
 ### Changed (Unreleased)
 

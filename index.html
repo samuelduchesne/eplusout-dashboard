@@ -66,6 +66,15 @@
             Open eplusout.sql
           </button>
           <button
+            id="btn-report"
+            type="button"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+            aria-label="Report a bug or request a feature"
+            title="Report a bug or request a feature"
+          >
+            Report issue
+          </button>
+          <button
             id="btn-export"
             type="button"
             disabled
@@ -778,6 +787,52 @@
       });
       document.getElementById('app-version')?.addEventListener('click', showChangelog);
       document.getElementById('btn-html-report')?.addEventListener('click', showHtmlReport);
+      // New Issue launcher
+      (function setupIssueButton() {
+        const btn = document.getElementById('btn-report');
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+          try {
+            const ghOwner = 'samuelduchesne';
+            const ghRepo = 'eplusout-dashboard';
+            const version = (window.__APP_VERSION__ || '').trim() || 'dev';
+            const theme = document.documentElement.getAttribute('data-theme') || '';
+            const units = localStorage.getItem('eplus_units_mode') || 'SI';
+            const ua = navigator.userAgent || '';
+            const body = [
+              '### What happened?',
+              '',
+              'A clear and concise description of the problem. Include steps to reproduce if possible.',
+              '',
+              '### Expected behavior',
+              '',
+              '',
+              '### Screenshots or screen recording',
+              '',
+              '',
+              '---',
+              `App version: ${version}`,
+              `Theme: ${theme}`,
+              `Units: ${units}`,
+              `User agent: ${ua}`,
+            ].join('\n');
+            const params = new URLSearchParams({
+              title: '[Bug]: ',
+              labels: 'bug',
+              body,
+            });
+            const url = `https://github.com/${ghOwner}/${ghRepo}/issues/new?${params.toString()}`;
+            window.open(url, '_blank', 'noopener');
+          } catch (e) {
+            // Fallback to issue chooser
+            window.open(
+              'https://github.com/samuelduchesne/eplusout-dashboard/issues/new/choose',
+              '_blank',
+              'noopener',
+            );
+          }
+        });
+      })();
       // Open modal Esc + backdrop close
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') hideOpen();
