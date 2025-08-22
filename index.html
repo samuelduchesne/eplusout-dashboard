@@ -152,130 +152,173 @@
       </div>
     </header>
 
-    <main class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-3 p-2 sm:p-3 flex-1 overflow-auto">
-      <section
-        class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-1 lg:order-none"
-      >
-        <div
-          class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark"
+    <main
+      class="grid grid-rows-[1fr_auto] lg:grid-cols-[360px_1fr] lg:grid-rows-[1fr_auto] gap-3 p-2 sm:p-3 flex-1 overflow-auto"
+    >
+      <div class="grid lg:grid-cols-[360px_1fr] gap-3 lg:col-span-2">
+        <section
+          class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-1 lg:order-none"
         >
-          <div class="flex items-center gap-2">
-            <strong>Signals</strong
-            ><span id="meta-count" class="text-muted dark:text-muted-dark"></span>
-          </div>
-          <!-- Collapse toggle removed -->
-        </div>
-        <div id="signals-body" class="p-3 flex flex-col gap-2 overflow-auto">
           <div
-            id="drop"
-            class="border-2 border-dashed rounded p-3 text-center bg-panel dark:bg-panel-dark border-border dark:border-border-dark text-muted dark:text-muted-dark"
+            class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark"
           >
-            Drag & drop
-            <span class="px-1 rounded bg-code dark:bg-code-dark">eplusout.sql</span> here
-          </div>
-          <input
-            type="text"
-            id="search"
-            placeholder="Search name/group/key/units…"
-            disabled
-            class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
-          />
-          <label class="flex items-center gap-2 text-xs text-muted dark:text-muted-dark select-none"
-            ><input id="fav-only" type="checkbox" class="h-3.5 w-3.5" />
-            <span>Favorites only (double‑click items to ★/☆)</span></label
-          >
-          <div class="flex gap-2">
-            <select
-              id="filter-freq"
-              disabled
-              class="flex-1 border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
-            >
-              <option value="">Any frequency</option>
-              <option value="Hourly">Hourly</option>
-              <option value="Monthly">Monthly</option>
-            </select>
-            <select
-              id="filter-meter"
-              disabled
-              class="flex-1 border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
-            >
-              <option value="">Vars & Meters</option>
-              <option value="1">Meters only</option>
-              <option value="0">Variables only</option>
-            </select>
-          </div>
-          <select
-            id="filter-group"
-            disabled
-            class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
-          >
-            <option value="">Any index group</option>
-          </select>
-          <select
-            id="dictionary"
-            size="12"
-            multiple
-            class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
-            disabled
-          ></select>
-          <div class="text-xs text-muted dark:text-muted-dark mt-2">
-            Tip: Choose an entry to plot. Hourly → line; Monthly → bars.
-          </div>
-        </div>
-      </section>
-
-      <section
-        class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-2 lg:order-none"
-      >
-        <div
-          class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark"
-        >
-          <strong id="series-title">Series</strong
-          ><span id="units" class="text-muted dark:text-muted-dark"></span>
-        </div>
-        <div class="p-3 flex flex-col gap-3 overflow-auto">
-          <div id="series-meta" class="relative text-xs text-muted dark:text-muted-dark">
-            <div id="series-meta-entries" class="grid grid-cols-[auto_1fr] gap-x-2 pr-10"></div>
-          </div>
-          <div class="flex items-center justify-between flex-wrap gap-2">
-            <div class="flex items-center gap-3 flex-wrap">
-              <div
-                class="inline-flex rounded border border-border dark:border-border-dark overflow-hidden"
-              >
-                <button id="view-time" class="px-2 py-1 text-xs bg-panel-2 dark:bg-panel-2-dark">
-                  Time Series
-                </button>
-                <button id="view-ldc" class="px-2 py-1 text-xs">Load Duration</button>
-                <button id="view-balance" class="px-2 py-1 text-xs">Load Balance</button>
-                <button id="view-scatter" class="px-2 py-1 text-xs">Scatter</button>
-              </div>
-              <label class="ml-1 text-xs inline-flex items-center gap-1">
-                <input id="ldc-normalize" type="checkbox" class="align-middle" />
-                Normalize to peak
-              </label>
+            <div class="flex items-center gap-2">
+              <strong>Signals</strong
+              ><span id="meta-count" class="text-muted dark:text-muted-dark"></span>
             </div>
+            <!-- Collapse toggle removed -->
+          </div>
+          <div id="signals-body" class="p-3 flex flex-col gap-2 overflow-auto">
             <div
-              class="flex items-center gap-2 ml-auto text-sm text-muted dark:text-muted-dark"
-              id="toolbar-actions"
+              id="drop"
+              class="border-2 border-dashed rounded p-3 text-center bg-panel dark:bg-panel-dark border-border dark:border-border-dark text-muted dark:text-muted-dark"
             >
-              <!-- Zoom always enabled (button removed) -->
-              <!-- tariff button will be injected here if present -->
+              Drag & drop
+              <span class="px-1 rounded bg-code dark:bg-code-dark">eplusout.sql</span> here
+            </div>
+            <input
+              type="text"
+              id="search"
+              placeholder="Search name/group/key/units…"
+              disabled
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+            />
+            <label
+              class="flex items-center gap-2 text-xs text-muted dark:text-muted-dark select-none"
+              ><input id="fav-only" type="checkbox" class="h-3.5 w-3.5" />
+              <span>Favorites only (double‑click items to ★/☆)</span></label
+            >
+            <div class="flex gap-2">
+              <select
+                id="filter-freq"
+                disabled
+                class="flex-1 border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+              >
+                <option value="">Any frequency</option>
+                <option value="Hourly">Hourly</option>
+                <option value="Monthly">Monthly</option>
+              </select>
+              <select
+                id="filter-meter"
+                disabled
+                class="flex-1 border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+              >
+                <option value="">Vars & Meters</option>
+                <option value="1">Meters only</option>
+                <option value="0">Variables only</option>
+              </select>
+            </div>
+            <select
+              id="filter-group"
+              disabled
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+            >
+              <option value="">Any index group</option>
+            </select>
+            <select
+              id="dictionary"
+              size="12"
+              multiple
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+              disabled
+            ></select>
+            <div class="text-xs text-muted dark:text-muted-dark mt-2">
+              Tip: Choose an entry to plot. Hourly → line; Monthly → bars.
             </div>
           </div>
-          <div id="zoom-hint" class="text-xs text-muted dark:text-muted-dark hidden">
-            Drag on the mini-map to zoom. Double-tap to reset.
+        </section>
+
+        <section
+          class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-2 lg:order-none"
+        >
+          <div
+            class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark"
+          >
+            <strong id="series-title">Series</strong
+            ><span id="units" class="text-muted dark:text-muted-dark"></span>
           </div>
-          <div id="legend" class="flex flex-wrap gap-2 items-center"></div>
-          <div
-            id="insights"
-            class="rounded-md border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-3 text-sm"
-          ></div>
-          <div id="kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2"></div>
-          <div
-            id="chart"
-            class="w-full h-[420px] max-[768px]:h-[300px] max-[480px]:h-[220px] relative"
-          ></div>
-          <div id="stats" class="grid grid-cols-8 gap-2"></div>
+          <div class="p-3 flex flex-col gap-3 overflow-auto">
+            <div id="series-meta" class="relative text-xs text-muted dark:text-muted-dark">
+              <div id="series-meta-entries" class="grid grid-cols-[auto_1fr] gap-x-2 pr-10"></div>
+            </div>
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-3 flex-wrap">
+                <div
+                  class="inline-flex rounded border border-border dark:border-border-dark overflow-hidden"
+                >
+                  <button id="view-time" class="px-2 py-1 text-xs bg-panel-2 dark:bg-panel-2-dark">
+                    Time Series
+                  </button>
+                  <button id="view-ldc" class="px-2 py-1 text-xs">Load Duration</button>
+                  <button id="view-balance" class="px-2 py-1 text-xs">Load Balance</button>
+                  <button id="view-scatter" class="px-2 py-1 text-xs">Scatter</button>
+                  <button id="view-3d" class="px-2 py-1 text-xs">3D Zones</button>
+                </div>
+                <label class="ml-1 text-xs inline-flex items-center gap-1">
+                  <input id="ldc-normalize" type="checkbox" class="align-middle" />
+                  Normalize to peak
+                </label>
+              </div>
+              <div
+                class="flex items-center gap-2 ml-auto text-sm text-muted dark:text-muted-dark"
+                id="toolbar-actions"
+              >
+                <!-- Zoom always enabled (button removed) -->
+                <!-- tariff button will be injected here if present -->
+              </div>
+            </div>
+            <div id="zoom-hint" class="text-xs text-muted dark:text-muted-dark hidden">
+              Drag on the mini-map to zoom. Double-tap to reset.
+            </div>
+            <div id="legend" class="flex flex-wrap gap-2 items-center"></div>
+            <div
+              id="insights"
+              class="rounded-md border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-3 text-sm"
+            ></div>
+            <div id="kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2"></div>
+            <div
+              id="chart"
+              class="w-full h-[420px] max-[768px]:h-[300px] max-[480px]:h-[220px] relative"
+            ></div>
+            <div id="stats" class="grid grid-cols-8 gap-2"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- 3D Viewer Panel -->
+      <section
+        id="viewer-3d-panel"
+        class="hidden lg:col-span-2 flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden"
+        style="height: 300px"
+      >
+        <div
+          class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark cursor-ns-resize"
+          id="viewer-3d-header"
+        >
+          <strong>3D Zone Viewer</strong>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted dark:text-muted-dark">Drag to resize</span>
+            <button
+              id="viewer-3d-close"
+              type="button"
+              class="p-1 rounded hover:bg-panel dark:hover:bg-panel-dark"
+              aria-label="Close 3D viewer"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                class="w-4 h-4"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="viewer-3d-content" class="flex-1 overflow-hidden relative">
+          <!-- 3D viewer canvas will be inserted here -->
         </div>
       </section>
     </main>
@@ -609,6 +652,7 @@
           await loadExternalScript(url);
         }
       }
+
       let SQL;
       async function ensureSql() {
         if (SQL) return SQL;
@@ -1194,6 +1238,11 @@
           } else {
             if (viewMode === 'scatter') {
               renderScatter(series);
+            } else if (viewMode === '3d') {
+              render3DZones(series);
+              // Clear the chart area when showing 3D viewer
+              $('chart').innerHTML =
+                '<div class="flex items-center justify-center h-full text-sm text-muted dark:text-muted-dark">3D Zone Viewer is displayed below</div>';
             } else {
               renderChart(series, { normalize: normalizeFlag });
               renderInsights(series);
@@ -1880,9 +1929,18 @@
       }
       injectTariffUI();
 
+      function cleanupChart() {
+        const container = $('chart');
+        if (container && container._cleanup) {
+          container._cleanup();
+          container._cleanup = null;
+        }
+      }
+
       async function renderChart(series, opts = {}) {
         await ensureD3();
         const container = $('chart');
+        cleanupChart();
         container.innerHTML = '';
         const rect = container.getBoundingClientRect();
         const width = rect.width,
@@ -2757,6 +2815,7 @@
         }
         // Expect at least 2 visible series; use first two as X/Y or user-chosen pair
         const container = $('chart');
+        cleanupChart();
         container.innerHTML = '';
         if (series.length < 2) {
           container.innerHTML =
@@ -3225,6 +3284,7 @@
       async function renderLDC(series) {
         await ensureD3();
         const container = $('chart');
+        cleanupChart();
         container.innerHTML = '';
         const rect = container.getBoundingClientRect();
         const width = rect.width,
@@ -3419,6 +3479,7 @@
       async function renderLoadBalance(series) {
         await ensureD3();
         const container = $('chart');
+        cleanupChart();
         const hadLoading = !!document.getElementById('lb-loading');
         // Required variable groups (any one of the alternatives in names[] will satisfy)
         const IDF_LOAD_BALANCE_SNIPPET = `! Load Balance Required Outputs (Monthly variant)\nOutput:Variable,*,Zone Air System Sensible Heating Energy,Monthly;\nOutput:Variable,*,Zone Air System Sensible Cooling Energy,Monthly;\n! or (Ideal Loads)\n! Output:Variable,*,Zone Ideal Loads Supply Air Sensible Heating Energy,Monthly;\n! Output:Variable,*,Zone Ideal Loads Supply Air Sensible Cooling Energy,Monthly;\n\n! Internal Gains\nOutput:Variable,*,People Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Lights Total Heating Energy,Monthly;\nOutput:Variable,*,Electric Equipment Total Heating Energy,Monthly;\nOutput:Variable,*,Hot Water Equipment Total Heating Energy,Monthly;\n\n! Solar\nOutput:Variable,*,Zone Windows Total Transmitted Solar Radiation Energy,Monthly;\n\n! Infiltration / ventilation\nOutput:Variable,*,Zone Infiltration Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Zone Infiltration Sensible Heat Loss Energy,Monthly;\nOutput:Variable,*,Zone Ventilation Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Zone Ventilation Sensible Heat Loss Energy,Monthly;\n\n! Conduction & storage\nOutput:Variable,*,Surface Inside Face Conduction Heat Gain Energy,Monthly;\nOutput:Variable,*,Surface Inside Face Conduction Heat Loss Energy,Monthly;\nOutput:Variable,*,Surface Inside Face Conduction Heat Storage Energy,Monthly;\nOutput:Variable,*,Zone Air Heat Balance Air Energy Storage Energy,Monthly;`;
@@ -3956,6 +4017,609 @@
         $('units').textContent = convertUnitLabel('J');
       }
 
+      async function render3DZones(series) {
+        // Show the 3D viewer panel
+        const panel = $('viewer-3d-panel');
+        const container = $('viewer-3d-content');
+
+        if (!panel || !container) return;
+
+        panel.classList.remove('hidden');
+        container.innerHTML = '';
+
+        if (!db || !dict) {
+          container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3'>Load a database first.</div>`;
+          return;
+        }
+
+        // Query surface geometry data using the provided SQL
+        let surfaceData;
+        try {
+          const surfaceQuery = `
+            SELECT
+                Surface.Name,
+                SurfaceClass.Name AS SurfaceType,
+                Surface.ZoneName,
+                Surface.Tilt,
+                Surface.Azimuth,
+                Surface.Area,
+                Vertex.X,
+                Vertex.Y,
+                Vertex.Z
+            FROM
+                Surfaces AS Surface
+            JOIN
+                SurfaceClass ON Surface.SurfaceType = SurfaceClass.SurfaceType
+            JOIN
+                SurfaceVertices AS Vertex ON Surface.SurfaceID = Vertex.SurfaceID
+            ORDER BY
+                Surface.Name, Vertex.VertexIndex`;
+          
+          surfaceData = toObjects(db.exec(surfaceQuery));
+        } catch (error) {
+          // Fallback to zone-based rendering if surface data not available
+          const zones = Array.from(
+            new Set(
+              dict.filter((d) => d.IndexGroup && d.IndexGroup.trim()).map((d) => d.IndexGroup.trim()),
+            ),
+          ).sort();
+
+          if (zones.length === 0) {
+            container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3'>No surface or zone data found in the database.</div>`;
+            return;
+          }
+          
+          // Use fallback zone rendering
+          renderZoneFallback(zones, container);
+          return;
+        }
+
+        if (!surfaceData || surfaceData.length === 0) {
+          container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3'>No surface geometry data found in the database.</div>`;
+          return;
+        }
+
+        // Group surface vertices by surface name
+        const surfaceMap = new Map();
+        surfaceData.forEach(row => {
+          const surfaceName = row.Name;
+          if (!surfaceMap.has(surfaceName)) {
+            surfaceMap.set(surfaceName, {
+              name: surfaceName,
+              type: row.SurfaceType,
+              zone: row.ZoneName,
+              tilt: row.Tilt,
+              azimuth: row.Azimuth,
+              area: row.Area,
+              vertices: []
+            });
+          }
+          surfaceMap.get(surfaceName).vertices.push({
+            x: Number(row.X),
+            y: Number(row.Y), 
+            z: Number(row.Z)
+          });
+        });
+
+        const surfaces = Array.from(surfaceMap.values());
+        
+        // Surface type color palette
+        const surfaceColors = {
+          'Wall': '#8B4513',           // Brown
+          'Roof': '#DC143C',           // Crimson  
+          'Floor': '#556B2F',          // DarkOliveGreen
+          'Window': '#87CEEB',         // SkyBlue
+          'Door': '#DEB887',           // BurlyWood
+          'Ceiling': '#F0E68C',        // Khaki
+          'Shading': '#9370DB',        // MediumPurple
+          'InternalMass': '#696969',   // DimGray
+          'default': '#708090'          // SlateGray
+        };
+
+        const rect = container.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+
+        // Create HTML5 Canvas for pseudo-3D visualization
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        container.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+
+        // Calculate building center and scale
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        let minZ = Infinity, maxZ = -Infinity;
+        
+        surfaces.forEach(surface => {
+          surface.vertices.forEach(v => {
+            minX = Math.min(minX, v.x);
+            maxX = Math.max(maxX, v.x);
+            minY = Math.min(minY, v.y);
+            maxY = Math.max(maxY, v.y);
+            minZ = Math.min(minZ, v.z);
+            maxZ = Math.max(maxZ, v.z);
+          });
+        });
+
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const centerZ = (minZ + maxZ) / 2;
+        
+        const buildingWidth = Math.max(maxX - minX, maxZ - minZ);
+        const buildingHeight = maxY - minY;
+        const scale = Math.min(width, height) * 0.3 / Math.max(buildingWidth, buildingHeight);
+
+        // Normalize vertices relative to building center
+        surfaces.forEach(surface => {
+          surface.vertices.forEach(v => {
+            v.x = (v.x - centerX) * scale;
+            v.y = (v.y - centerY) * scale;
+            v.z = (v.z - centerZ) * scale;
+          });
+        });
+
+        // 3D simulation variables
+        let rotation = { x: 0, y: 0 };
+        let cameraDistance = Math.max(buildingWidth, buildingHeight) * scale * 1.5;
+
+        // 3D projection function
+        const project3D = (x, y, z) => {
+          // Apply rotation
+          const cosX = Math.cos(rotation.x);
+          const sinX = Math.sin(rotation.x);
+          const cosY = Math.cos(rotation.y);
+          const sinY = Math.sin(rotation.y);
+
+          // Rotate around Y axis (horizontal)
+          const x1 = x * cosY - z * sinY;
+          const z1 = x * sinY + z * cosY;
+
+          // Rotate around X axis (vertical) - constrained
+          const y1 = y * cosX - z1 * sinX;
+          const z2 = y * sinX + z1 * cosX;
+
+          // Project to 2D
+          const perspective = cameraDistance / (cameraDistance + z2 + 200);
+          return {
+            x: width / 2 + x1 * perspective,
+            y: height / 2 + y1 * perspective,
+            depth: z2,
+          };
+        };
+
+        // Calculate surface normal for lighting
+        const calculateNormal = (vertices) => {
+          if (vertices.length < 3) return { x: 0, y: 0, z: 1 };
+          
+          const v1 = vertices[1];
+          const v0 = vertices[0];
+          const v2 = vertices[2];
+          
+          const a = { x: v1.x - v0.x, y: v1.y - v0.y, z: v1.z - v0.z };
+          const b = { x: v2.x - v0.x, y: v2.y - v0.y, z: v2.z - v0.z };
+          
+          const normal = {
+            x: a.y * b.z - a.z * b.y,
+            y: a.z * b.x - a.x * b.z,
+            z: a.x * b.y - a.y * b.x
+          };
+          
+          const length = Math.sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+          if (length > 0) {
+            normal.x /= length;
+            normal.y /= length;
+            normal.z /= length;
+          }
+          
+          return normal;
+        };
+
+        // Render function
+        const render3D = () => {
+          // Clear canvas
+          const isDark = document.documentElement.classList.contains('dark');
+          ctx.fillStyle = isDark ? '#121821' : '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+
+          // Project all surfaces and calculate visibility
+          const projectedSurfaces = surfaces.map(surface => {
+            const projectedVertices = surface.vertices.map(v => project3D(v.x, v.y, v.z));
+            const avgDepth = projectedVertices.reduce((sum, v) => sum + v.depth, 0) / projectedVertices.length;
+            const normal = calculateNormal(surface.vertices);
+            
+            // Simple backface culling - hide surfaces facing away from camera
+            const isVisible = normal.z > -0.1; // Allow some tolerance
+            
+            // Calculate lighting intensity based on normal
+            const lightIntensity = Math.max(0.3, Math.abs(normal.z) * 0.7 + 0.3);
+            
+            return {
+              ...surface,
+              projectedVertices,
+              avgDepth,
+              normal,
+              isVisible,
+              lightIntensity
+            };
+          });
+
+          // Sort by depth (back to front for proper alpha blending)
+          projectedSurfaces.sort((a, b) => a.avgDepth - b.avgDepth);
+
+          // Draw surfaces
+          projectedSurfaces.forEach(surface => {
+            if (!surface.isVisible || surface.projectedVertices.length < 3) return;
+            
+            const baseColor = surfaceColors[surface.type] || surfaceColors.default;
+            
+            // Apply lighting
+            const rgb = hexToRgb(baseColor);
+            const litColor = {
+              r: Math.round(rgb.r * surface.lightIntensity),
+              g: Math.round(rgb.g * surface.lightIntensity),
+              b: Math.round(rgb.b * surface.lightIntensity)
+            };
+            
+            ctx.save();
+            ctx.globalAlpha = 0.8;
+            ctx.fillStyle = `rgb(${litColor.r}, ${litColor.g}, ${litColor.b})`;
+            ctx.strokeStyle = isDark ? '#ffffff' : '#000000';
+            ctx.lineWidth = 0.5;
+            
+            // Draw surface polygon
+            ctx.beginPath();
+            const firstVertex = surface.projectedVertices[0];
+            ctx.moveTo(firstVertex.x, firstVertex.y);
+            
+            for (let i = 1; i < surface.projectedVertices.length; i++) {
+              const vertex = surface.projectedVertices[i];
+              ctx.lineTo(vertex.x, vertex.y);
+            }
+            ctx.closePath();
+            
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+          });
+
+          // Draw legend for surface types
+          const uniqueTypes = [...new Set(surfaces.map(s => s.type))];
+          const legendY = 40;
+          const legendX = 20;
+          
+          ctx.save();
+          ctx.font = '12px Arial, sans-serif';
+          ctx.fillStyle = isDark ? '#e6eef7' : '#0b1220';
+          ctx.textAlign = 'left';
+          
+          uniqueTypes.forEach((type, index) => {
+            const y = legendY + index * 20;
+            const color = surfaceColors[type] || surfaceColors.default;
+            
+            // Draw color square
+            ctx.fillStyle = color;
+            ctx.fillRect(legendX, y - 8, 12, 12);
+            
+            // Draw type label
+            ctx.fillStyle = isDark ? '#e6eef7' : '#0b1220';
+            ctx.fillText(type, legendX + 18, y + 2);
+          });
+
+          // Draw title
+          ctx.font = '14px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('3D Building Surfaces - Drag to rotate, Scroll to zoom', width / 2, 20);
+          ctx.restore();
+        };
+
+        // Helper function to convert hex color to RGB
+        const hexToRgb = (hex) => {
+          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+          } : { r: 128, g: 128, b: 128 };
+        };
+
+        // Mouse interaction
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        const handleMouseDown = (event) => {
+          isDragging = true;
+          const rect = canvas.getBoundingClientRect();
+          lastMouseX = event.clientX - rect.left;
+          lastMouseY = event.clientY - rect.top;
+        };
+
+        const handleMouseMove = (event) => {
+          if (!isDragging) return;
+
+          const rect = canvas.getBoundingClientRect();
+          const mouseX = event.clientX - rect.left;
+          const mouseY = event.clientY - rect.top;
+
+          const deltaX = mouseX - lastMouseX;
+          const deltaY = mouseY - lastMouseY;
+
+          rotation.y += deltaX * 0.01;
+          rotation.x += deltaY * 0.01;
+
+          // Constrain vertical rotation to prevent flipping
+          rotation.x = Math.max(-Math.PI * 0.3, Math.min(Math.PI * 0.3, rotation.x));
+
+          lastMouseX = mouseX;
+          lastMouseY = mouseY;
+
+          render3D();
+        };
+
+        const handleMouseUp = () => {
+          isDragging = false;
+        };
+
+        const handleWheel = (event) => {
+          event.preventDefault();
+          const scale = event.deltaY > 0 ? 1.1 : 0.9;
+          cameraDistance *= scale;
+
+          // Constrain zoom
+          const minDistance = Math.max(buildingWidth, buildingHeight) * scale * 0.5;
+          const maxDistance = Math.max(buildingWidth, buildingHeight) * scale * 5;
+          cameraDistance = Math.max(minDistance, Math.min(maxDistance, cameraDistance));
+
+          render3D();
+        };
+
+        // Event listeners
+        canvas.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('wheel', handleWheel);
+
+        // Handle window resize
+        const handleResize = () => {
+          const rect = container.getBoundingClientRect();
+          canvas.width = rect.width;
+          canvas.height = rect.height;
+          render3D();
+        };
+
+        window.addEventListener('resize', handleResize);
+
+        // Store cleanup function for view changes
+        container._cleanup = () => {
+          window.removeEventListener('resize', handleResize);
+          canvas.removeEventListener('mousedown', handleMouseDown);
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+          canvas.removeEventListener('wheel', handleWheel);
+        };
+
+        // Initial render
+        render3D();
+
+        // Update insights and units
+        const zoneCount = new Set(surfaces.map(s => s.zone)).size;
+        const surfaceTypes = [...new Set(surfaces.map(s => s.type))].sort();
+        $('insights').innerHTML = `Building model: ${surfaces.length} surfaces across ${zoneCount} zones. Surface types: ${surfaceTypes.join(', ')}`;
+        $('units').textContent = 'Surfaces';
+      }
+
+      // Fallback function for zone-based rendering when surface data is not available
+      function renderZoneFallback(zones, container) {
+        const rect = container.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+
+        // Create HTML5 Canvas for pseudo-3D visualization
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        container.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+
+        // 3D simulation variables
+        let rotation = { x: 0, y: 0 };
+        let radius = Math.max(100, zones.length * 15);
+        let cameraDistance = radius * 2;
+
+        // Arrange zones in a circular pattern with 3D positioning
+        const zonePositions = zones.map((zone, index) => {
+          const angle = (index / zones.length) * Math.PI * 2;
+          return {
+            name: zone,
+            x: Math.cos(angle) * radius,
+            y: (Math.random() - 0.5) * 30, // Random height variation
+            z: Math.sin(angle) * radius,
+            originalX: Math.cos(angle) * radius,
+            originalY: (Math.random() - 0.5) * 30,
+            originalZ: Math.sin(angle) * radius,
+          };
+        });
+
+        // 3D projection function
+        const project3D = (x, y, z) => {
+          // Apply rotation
+          const cosX = Math.cos(rotation.x);
+          const sinX = Math.sin(rotation.x);
+          const cosY = Math.cos(rotation.y);
+          const sinY = Math.sin(rotation.y);
+
+          // Rotate around Y axis (horizontal)
+          const x1 = x * cosY - z * sinY;
+          const z1 = x * sinY + z * cosY;
+
+          // Rotate around X axis (vertical) - constrained
+          const y1 = y * cosX - z1 * sinX;
+          const z2 = y * sinX + z1 * cosX;
+
+          // Project to 2D
+          const perspective = cameraDistance / (cameraDistance + z2);
+          return {
+            x: width / 2 + x1 * perspective,
+            y: height / 2 + y1 * perspective,
+            scale: perspective,
+            depth: z2,
+          };
+        };
+
+        // Render function
+        const render3D = () => {
+          // Clear canvas
+          const isDark = document.documentElement.classList.contains('dark');
+          ctx.fillStyle = isDark ? '#121821' : '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+
+          // Update zone positions based on rotation
+          const projectedZones = zonePositions.map((zone) => {
+            const projected = project3D(zone.originalX, zone.originalY, zone.originalZ);
+            return { ...zone, ...projected };
+          });
+
+          // Sort by depth (back to front)
+          projectedZones.sort((a, b) => a.depth - b.depth);
+
+          // Draw zones
+          projectedZones.forEach((zone) => {
+            const fontSize = Math.max(12, 16 * zone.scale);
+            const alpha = Math.max(0.3, zone.scale);
+
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.font = `${fontSize}px Arial, sans-serif`;
+            ctx.fillStyle = isDark ? '#e6eef7' : '#0b1220';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Draw zone name
+            ctx.fillText(zone.name, zone.x, zone.y);
+
+            // Draw a small circle to represent the zone
+            ctx.beginPath();
+            ctx.arc(zone.x, zone.y + fontSize / 2 + 5, 3 * zone.scale, 0, Math.PI * 2);
+            ctx.fillStyle = '#2563eb';
+            ctx.fill();
+
+            ctx.restore();
+          });
+
+          // Draw title
+          ctx.save();
+          ctx.font = '14px Arial, sans-serif';
+          ctx.fillStyle = isDark ? '#e6eef7' : '#0b1220';
+          ctx.textAlign = 'center';
+          ctx.fillText('3D Zone Viewer - Drag to rotate, Scroll to zoom', width / 2, 20);
+          ctx.restore();
+        };
+
+        // Mouse interaction
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        const handleMouseDown = (event) => {
+          isDragging = true;
+          const rect = canvas.getBoundingClientRect();
+          lastMouseX = event.clientX - rect.left;
+          lastMouseY = event.clientY - rect.top;
+        };
+
+        const handleMouseMove = (event) => {
+          if (!isDragging) return;
+
+          const rect = canvas.getBoundingClientRect();
+          const mouseX = event.clientX - rect.left;
+          const mouseY = event.clientY - rect.top;
+
+          const deltaX = mouseX - lastMouseX;
+          const deltaY = mouseY - lastMouseY;
+
+          rotation.y += deltaX * 0.01;
+          rotation.x += deltaY * 0.01;
+
+          // Constrain vertical rotation to prevent flipping
+          rotation.x = Math.max(-Math.PI * 0.3, Math.min(Math.PI * 0.3, rotation.x));
+
+          lastMouseX = mouseX;
+          lastMouseY = mouseY;
+
+          render3D();
+        };
+
+        const handleMouseUp = () => {
+          isDragging = false;
+        };
+
+        const handleWheel = (event) => {
+          event.preventDefault();
+          const scale = event.deltaY > 0 ? 1.1 : 0.9;
+          cameraDistance *= scale;
+
+          // Constrain zoom
+          cameraDistance = Math.max(radius * 0.5, Math.min(radius * 5, cameraDistance));
+
+          render3D();
+        };
+
+        // Event listeners
+        canvas.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('wheel', handleWheel);
+
+        // Handle window resize
+        const handleResize = () => {
+          const rect = container.getBoundingClientRect();
+          canvas.width = rect.width;
+          canvas.height = rect.height;
+          render3D();
+        };
+
+        window.addEventListener('resize', handleResize);
+
+        // Store cleanup function for view changes
+        container._cleanup = () => {
+          window.removeEventListener('resize', handleResize);
+          canvas.removeEventListener('mousedown', handleMouseDown);
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+          canvas.removeEventListener('wheel', handleWheel);
+        };
+
+        // Initial render
+        render3D();
+
+        // Update insights and units
+        $('insights').innerHTML = `Found ${zones.length} zones: ${zones.join(', ')} (using fallback zone display - surface geometry not available)`;
+        $('units').textContent = 'Zones';
+      }
+
+      // Function to hide 3D viewer panel
+      function hide3DViewer() {
+        const panel = $('viewer-3d-panel');
+        const container = $('viewer-3d-content');
+
+        if (panel) panel.classList.add('hidden');
+
+        // Cleanup any existing 3D viewer
+        if (container && container._cleanup) {
+          container._cleanup();
+          container._cleanup = null;
+        }
+        if (container) container.innerHTML = '';
+      }
+
       // Signals inputs
       ['search', 'filter-freq', 'filter-meter', 'filter-group', 'fav-only'].forEach((id) =>
         $(id).addEventListener('input', populateDictionaryList),
@@ -4116,38 +4780,59 @@
         btnLdc = $('view-ldc'),
         btnBalance = $('view-balance'),
         btnScatter = $('view-scatter'),
+        btn3D = $('view-3d'),
         chkNorm = $('ldc-normalize');
       btnTime?.addEventListener('click', () => {
+        hide3DViewer(); // Hide 3D viewer when switching to other views
         viewMode = 'time';
         btnTime.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
         btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnScatter?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btn3D?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden'); // LDC view (no time zoom)
         renderAll();
       });
       btnLdc?.addEventListener('click', () => {
+        hide3DViewer(); // Hide 3D viewer when switching to other views
         viewMode = 'ldc';
         btnLdc.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
         btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnScatter?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btn3D?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden');
         renderAll();
       });
       btnBalance?.addEventListener('click', () => {
+        hide3DViewer(); // Hide 3D viewer when switching to other views
         viewMode = 'balance';
         btnBalance.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
         btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnScatter?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btn3D?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden');
         renderAll();
       });
       btnScatter?.addEventListener('click', () => {
+        hide3DViewer(); // Hide 3D viewer when switching to other views
         viewMode = 'scatter';
         btnScatter.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
         btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btn3D?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        $('zoom-hint').classList.add('hidden');
+        renderAll();
+      });
+      btn3D?.addEventListener('click', () => {
+        viewMode = '3d';
+        btn3D.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnScatter?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden');
         renderAll();
       });
@@ -4155,6 +4840,73 @@
         // Always re-render; normalization now applies to both time & LDC views
         renderAll();
       });
+
+      // 3D Viewer panel resize functionality
+      (function setup3DViewerResize() {
+        const panel = $('viewer-3d-panel');
+        const header = $('viewer-3d-header');
+        const closeBtn = $('viewer-3d-close');
+
+        if (!panel || !header || !closeBtn) return;
+
+        let isResizing = false;
+        let startY = 0;
+        let startHeight = 0;
+
+        const handleMouseDown = (e) => {
+          isResizing = true;
+          startY = e.clientY;
+          startHeight = panel.offsetHeight;
+          document.body.style.cursor = 'ns-resize';
+          document.body.style.userSelect = 'none';
+          e.preventDefault();
+        };
+
+        const handleMouseMove = (e) => {
+          if (!isResizing) return;
+
+          const deltaY = startY - e.clientY; // Inverted because we want up to increase height
+          const newHeight = Math.max(200, Math.min(600, startHeight + deltaY));
+          panel.style.height = newHeight + 'px';
+
+          // Trigger resize for the 3D viewer canvas if it exists
+          const container = $('viewer-3d-content');
+          if (container && container._cleanup) {
+            // Re-render the 3D viewer with new size
+            const canvas = container.querySelector('canvas');
+            if (canvas) {
+              const rect = container.getBoundingClientRect();
+              canvas.width = rect.width;
+              canvas.height = rect.height;
+              // The render function is stored in the container's scope, but we can trigger a view refresh
+              setTimeout(() => {
+                if (viewMode === '3d') renderAll();
+              }, 10);
+            }
+          }
+        };
+
+        const handleMouseUp = () => {
+          isResizing = false;
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+        };
+
+        header.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        // Close button functionality
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation(); // Prevent header drag from triggering
+          hide3DViewer();
+          // Switch back to time series view
+          viewMode = 'time';
+          $('view-time')?.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+          $('view-3d')?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+          renderAll();
+        });
+      })();
 
       function restoreSelection() {
         try {
