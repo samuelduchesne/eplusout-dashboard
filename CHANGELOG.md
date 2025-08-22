@@ -21,6 +21,7 @@ All notable changes to this project will be documented here.
 - HTML Report TOC (mobile): improved resizer behavior with better default height (260px) and clamped range; only applies stored height on mobile and clears explicit sizing on desktop to ensure full-height sidebar.
 - Open modal: increased z-index and backdrop blur, locked background scroll, and added Esc/backdrop close to prevent Signals filters from bleeding through.
 - Offline file loading: selecting an eplusout.sql from the Open modal now works without internet. Bundled sql.js (WASM + loader) and d3 locally under dist/vendor and pointed the app to those paths; added error handling around the file picker to surface failures instead of silently doing nothing.
+- Signals: ensured the `#dictionary` multi-select keeps a sensible minimum height so it remains usable when the panel gets crowded.
 
 ## [0.2.0] - 2025-08-19
 
