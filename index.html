@@ -1733,6 +1733,28 @@
       let tempRespModel = null; // cache of last model {intercept,hCoeff,cCoeff,r2,useH,useC,predSeriesId,predPoints,energyUnits,label}
       // Preserve current hourly x-domain across redraws (zoom + resize)
       let currentXDomain = null;
+      // Global crosshair state to sync vertical guideline across multiple time-series charts
+      let __hoverXMs = null; // number | null (UTC ms)
+      const __crosshairSubs = new Set(); // Set<(ms:number|null, source:any)=>void>
+      function __setHoverX(ms, source) {
+        __hoverXMs = ms;
+        __crosshairSubs.forEach((fn) => {
+          try {
+            fn(ms, source);
+          } catch {}
+        });
+      }
+      // Global band crosshair state (for Monthly/Annual bar charts), keyed by xLabel
+      let __hoverBandKey = null; // string | null
+      const __crosshairBandSubs = new Set(); // Set<(key:string|null, source:any)=>void>
+      function __setHoverBand(key, source) {
+        __hoverBandKey = key;
+        __crosshairBandSubs.forEach((fn) => {
+          try {
+            fn(key, source);
+          } catch {}
+        });
+      }
       // Time resolution resampling state
       let resampleMode = 'original'; // 'original' | 'hourly' | 'monthly' | 'annual'
       let resampleAgg = 'auto'; // 'auto' | 'sum' | 'avg' | 'max' | 'min'
@@ -3085,6 +3107,22 @@
       async function renderChart(series, opts = {}) {
         await ensureD3();
         const container = opts.containerEl || $('chart');
+        // Unsubscribe any lingering crosshair subscriber from previous render in this container
+        if (container.__crosshairUnsub && typeof container.__crosshairUnsub === 'function') {
+          try {
+            container.__crosshairUnsub();
+          } catch {}
+          container.__crosshairUnsub = null;
+        }
+        if (
+          container.__crosshairBandUnsub &&
+          typeof container.__crosshairBandUnsub === 'function'
+        ) {
+          try {
+            container.__crosshairBandUnsub();
+          } catch {}
+          container.__crosshairBandUnsub = null;
+        }
         container.innerHTML = '';
         const rect = container.getBoundingClientRect();
         const width = rect.width,
@@ -3243,6 +3281,29 @@
             }
           }
           drawSeries();
+          // Crosshair line + per-series dots (synced across charts)
+          const crosshairG = g.append('g').attr('class', 'crosshair').style('display', 'none');
+          // Keep crosshair above bar layers
+          crosshairG.raise();
+          // Keep crosshair above all chart layers
+          crosshairG.raise();
+          const vline = crosshairG
+            .append('line')
+            .attr('y1', 0)
+            .attr('y2', h)
+            .attr('stroke', axisColor)
+            .attr('stroke-opacity', 0.5)
+            .attr('stroke-width', 1);
+          // One marker per series
+          const markers = series.map((s) =>
+            crosshairG
+              .append('circle')
+              .attr('r', 4.5)
+              .attr('fill', s.color)
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1)
+              .attr('vector-effect', 'non-scaling-stroke'),
+          );
 
           // Temperature response model (degree-day) overlay if enabled
           function computeTempResponseModel() {
@@ -3485,6 +3546,8 @@
               .attr('fill', accent)
               .attr('fill-opacity', 0.15)
               .attr('stroke', accentStrong);
+            // Ensure crosshair sits above the brush overlay
+            crosshairG.raise();
             $('zoom-hint').classList.remove('hidden');
           } else {
             $('zoom-hint').classList.add('hidden');
@@ -3526,6 +3589,8 @@
                     .y((d) => y(normVal(d.y, { id: '__pred' }))),
                 );
             }
+            // After re-drawing series, keep crosshair on top
+            crosshairG.raise();
           }
           redraw();
           svg.on('dblclick', () => {
@@ -3537,6 +3602,7 @@
           const tooltip = d3
             .select(container)
             .append('div')
+            .attr('class', 'chart-tooltip')
             .style('position', 'absolute')
             .style('pointer-events', 'none')
             .style('background', tooltipBg)
@@ -3546,50 +3612,98 @@
             .style('border-radius', '6px')
             .style('font-size', '12px')
             .style('display', 'none');
-          const allPts = series
-            .flatMap((s) =>
-              s.points.map((p) => ({
-                x: p.x,
-                y: normVal(convertUnits(p.y, s.meta.Units), s),
-                raw: convertUnits(p.y, s.meta.Units),
-                label: p.label,
-                color: s.color,
+          // Per-series bisectors for nearest point at a given time
+          const seriesBisectors = series.map(() => d3.bisector((d) => d.x).left);
+          // Compute and draw crosshair + markers + tooltip for a UTC ms timestamp
+          function updateCrosshair(ms) {
+            if (ms == null) {
+              crosshairG.style('display', 'none');
+              tooltip.style('display', 'none');
+              return;
+            }
+            const date = new Date(ms);
+            if (date < x.domain()[0] || date > x.domain()[1]) {
+              crosshairG.style('display', 'none');
+              tooltip.style('display', 'none');
+              return;
+            }
+            const px = x(date);
+            vline.attr('x1', px).attr('x2', px);
+            const rows = [];
+            markers.forEach((mk, idx) => {
+              const s = series[idx];
+              const b = seriesBisectors[idx];
+              const pts = s.points;
+              if (!pts || pts.length === 0) {
+                mk.style('display', 'none');
+                return;
+              }
+              let i = b(pts, date);
+              if (i <= 0) i = 0;
+              if (i >= pts.length) i = pts.length - 1;
+              const p = pts[i];
+              const yDisp = normVal(convertUnits(p.y, s.meta.Units), s);
+              mk.style('display', null).attr('cx', x(p.x)).attr('cy', y(yDisp));
+              rows.push({
                 name: s.meta.Name,
+                color: s.color,
+                yDisp,
+                raw: convertUnits(p.y, s.meta.Units),
                 units: normalize ? '%' : convertUnitLabel(s.meta.Units),
-              })),
-            )
-            .sort((a, b) => a.x - b.x);
-          const bisect = d3.bisector((d) => d.x).left;
-          svg
-            .on('mousemove', (ev) => {
-              const [mx] = d3.pointer(ev, g.node());
-              const x0 = x.invert(mx);
-              const i = Math.min(allPts.length - 1, Math.max(0, bisect(allPts, x0)));
-              const d = allPts[i];
-              tooltip
-                .style('display', 'block')
-                .html(
-                  `<div><strong>${d.label}</strong></div><div><span style='color:${d.color}'>${
-                    d.name
-                  }</span> — ${fmt(d.y)} ${d.units || ''}${
-                    normalize
-                      ? ` <span class='text-muted dark:text-muted-dark'>(raw ${fmt(d.raw)})</span>`
-                      : ''
-                  }</div>`,
-                );
+                label: p.label,
+              });
+            });
+            crosshairG.style('display', null);
+            // Build tooltip content: time label + per-series rows
+            if (rows.length) {
+              const timeLabel = rows[0].label || d3.utcFormat('%Y-%m-%d %H:%M')(date);
+              let html = `<div><strong>${escapeHtml(timeLabel)}</strong></div>`;
+              for (const r of rows) {
+                html += `<div><span style="color:${r.color}">${escapeHtml(r.name)}</span> — ${fmt(
+                  r.yDisp,
+                )} ${escapeHtml(r.units || '')}${
+                  normalize
+                    ? ` <span class='text-muted dark:text-muted-dark'>(raw ${fmt(r.raw)})</span>`
+                    : ''
+                }</div>`;
+              }
+              tooltip.style('display', 'block').html(html);
               const cw = container.clientWidth;
               const ch = container.clientHeight;
               const tw = tooltip.node().offsetWidth || 0;
               const th = tooltip.node().offsetHeight || 0;
-              let left = ev.offsetX + 12;
-              if (left + tw > cw - 4) left = ev.offsetX - 12 - tw;
+              let left = m.left + px + 12;
+              if (left + tw > cw - 4) left = m.left + px - 12 - tw;
               if (left < 4) left = 4;
-              let top = ev.offsetY - 24;
-              if (top < 4) top = ev.offsetY + 12;
+              let top = m.top + 8;
               if (top + th > ch - 4) top = ch - th - 4;
               tooltip.style('left', left + 'px').style('top', top + 'px');
+            } else {
+              tooltip.style('display', 'none');
+            }
+          }
+          // Unique id for this chart instance (for source hinting; not strictly needed)
+          const __selfId = Symbol('chart');
+          // Register for global crosshair updates
+          const __sub = (ms /*, source*/) => {
+            if (!container.isConnected) {
+              __crosshairSubs.delete(__sub);
+              return;
+            }
+            updateCrosshair(ms);
+          };
+          __crosshairSubs.add(__sub);
+          container.__crosshairUnsub = () => __crosshairSubs.delete(__sub);
+          // Local mouse interactions to drive global crosshair
+          svg
+            .on('mousemove', (ev) => {
+              const [mx] = d3.pointer(ev, g.node());
+              const x0 = x.invert(mx);
+              __setHoverX(+x0, __selfId);
             })
-            .on('mouseleave', () => tooltip.style('display', 'none'));
+            .on('mouseleave', () => {
+              __setHoverX(null, __selfId);
+            });
           // Inject legend item & controls for temp response
           if (series.length && tempRespEnabled) {
             const insights = $('insights');
@@ -3730,6 +3844,112 @@
               .attr('height', (d) => h - y(convertUnits(d.y, s.meta.Units)))
               .attr('fill', s.color);
           });
+          // Crosshair for bars: vertical line at band center + per-series dots at bar tops
+          const crosshairG = g.append('g').attr('class', 'crosshair').style('display', 'none');
+          const vline = crosshairG
+            .append('line')
+            .attr('y1', 0)
+            .attr('y2', h)
+            .attr('stroke', axisColor)
+            .attr('stroke-opacity', 0.5)
+            .attr('stroke-width', 1);
+          const markers = series.map((s) =>
+            crosshairG
+              .append('circle')
+              .attr('r', 4.5)
+              .attr('fill', s.color)
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1)
+              .attr('vector-effect', 'non-scaling-stroke'),
+          );
+          const tooltip = d3
+            .select(container)
+            .append('div')
+            .attr('class', 'chart-tooltip')
+            .style('position', 'absolute')
+            .style('pointer-events', 'none')
+            .style('background', tooltipBg)
+            .style('border', '1px solid ' + borderColor)
+            .style('color', textColor)
+            .style('padding', '6px 8px')
+            .style('border-radius', '6px')
+            .style('font-size', '12px')
+            .style('display', 'none');
+          function updateCrosshairBand(key) {
+            if (!key || !x.domain().includes(key)) {
+              crosshairG.style('display', 'none');
+              tooltip.style('display', 'none');
+              return;
+            }
+            const cx = (x(key) || 0) + x.bandwidth() / 2;
+            vline.attr('x1', cx).attr('x2', cx);
+            const rows = [];
+            series.forEach((s, idx) => {
+              const pt = s.points.find((p) => p.xLabel === key);
+              if (!pt) return markers[idx].style('display', 'none');
+              const yv = convertUnits(pt.y, s.meta.Units);
+              markers[idx]
+                .style('display', null)
+                .attr('cx', (x(key) || 0) + x1(String(s.id)) + x1.bandwidth() / 2)
+                .attr('cy', y(yv));
+              rows.push({
+                name: s.meta.Name,
+                color: s.color,
+                y: yv,
+                units: convertUnitLabel(s.meta.Units),
+              });
+            });
+            crosshairG.style('display', null);
+            const lbl = monthLabelFmt(key);
+            tooltip
+              .style('display', 'block')
+              .html(
+                `<div><strong>${escapeHtml(lbl)}</strong></div>` +
+                  rows
+                    .map(
+                      (r) =>
+                        `<div><span style=\"color:${r.color}\">${escapeHtml(r.name)}</span> — ${fmt(
+                          r.y,
+                        )} ${escapeHtml(r.units || '')}</div>`,
+                    )
+                    .join(''),
+              );
+            const cw = container.clientWidth;
+            const ch = container.clientHeight;
+            const tw = tooltip.node().offsetWidth || 0;
+            const th = tooltip.node().offsetHeight || 0;
+            let left = m.left + cx + 12;
+            if (left + tw > cw - 4) left = m.left + cx - 12 - tw;
+            if (left < 4) left = 4;
+            let top = m.top + 8;
+            if (top + th > ch - 4) top = ch - th - 4;
+            tooltip.style('left', left + 'px').style('top', top + 'px');
+          }
+          // Subscribe to global band crosshair updates
+          const __selfId = Symbol('chart');
+          const __bandSub = (key /*, source*/) => updateCrosshairBand(key);
+          __crosshairBandSubs.add(__bandSub);
+          container.__crosshairBandUnsub = () => __crosshairBandSubs.delete(__bandSub);
+          // Drive global band crosshair from local mousemove
+          svg
+            .on('mousemove', (ev) => {
+              const [mx] = d3.pointer(ev, g.node());
+              // Find nearest domain key by center distance
+              const keys = x.domain();
+              if (!keys.length) return;
+              let best = keys[0];
+              let bestDist = Infinity;
+              for (const k of keys) {
+                const cx = (x(k) || 0) + x.bandwidth() / 2;
+                const d = Math.abs(mx - cx);
+                if (d < bestDist) {
+                  bestDist = d;
+                  best = k;
+                }
+              }
+              __setHoverBand(best, __selfId);
+            })
+            .on('mouseleave', () => __setHoverBand(null, __selfId));
           if (zoomEnabled) {
             // Implement simple band zoom: click-drag creates selection over bands
             const drag = d3
@@ -3770,6 +3990,10 @@
                       .attr('height', (d) => h - y(convertUnits(d.y, s.meta.Units)))
                       .attr('fill', s.color);
                   });
+                  // keep crosshair updated after band zoom
+                  updateCrosshairBand(__hoverBandKey);
+                  // keep crosshair on top after bar re-render
+                  crosshairG.raise();
                 }
                 g.select('.band-zoom').call(drag.move, null);
               });
@@ -3778,6 +4002,8 @@
               .attr('fill', accent)
               .attr('fill-opacity', 0.15)
               .attr('stroke', accentStrong);
+            // Ensure crosshair sits above the band-zoom overlay
+            crosshairG.raise();
           }
         }
         const leg = $('legend');

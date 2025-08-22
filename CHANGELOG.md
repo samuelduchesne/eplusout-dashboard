@@ -12,11 +12,10 @@ All notable changes to this project will be documented here.
 
 - "Report issue" button in the header that opens a prefilled GitHub issue with app version, theme, units, and browser details.
 - GitHub issue templates for bug reports and feature requests to standardize submissions.
+- Synchronized crosshair for time-series charts: a vertical guideline follows the mouse with per-series hover markers and a consolidated tooltip; when multiple charts are visible (grouped by units), the crosshair position is kept in sync across them to quickly read values at the same time.
 
 
 ### Changed (Unreleased)
-
-### Fixed (Unreleased)
 
 ## [0.3.1] - 2025-08-22
 
