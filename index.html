@@ -81,17 +81,16 @@
             <!-- Document report icon -->
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
               fill="none"
-              stroke="currentColor"
+              viewBox="0 0 24 24"
               stroke-width="1.5"
-              class="w-5 h-5"
-              aria-hidden="true"
+              stroke="currentColor"
+              class="size-6"
             >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c0 .621-.504 1.125-1.125 1.125H9.375a1.125 1.125 0 01-1.125-1.125v-2.25c0-.621.504-1.125 1.125-1.125H15a2.25 2.25 0 002.25-2.25z"
+                d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5"
               />
             </svg>
           </button>
@@ -699,23 +698,130 @@
       } catch {}
 
       function copyToClipboard(text, button) {
-        navigator.clipboard
-          .writeText(text)
-          .then(() => {
-            const originalText = button.textContent;
-            button.textContent = 'Copied!';
-            button.classList.add('bg-accent', 'text-white', 'dark:bg-accent-dark');
+        const showResult = (ok) => {
+          const originalText = button?.textContent ?? '';
+          if (button) {
+            button.textContent = ok ? 'Copied!' : 'Copy failed';
+            if (ok) button.classList.add('bg-accent', 'text-white', 'dark:bg-accent-dark');
             setTimeout(() => {
-              button.textContent = originalText;
-              button.classList.remove('bg-accent', 'text-white', 'dark:bg-accent-dark');
+              button.textContent = originalText || 'Copy';
+              if (ok) button.classList.remove('bg-accent', 'text-white', 'dark:bg-accent-dark');
             }, 1500);
-          })
-          .catch(() => {
-            button.textContent = 'Copy failed';
-            setTimeout(() => {
-              button.textContent = 'Copy';
-            }, 1500);
-          });
+          }
+        };
+        // Preferred modern API (requires secure context such as http://localhost or https)
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard
+            .writeText(text)
+            .then(() => showResult(true))
+            .catch(() => {
+              // Fallback below if navigator.clipboard fails
+              try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'absolute';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                const ok = document.execCommand('copy');
+                ta.remove();
+                showResult(!!ok);
+              } catch {
+                showResult(false);
+              }
+            });
+          return;
+        }
+        // Legacy fallback for file:// or non-secure contexts
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'absolute';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          ta.remove();
+          showResult(!!ok);
+        } catch {
+          showResult(false);
+        }
+      }
+
+      // Rich clipboard write: HTML + TSV with fallback to plain TSV
+      async function copyRich(tsv, html, button) {
+        const show = (ok) => {
+          const originalText = button?.textContent ?? '';
+          if (!button) return;
+          button.textContent = ok ? 'Copied!' : 'Copy failed';
+          if (ok) button.classList.add('bg-accent', 'text-white', 'dark:bg-accent-dark');
+          setTimeout(() => {
+            button.textContent = originalText || 'Copy';
+            if (ok) button.classList.remove('bg-accent', 'text-white', 'dark:bg-accent-dark');
+          }, 1500);
+        };
+        try {
+          if (
+            window.isSecureContext &&
+            navigator.clipboard &&
+            typeof navigator.clipboard.write === 'function' &&
+            typeof window.ClipboardItem === 'function'
+          ) {
+            const item = new ClipboardItem({
+              'text/html': new Blob([html], { type: 'text/html' }),
+              'text/plain': new Blob([tsv], { type: 'text/plain' }),
+            });
+            await navigator.clipboard.write([item]);
+            show(true);
+            return;
+          }
+          // fallback to writeText if available
+          if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(tsv);
+            show(true);
+            return;
+          }
+        } catch {}
+        // legacy fallback via textarea (TSV only)
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = tsv;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'absolute';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          ta.remove();
+          show(!!ok);
+        } catch {
+          show(false);
+        }
+      }
+
+      // Safe Base64 for Unicode strings (for embedding CSV in data-* attributes)
+      function b64EncodeUnicode(str) {
+        try {
+          return btoa(unescape(encodeURIComponent(str)));
+        } catch (e) {
+          // Fallback via TextEncoder
+          const bytes = new TextEncoder().encode(str);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          return btoa(binary);
+        }
+      }
+      function b64DecodeUnicode(b64) {
+        try {
+          return decodeURIComponent(escape(atob(b64)));
+        } catch (e) {
+          const binary = atob(b64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          return new TextDecoder().decode(bytes);
+        }
       }
 
       function generateTableWithCopy(title, data, columns) {
@@ -729,22 +835,32 @@
         const tableId = title.toLowerCase().replace(/[^a-z0-9]/g, '-');
         const headers = columns || Object.keys(data[0]);
 
-        // Generate CSV content for copying
-        const csvContent = [
-          headers.join(','),
-          ...data.map((row) =>
-            headers.map((col) => `"${String(row[col] || '').replace(/"/g, '""')}"`).join(','),
-          ),
-        ].join('\n');
+        // Generate TSV content for copying (safer across locales)
+        const tsvRow = (row) =>
+          headers.map((col) => String(row[col] ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t');
+        const tsvContent = [headers.join('\t'), ...data.map(tsvRow)].join('\n');
+        const tsvB64 = b64EncodeUnicode(tsvContent);
+
+        // Generate minimal HTML table for rich clipboard
+        let htmlTable = '<table><thead><tr>';
+        for (const h of headers) htmlTable += '<th>' + escapeHtml(h) + '</th>';
+        htmlTable += '</tr></thead><tbody>';
+        for (const row of data) {
+          htmlTable += '<tr>';
+          for (const col of headers)
+            htmlTable += '<td>' + escapeHtml(String(row[col] ?? '')) + '</td>';
+          htmlTable += '</tr>';
+        }
+        htmlTable += '</tbody></table>';
+        const htmlB64 = b64EncodeUnicode(htmlTable);
 
         let html = `<div class="mb-6" id="${tableId}">
           <div class="flex items-center justify-between mb-3">
             <h3 class="text-base font-semibold">${escapeHtml(title)}</h3>
-            <button 
-              onclick="copyToClipboard('${csvContent.replace(/'/g, "\\'")}', this)"
-              class="px-2 py-1 text-xs border rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark border-border dark:border-border-dark transition-colors"
+            <button type="button" data-tsvb64="${tsvB64}" data-htmlb64="${htmlB64}"
+              class="btn-copy-csv px-2 py-1 text-xs border rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark border-border dark:border-border-dark transition-colors"
             >
-              Copy CSV
+              Copy
             </button>
           </div>
           <div class="overflow-x-auto border border-border dark:border-border-dark rounded">
@@ -753,7 +869,9 @@
                 <tr>`;
 
         headers.forEach((header) => {
-          html += `<th class="px-3 py-2 text-left border-b border-border dark:border-border-dark font-medium">${escapeHtml(header)}</th>`;
+          html += `<th class="px-3 py-2 text-left border-b border-border dark:border-border-dark font-medium">${escapeHtml(
+            header,
+          )}</th>`;
         });
 
         html += `</tr>
@@ -765,7 +883,9 @@
           html += `<tr class="${bgClass}">`;
           headers.forEach((col) => {
             const value = row[col] || '';
-            html += `<td class="px-3 py-2 border-b border-border dark:border-border-dark">${escapeHtml(String(value))}</td>`;
+            html += `<td class="px-3 py-2 border-b border-border dark:border-border-dark">${escapeHtml(
+              String(value),
+            )}</td>`;
           });
           html += '</tr>';
         });
@@ -777,6 +897,23 @@
 
         return html;
       }
+
+      // Delegate Copy clicks anywhere in the document (handles dynamic content)
+      document.addEventListener('click', (e) => {
+        const btn = e.target && e.target.closest && e.target.closest('button.btn-copy-csv');
+        if (!btn) return;
+        const tsvB64 = btn.getAttribute('data-tsvb64') || '';
+        const htmlB64 = btn.getAttribute('data-htmlb64') || '';
+        let tsv = '',
+          html = '';
+        try {
+          tsv = b64DecodeUnicode(tsvB64);
+        } catch {}
+        try {
+          html = b64DecodeUnicode(htmlB64);
+        } catch {}
+        copyRich(tsv, html, btn);
+      });
 
       function generateHtmlReport() {
         if (!db) {
@@ -828,7 +965,13 @@
           const tocHtml = tocItems
             .map(
               (item) =>
-                `<a href="#${item.id}" class="block px-2 py-1 text-xs hover:bg-panel dark:hover:bg-panel-dark rounded transition-colors" onclick="document.getElementById('${item.id}').scrollIntoView({behavior: 'smooth'}); return false;">${escapeHtml(item.title)}</a>`,
+                `<a href="#${
+                  item.id
+                }" class="block px-2 py-1 text-xs hover:bg-panel dark:hover:bg-panel-dark rounded transition-colors" onclick="document.getElementById('${
+                  item.id
+                }').scrollIntoView({behavior: 'smooth'}); return false;">${escapeHtml(
+                  item.title,
+                )}</a>`,
             )
             .join('');
 
@@ -845,7 +988,9 @@
         } catch (error) {
           console.error('Error generating HTML report:', error);
           document.getElementById('html-report-body').innerHTML =
-            `<div class="text-center py-8 text-danger dark:text-danger-dark">Error generating report: ${escapeHtml(error.message)}</div>`;
+            `<div class="text-center py-8 text-danger dark:text-danger-dark">Error generating report: ${escapeHtml(
+              error.message,
+            )}</div>`;
         }
       }
 
@@ -1083,7 +1228,16 @@
 
           const content = `<div class="mb-8" id="energy-meters">
             <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Energy Meters Summary</h2>
-            ${generateTableWithCopy('Energy Meters', data, ['Meter Name', 'Type', 'Units', 'Data Points', 'Min Value', 'Max Value', 'Avg Value', 'Total Value'])}
+            ${generateTableWithCopy('Energy Meters', data, [
+              'Meter Name',
+              'Type',
+              'Units',
+              'Data Points',
+              'Min Value',
+              'Max Value',
+              'Avg Value',
+              'Total Value',
+            ])}
           </div>`;
 
           return {
