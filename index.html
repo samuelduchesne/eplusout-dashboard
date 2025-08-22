@@ -248,6 +248,7 @@
                 <button id="view-ldc" class="px-2 py-1 text-xs">Load Duration</button>
                 <button id="view-balance" class="px-2 py-1 text-xs">Load Balance</button>
                 <button id="view-scatter" class="px-2 py-1 text-xs">Scatter</button>
+                <button id="view-3d" class="px-2 py-1 text-xs">3D Zones</button>
               </div>
               <label class="ml-1 text-xs inline-flex items-center gap-1">
                 <input id="ldc-normalize" type="checkbox" class="align-middle" />
@@ -609,6 +610,7 @@
           await loadExternalScript(url);
         }
       }
+
       let SQL;
       async function ensureSql() {
         if (SQL) return SQL;
@@ -1194,6 +1196,8 @@
           } else {
             if (viewMode === 'scatter') {
               renderScatter(series);
+            } else if (viewMode === '3d') {
+              render3DZones(series);
             } else {
               renderChart(series, { normalize: normalizeFlag });
               renderInsights(series);
@@ -1880,9 +1884,18 @@
       }
       injectTariffUI();
 
+      function cleanupChart() {
+        const container = $('chart');
+        if (container && container._cleanup) {
+          container._cleanup();
+          container._cleanup = null;
+        }
+      }
+
       async function renderChart(series, opts = {}) {
         await ensureD3();
         const container = $('chart');
+        cleanupChart();
         container.innerHTML = '';
         const rect = container.getBoundingClientRect();
         const width = rect.width,
@@ -2757,6 +2770,7 @@
         }
         // Expect at least 2 visible series; use first two as X/Y or user-chosen pair
         const container = $('chart');
+        cleanupChart();
         container.innerHTML = '';
         if (series.length < 2) {
           container.innerHTML =
@@ -3225,6 +3239,7 @@
       async function renderLDC(series) {
         await ensureD3();
         const container = $('chart');
+        cleanupChart();
         container.innerHTML = '';
         const rect = container.getBoundingClientRect();
         const width = rect.width,
@@ -3419,6 +3434,7 @@
       async function renderLoadBalance(series) {
         await ensureD3();
         const container = $('chart');
+        cleanupChart();
         const hadLoading = !!document.getElementById('lb-loading');
         // Required variable groups (any one of the alternatives in names[] will satisfy)
         const IDF_LOAD_BALANCE_SNIPPET = `! Load Balance Required Outputs (Monthly variant)\nOutput:Variable,*,Zone Air System Sensible Heating Energy,Monthly;\nOutput:Variable,*,Zone Air System Sensible Cooling Energy,Monthly;\n! or (Ideal Loads)\n! Output:Variable,*,Zone Ideal Loads Supply Air Sensible Heating Energy,Monthly;\n! Output:Variable,*,Zone Ideal Loads Supply Air Sensible Cooling Energy,Monthly;\n\n! Internal Gains\nOutput:Variable,*,People Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Lights Total Heating Energy,Monthly;\nOutput:Variable,*,Electric Equipment Total Heating Energy,Monthly;\nOutput:Variable,*,Hot Water Equipment Total Heating Energy,Monthly;\n\n! Solar\nOutput:Variable,*,Zone Windows Total Transmitted Solar Radiation Energy,Monthly;\n\n! Infiltration / ventilation\nOutput:Variable,*,Zone Infiltration Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Zone Infiltration Sensible Heat Loss Energy,Monthly;\nOutput:Variable,*,Zone Ventilation Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Zone Ventilation Sensible Heat Loss Energy,Monthly;\n\n! Conduction & storage\nOutput:Variable,*,Surface Inside Face Conduction Heat Gain Energy,Monthly;\nOutput:Variable,*,Surface Inside Face Conduction Heat Loss Energy,Monthly;\nOutput:Variable,*,Surface Inside Face Conduction Heat Storage Energy,Monthly;\nOutput:Variable,*,Zone Air Heat Balance Air Energy Storage Energy,Monthly;`;
@@ -3956,6 +3972,216 @@
         $('units').textContent = convertUnitLabel('J');
       }
 
+      async function render3DZones(series) {
+        const container = $('chart');
+        cleanupChart();
+        container.innerHTML = '';
+        
+        if (!db || !dict) {
+          container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3'>Load a database first.</div>`;
+          return;
+        }
+
+        // Extract unique zone names from the dictionary
+        const zones = Array.from(new Set(dict
+          .filter(d => d.IndexGroup && d.IndexGroup.trim())
+          .map(d => d.IndexGroup.trim())
+        )).sort();
+
+        if (zones.length === 0) {
+          container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3'>No zone data found in the database.</div>`;
+          return;
+        }
+
+        const rect = container.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+
+        // Create HTML5 Canvas for pseudo-3D visualization
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        container.appendChild(canvas);
+        
+        const ctx = canvas.getContext('2d');
+        
+        // 3D simulation variables
+        let rotation = { x: 0, y: 0 };
+        let radius = Math.max(100, zones.length * 15);
+        let cameraDistance = radius * 2;
+        
+        // Arrange zones in a circular pattern with 3D positioning
+        const zonePositions = zones.map((zone, index) => {
+          const angle = (index / zones.length) * Math.PI * 2;
+          return {
+            name: zone,
+            x: Math.cos(angle) * radius,
+            y: (Math.random() - 0.5) * 30, // Random height variation
+            z: Math.sin(angle) * radius,
+            originalX: Math.cos(angle) * radius,
+            originalY: (Math.random() - 0.5) * 30,
+            originalZ: Math.sin(angle) * radius
+          };
+        });
+        
+        // 3D projection function
+        const project3D = (x, y, z) => {
+          // Apply rotation
+          const cosX = Math.cos(rotation.x);
+          const sinX = Math.sin(rotation.x);
+          const cosY = Math.cos(rotation.y);
+          const sinY = Math.sin(rotation.y);
+          
+          // Rotate around Y axis (horizontal)
+          const x1 = x * cosY - z * sinY;
+          const z1 = x * sinY + z * cosY;
+          
+          // Rotate around X axis (vertical) - constrained
+          const y1 = y * cosX - z1 * sinX;
+          const z2 = y * sinX + z1 * cosX;
+          
+          // Project to 2D
+          const perspective = cameraDistance / (cameraDistance + z2);
+          return {
+            x: width / 2 + x1 * perspective,
+            y: height / 2 + y1 * perspective,
+            scale: perspective,
+            depth: z2
+          };
+        };
+        
+        // Render function
+        const render = () => {
+          // Clear canvas
+          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-bg') || '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          
+          // Update zone positions based on rotation
+          const projectedZones = zonePositions.map(zone => {
+            const projected = project3D(zone.originalX, zone.originalY, zone.originalZ);
+            return { ...zone, ...projected };
+          });
+          
+          // Sort by depth (back to front)
+          projectedZones.sort((a, b) => a.depth - b.depth);
+          
+          // Draw zones
+          projectedZones.forEach(zone => {
+            const fontSize = Math.max(12, 16 * zone.scale);
+            const alpha = Math.max(0.3, zone.scale);
+            
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.font = `${fontSize}px Arial, sans-serif`;
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-text') || '#000000';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Draw zone name
+            ctx.fillText(zone.name, zone.x, zone.y);
+            
+            // Draw a small circle to represent the zone
+            ctx.beginPath();
+            ctx.arc(zone.x, zone.y + fontSize/2 + 5, 3 * zone.scale, 0, Math.PI * 2);
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-accent') || '#007acc';
+            ctx.fill();
+            
+            ctx.restore();
+          });
+          
+          // Draw title
+          ctx.save();
+          ctx.font = '14px Arial, sans-serif';
+          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-text') || '#000000';
+          ctx.textAlign = 'center';
+          ctx.fillText('3D Zone Viewer - Drag to rotate, Scroll to zoom', width / 2, 20);
+          ctx.restore();
+        };
+        
+        // Mouse interaction
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        
+        const handleMouseDown = (event) => {
+          isDragging = true;
+          const rect = canvas.getBoundingClientRect();
+          lastMouseX = event.clientX - rect.left;
+          lastMouseY = event.clientY - rect.top;
+        };
+        
+        const handleMouseMove = (event) => {
+          if (!isDragging) return;
+          
+          const rect = canvas.getBoundingClientRect();
+          const mouseX = event.clientX - rect.left;
+          const mouseY = event.clientY - rect.top;
+          
+          const deltaX = mouseX - lastMouseX;
+          const deltaY = mouseY - lastMouseY;
+          
+          rotation.y += deltaX * 0.01;
+          rotation.x += deltaY * 0.01;
+          
+          // Constrain vertical rotation to prevent flipping
+          rotation.x = Math.max(-Math.PI * 0.3, Math.min(Math.PI * 0.3, rotation.x));
+          
+          lastMouseX = mouseX;
+          lastMouseY = mouseY;
+          
+          render();
+        };
+        
+        const handleMouseUp = () => {
+          isDragging = false;
+        };
+        
+        const handleWheel = (event) => {
+          event.preventDefault();
+          const scale = event.deltaY > 0 ? 1.1 : 0.9;
+          cameraDistance *= scale;
+          
+          // Constrain zoom
+          cameraDistance = Math.max(radius * 0.5, Math.min(radius * 5, cameraDistance));
+          
+          render();
+        };
+        
+        // Event listeners
+        canvas.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('wheel', handleWheel);
+        
+        // Handle window resize
+        const handleResize = () => {
+          const rect = container.getBoundingClientRect();
+          canvas.width = rect.width;
+          canvas.height = rect.height;
+          render();
+        };
+        
+        window.addEventListener('resize', handleResize);
+        
+        // Store cleanup function for view changes
+        container._cleanup = () => {
+          window.removeEventListener('resize', handleResize);
+          canvas.removeEventListener('mousedown', handleMouseDown);
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+          canvas.removeEventListener('wheel', handleWheel);
+        };
+        
+        // Initial render
+        render();
+
+        // Update insights and units
+        $('insights').innerHTML = `Found ${zones.length} zones: ${zones.join(', ')}`;
+        $('units').textContent = 'Zones';
+      }
+
       // Signals inputs
       ['search', 'filter-freq', 'filter-meter', 'filter-group', 'fav-only'].forEach((id) =>
         $(id).addEventListener('input', populateDictionaryList),
@@ -4116,12 +4342,15 @@
         btnLdc = $('view-ldc'),
         btnBalance = $('view-balance'),
         btnScatter = $('view-scatter'),
+        btn3D = $('view-3d'),
         chkNorm = $('ldc-normalize');
       btnTime?.addEventListener('click', () => {
         viewMode = 'time';
         btnTime.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
         btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnScatter?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btn3D?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden'); // LDC view (no time zoom)
         renderAll();
       });
@@ -4130,6 +4359,8 @@
         btnLdc.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
         btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnScatter?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btn3D?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden');
         renderAll();
       });
@@ -4139,6 +4370,7 @@
         btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnScatter?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btn3D?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden');
         renderAll();
       });
@@ -4148,6 +4380,17 @@
         btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btn3D?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        $('zoom-hint').classList.add('hidden');
+        renderAll();
+      });
+      btn3D?.addEventListener('click', () => {
+        viewMode = '3d';
+        btn3D.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+        btnScatter?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
         $('zoom-hint').classList.add('hidden');
         renderAll();
       });
