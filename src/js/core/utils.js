@@ -367,6 +367,9 @@
         return n.toFixed(abs < 10 ? 2 : abs < 100 ? 1 : 0);
       }
 
+      // Alias for fmt function (used in chart rendering)
+      const formatValue = fmt;
+
       function kpiFmt(n, opts = {}) {
         if (!isFinite(n)) return '—';
         const { compact = true, maxDigits = 3, forceSign = false } = opts;
