@@ -20,3 +20,13 @@ venv/
 dist/
 build/
 coverage/
+
+# Source restructuring backup file
+index.html.backup
+
+# Phase 3 development artifacts
+tests/
+docs/api/
+dist/ts-build/
+yarn-debug.log*
+yarn-error.log*

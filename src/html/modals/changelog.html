@@ -1,0 +1,34 @@
+    <div
+      id="changelog-backdrop"
+      class="hidden fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm z-40"
+    ></div>
+    <div
+      id="changelog-modal"
+      class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="changelog-title"
+      tabindex="-1"
+    >
+      <div
+        class="w-[min(96vw,48rem)] h-[min(90vh,40rem)] rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark shadow-xl flex flex-col"
+      >
+        <div
+          class="flex items-center justify-between px-4 py-3 border-b border-border dark:border-border-dark"
+        >
+          <h2 id="changelog-title" class="text-base font-semibold">What's New</h2>
+          <button
+            onclick="hideChangelog()"
+            class="text-sm px-2 py-1 border rounded bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+          >
+            Close
+          </button>
+        </div>
+        <div
+          id="changelog-body"
+          class="p-4 flex-1 overflow-auto text-text dark:text-text-dark text-sm leading-relaxed"
+        >
+          <div class="text-center py-8 text-muted dark:text-muted-dark">Loading changelog...</div>
+        </div>
+      </div>
+    </div>

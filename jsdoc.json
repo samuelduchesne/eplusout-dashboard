@@ -1,0 +1,36 @@
+{
+  "source": {
+    "include": ["./src/"],
+    "includePattern": "\\.(js|ts)$",
+    "exclude": ["node_modules/", "dist/", "assets/"]
+  },
+  "sourceType": "module",
+  "tags": {
+    "allowUnknownTags": true,
+    "dictionaries": ["jsdoc", "closure"]
+  },
+  "opts": {
+    "destination": "./docs/api/",
+    "recurse": true,
+    "readme": "./README.md"
+  },
+  "plugins": [
+    "plugins/markdown",
+    "better-docs/typescript"
+  ],
+  "templates": {
+    "cleverLinks": false,
+    "monospaceLinks": false,
+    "better-docs": {
+      "name": "EnergyPlus Dashboard API",
+      "title": "EnergyPlus Dashboard - Developer API Documentation",
+      "hideGenerator": false,
+      "navLinks": [
+        {
+          "label": "GitHub",
+          "href": "https://github.com/samuelduchesne/eplusout-dashboard"
+        }
+      ]
+    }
+  }
+}
