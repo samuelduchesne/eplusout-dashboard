@@ -141,3 +141,16 @@
         }
         return result.sort((a, b) => a.env - b.env);
       }
+
+      // Load Duration Curve transformation
+      function toLDC(points, units, normalize) {
+        const vals = points.map((p) => convertUnits(p.y, units)).filter((v) => Number.isFinite(v));
+        if (!vals.length) return [];
+        vals.sort((a, b) => b - a);
+        const peak = vals[0];
+        const n = vals.length;
+        return vals.map((v, i) => ({
+          x: n > 1 ? (i / (n - 1)) * 100 : 0,
+          y: normalize ? (v / peak) * 100 : v,
+        }));
+      }
