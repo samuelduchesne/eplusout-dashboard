@@ -9,7 +9,8 @@
     "dev:css": "npm run version:inject && tailwindcss -c tailwind.config.js -i ./src.css -o ./dist/tailwind.css --watch",
     "assets": "node scripts/copy-assets.js",
     "sample:generate": "node scripts/gen-sample-db.js",
-    "build": "npm run version:inject && npm run tailwind && npm run sample:generate && npm run assets"
+    "build:src": "node scripts/build-src.js",
+    "build": "npm run version:inject && npm run tailwind && npm run sample:generate && npm run assets && npm run build:src"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",

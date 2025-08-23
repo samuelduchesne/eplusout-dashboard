@@ -1,0 +1,152 @@
+    <header
+      class="px-4 py-3 border-b border-border dark:border-border-dark sticky top-0 z-10 backdrop-blur-sm bg-white/95 dark:bg-[#121821]/90"
+    >
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div class="flex flex-col flex-1 min-w-0">
+          <h1 class="text-base font-semibold tracking-wide truncate flex items-baseline gap-2">
+            <span>EnergyPlus eplusout.sql Dashboard</span>
+            <button
+              id="app-version"
+              type="button"
+              class="text-[11px] font-mono text-muted dark:text-muted-dark hover:text-text dark:hover:text-text-dark underline decoration-dotted focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-dark rounded"
+              aria-haspopup="dialog"
+              aria-controls="changelog-modal"
+            ></button>
+          </h1>
+          <span class="text-xs text-muted dark:text-muted-dark"
+            >Drop
+            <span class="px-1 py-0.5 rounded bg-code dark:bg-code-dark">eplusout.sql</span>
+            to explore variables & meters.</span
+          >
+        </div>
+        <div class="flex flex-nowrap gap-2 overflow-x-auto items-center">
+          <button
+            id="btn-open"
+            type="button"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+            title="Open eplusout.sql"
+          >
+            Open eplusout.sql
+          </button>
+          <button
+            id="btn-report"
+            type="button"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+            aria-label="Report a bug or request a feature"
+            title="Report a bug or request a feature"
+          >
+            Report issue
+          </button>
+          <button
+            id="btn-export"
+            type="button"
+            disabled
+            class="px-3 py-1.5 text-sm rounded-md border disabled:opacity-50 disabled:cursor-not-allowed text-white bg-accent-strong dark:bg-accent-strong-dark border-accent-strong dark:border-accent-strong-dark"
+          >
+            Export CSV
+          </button>
+          <button
+            id="btn-html-report"
+            type="button"
+            disabled
+            aria-label="View HTML Report"
+            title="View HTML Report"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded disabled:opacity-50 disabled:cursor-not-allowed bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+          >
+            <!-- Document report icon -->
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="size-6"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5"
+              />
+            </svg>
+          </button>
+          <button
+            id="btn-theme"
+            type="button"
+            aria-label="Toggle dark mode"
+            title="Toggle dark mode"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+          >
+            <!-- Heroicons Sun (outline) shown in light mode -->
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              class="w-5 h-5 dark:hidden"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M12 3v2.25M12 18.75V21M4.5 12H2.25M21.75 12H19.5M6.364 6.364l-1.59-1.59M19.227 19.227l-1.59-1.59M6.364 17.636l-1.59 1.59M19.227 4.773l-1.59 1.59M16.5 12a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
+              />
+            </svg>
+            <!-- Heroicons Moon (outline) shown in dark mode -->
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              class="w-5 h-5 hidden dark:inline"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"
+              />
+            </svg>
+          </button>
+          <button
+            id="btn-units"
+            type="button"
+            aria-label="Toggle units"
+            title="Toggle SI/IP units"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+          >
+            SI
+          </button>
+          <button
+            id="btn-units-settings"
+            type="button"
+            aria-label="Unit settings"
+            title="Unit settings"
+            class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+          >
+            <!-- Heroicons Cog 6 Tooth -->
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              class="w-5 h-5"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.326.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128 1.125 1.125 0 00-.645.87l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281a1.125 1.125 0 00-.645-.87 6.52 6.52 0 01-.22-.128c-.326-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.75.072 1.076-.124.072-.044.146-.087.22-.128.332-.184.582-.496.645-.87l.214-1.281z"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>

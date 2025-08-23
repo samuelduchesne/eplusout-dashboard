@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EnergyPlus eplusout.sql — Offline Dashboard</title>
+    <script src="dist/version.js"></script>
+    <script>
+      try {
+        var k = 'eplus_theme';
+        var s = localStorage.getItem(k);
+        var t =
+          s === 'light' || s === 'dark'
+            ? s
+            : matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    </script>
+    <!-- Tailwind CSS compiled locally -->
+    <link rel="stylesheet" href="dist/tailwind.css" />
+    <!-- Removed legacy CSS variables; using Tailwind semantic classes -->
+    <script>
+      // Prefer local vendor copies (built into dist/vendor via build script); fall back to CDN if missing.
+      window.__LIB_URLS__ = {
+        d3: 'dist/vendor/d3.min.js',
+        sqljs: 'dist/vendor/sql-wasm.js',
+        sqlwasm: 'dist/vendor/sql-wasm.wasm',
+      };
+    </script>
+  </head>
+  <body
+    class="h-screen flex flex-col bg-bg text-text dark:bg-bg-dark dark:text-text-dark transition-colors"
+  >

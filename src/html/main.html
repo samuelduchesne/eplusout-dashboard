@@ -1,0 +1,174 @@
+    <main
+      id="main-grid"
+      class="grid grid-cols-1 lg:grid-cols-[360px_12px_1fr] gap-3 lg:gap-0 p-2 sm:p-3 flex-1 overflow-auto"
+    >
+      <section
+        id="signals-panel"
+        class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-1 lg:order-none z-0"
+      >
+        <div
+          class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark"
+        >
+          <div class="flex items-center gap-2">
+            <strong>Signals</strong
+            ><span id="meta-count" class="text-muted dark:text-muted-dark"></span>
+          </div>
+          <!-- Collapse toggle removed -->
+        </div>
+        <div id="signals-body" class="p-3 flex flex-col gap-2 overflow-auto">
+          <input
+            type="text"
+            id="search"
+            placeholder="Search name/group/key/units…"
+            disabled
+            class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+          />
+          <label class="flex items-center gap-2 text-xs text-muted dark:text-muted-dark select-none"
+            ><input id="fav-only" type="checkbox" class="h-3.5 w-3.5" />
+            <span>Favorites only (double‑click items to ★/☆)</span></label
+          >
+          <div class="flex gap-2">
+            <select
+              id="filter-freq"
+              disabled
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+            >
+              <option value="">Any frequency</option>
+              <option value="Hourly">Hourly</option>
+              <option value="Monthly">Monthly</option>
+            </select>
+            <select
+              id="filter-meter"
+              disabled
+              class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+            >
+              <option value="">Vars & Meters</option>
+              <option value="1">Meters only</option>
+              <option value="0">Variables only</option>
+            </select>
+          </div>
+          <select
+            id="filter-group"
+            disabled
+            class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+          >
+            <option value="">Any index group</option>
+          </select>
+          <select
+            id="dictionary"
+            size="12"
+            multiple
+            class="w-full border rounded px-2 py-1 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark min-h-[240px]"
+            disabled
+          ></select>
+          <div class="text-xs text-muted dark:text-muted-dark mt-2">
+            Tip: Choose an entry to plot. Hourly → line; Monthly → bars.
+          </div>
+          <div id="zones-quick-wrap" class="mt-3 hidden">
+            <div class="flex items-center justify-between mb-1">
+              <strong class="text-xs">Zones</strong>
+              <span
+                id="zones-quick-count"
+                class="text-[10px] text-muted dark:text-muted-dark"
+              ></span>
+            </div>
+            <div id="zones-quick" class="flex flex-wrap gap-1.5"></div>
+            <div id="zones-quick-hint" class="text-[10px] text-muted dark:text-muted-dark mt-1">
+              Click a zone to load Temperature and Setpoints.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vertical resizer (visible on lg+) -->
+      <div
+        id="signals-resizer"
+        class="hidden lg:block cursor-col-resize select-none touch-none"
+        aria-hidden="true"
+      >
+        <div class="h-full w-px bg-border dark:bg-border-dark mx-auto"></div>
+      </div>
+
+      <section
+        class="flex flex-col rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark overflow-hidden min-h-0 order-2 lg:order-none"
+      >
+        <div
+          class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark"
+        >
+          <strong id="series-title">Series</strong
+          ><span id="units" class="text-muted dark:text-muted-dark"></span>
+        </div>
+        <div class="p-3 flex flex-col gap-3 overflow-auto">
+          <div id="series-meta" class="relative text-xs text-muted dark:text-muted-dark">
+            <div id="series-meta-entries" class="grid grid-cols-[auto_1fr] gap-x-2 pr-10"></div>
+          </div>
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-3 flex-wrap">
+              <div
+                class="inline-flex rounded border border-border dark:border-border-dark overflow-hidden"
+              >
+                <button id="view-time" class="px-2 py-1 text-xs bg-panel-2 dark:bg-panel-2-dark">
+                  Time Series
+                </button>
+                <button id="view-ldc" class="px-2 py-1 text-xs">Load Duration</button>
+                <button id="view-balance" class="px-2 py-1 text-xs">Load Balance</button>
+                <button id="view-scatter" class="px-2 py-1 text-xs">Scatter</button>
+              </div>
+              <label class="ml-1 text-xs inline-flex items-center gap-1">
+                <input id="ldc-normalize" type="checkbox" class="align-middle" />
+                Normalize to peak
+              </label>
+              <label class="ml-2 text-xs inline-flex items-center gap-1">
+                Resolution:
+                <select
+                  id="resample-mode"
+                  class="px-1 py-0.5 rounded bg-panel-2 dark:bg-panel-2-dark border border-border dark:border-border-dark text-xs"
+                >
+                  <option value="original">Original</option>
+                  <option value="hourly">Hourly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="annual">Annual</option>
+                </select>
+              </label>
+              <label class="ml-2 text-xs inline-flex items-center gap-1">
+                Aggregation:
+                <select
+                  id="resample-agg"
+                  class="px-1 py-0.5 rounded bg-panel-2 dark:bg-panel-2-dark border border-border dark:border-border-dark text-xs"
+                >
+                  <option value="auto">Auto</option>
+                  <option value="sum">Sum</option>
+                  <option value="avg">Avg</option>
+                  <option value="max">Max</option>
+                  <option value="min">Min</option>
+                </select>
+              </label>
+            </div>
+            <div
+              class="flex items-center gap-2 ml-auto text-sm text-muted dark:text-muted-dark"
+              id="toolbar-actions"
+            >
+              <!-- Zoom always enabled (button removed) -->
+              <!-- tariff button will be injected here if present -->
+            </div>
+          </div>
+          <div id="zoom-hint" class="text-xs text-muted dark:text-muted-dark hidden">
+            Drag on the mini-map to zoom. Double-tap to reset.
+          </div>
+          <div id="single-chart-panel" class="flex flex-col gap-3">
+            <div id="legend" class="flex flex-wrap gap-2 items-center"></div>
+            <div
+              id="insights"
+              class="rounded-md border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-3 text-sm"
+            ></div>
+            <div id="kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2"></div>
+            <div
+              id="chart"
+              class="w-full h-[420px] max-[768px]:h-[300px] max-[480px]:h-[220px] relative"
+            ></div>
+            <div id="stats" class="grid grid-cols-8 gap-2"></div>
+          </div>
+          <div id="multi-charts" class="flex flex-col gap-4 hidden"></div>
+        </div>
+      </section>
+    </main>

@@ -20,3 +20,6 @@ venv/
 dist/
 build/
 coverage/
+
+# Source restructuring backup file
+index.html.backup
