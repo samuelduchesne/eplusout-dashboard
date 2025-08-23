@@ -1,39 +1,117 @@
-      // Core utility functions and constants
+      /**
+       * @fileoverview Core utility functions and constants for the EnergyPlus Dashboard
+       * Provides global state management, unit conversion system, formatting functions, 
+       * and application constants.
+       * @author EnergyPlus Dashboard
+       */
+
+      /**
+       * @namespace StorageKeys
+       * @description Local storage keys for user preferences and application state
+       */
       
+      /** @const {string} Theme preference storage key */
       const THEME_KEY = 'eplus_theme';
+      
+      /** @const {string} Units system preference storage key (SI/IP) */
       const UNITS_KEY = 'eplus_units_mode';
+      
+      /** @const {string} Favorite signals storage key */
       const FAVORITES_KEY = 'eplus_favs';
+      
+      /** @const {string} Selected signals storage key */
       const SELECT_KEY = 'eplus_selected_ids';
+      
+      /** @const {string} Signals panel collapse state storage key */
       const COLLAPSE_KEY = 'eplus_signals_collapsed';
+      
+      /** @const {string} SI temperature unit preference storage key */
       const TEMP_SI_KEY = 'eplus_temp_si';
+      
+      /** @const {string} IP temperature unit preference storage key */
       const TEMP_IP_KEY = 'eplus_temp_ip';
 
-      // Additional unit preference keys
+      /** @const {string} SI energy unit preference storage key */
       const ENERGY_SI_KEY = 'eplus_energy_si';
+      
+      /** @const {string} IP energy unit preference storage key */
       const ENERGY_IP_KEY = 'eplus_energy_ip';
+      
+      /** @const {string} IP power unit preference storage key */
       const POWER_IP_KEY = 'eplus_power_ip';
 
-      // Global application state variables
-      let db, dict = [], selected = new Map();
+      /**
+       * @namespace GlobalState
+       * @description Global application state variables for database, UI, and chart management
+       */
+      
+      /** @type {Database} SQLite database instance */
+      let db;
+      
+      /** @type {Array<Object>} Data dictionary cache from database */
+      let dict = [];
+      
+      /** @type {Map<number, Object>} Currently selected signals/meters */
+      let selected = new Map();
+      
+      /** @type {Set<number>} User's favorite signals/meters */
       let favs = new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'));
+      
+      /** @type {boolean} Whether chart zooming is enabled */
       let zoomEnabled = true;
+      
+      /** @type {string|null} Base frequency for data resampling */
       let baseFreq = null;
+      
+      /** @type {string} Current chart view mode */
       let viewMode = 'time';
+      
+      /** @type {string} Data resampling mode */
       let resampleMode = 'original';
+      
+      /** @type {string} Aggregation method for resampling */
       let resampleAgg = 'auto';
+      
+      /** @type {Array<number>|null} Signal pair for scatter plots */
       let scatterPair = null;
+      
+      /** @type {boolean} Whether to show regression line in scatter plots */
       let scatterShowRegression = true;
+      
+      /** @type {boolean} Whether to show degree day analysis in scatter plots */
       let scatterShowDegDay = false;
+      
+      /** @type {number} Base temperature for degree day calculations */
       let scatterDegDayBaseTemp = 18;
+      
+      /** @type {string} Period for degree day calculations */
       let scatterDegDayPeriod = 'daily';
+      
+      /** @type {string} Degree day calculation mode */
       let scatterDegDayMode = 'both';
+      
+      /** @type {boolean} Whether temperature response is enabled */
       let tempRespEnabled = false;
+      
+      /** @type {number} Base temperature for temperature response */
       let tempRespBaseTemp = 18;
+      
+      /** @type {string} Period for temperature response */
       let tempRespPeriod = 'daily';
+      
+      /** @type {string} Temperature response mode */
       let tempRespMode = 'both';
+      
+      /** @type {Object|null} Temperature response model */
       let tempRespModel = null;
+      
+      /** @type {Array<number>|null} Current X-axis domain for charts */
       let currentXDomain = null;
+      
+      /** @type {boolean} Internal flag to prevent render loops */
       let __rendering = false;
+      
+      /** @type {Object|null} Cached load balance data */
       let __loadBalanceCache = null;
 
       // Units system preferences

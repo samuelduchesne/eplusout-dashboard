@@ -10,15 +10,36 @@
     "assets": "node scripts/copy-assets.js",
     "sample:generate": "node scripts/gen-sample-db.js",
     "build:src": "node scripts/build-src.js",
-    "build": "npm run version:inject && npm run tailwind && npm run sample:generate && npm run assets && npm run build:src"
+    "build": "npm run version:inject && npm run tailwind && npm run sample:generate && npm run assets && npm run build:src",
+    "dev": "node scripts/dev-server.js",
+    "dev:watch": "node scripts/dev-watch.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "docs": "jsdoc -c jsdoc.json",
+    "docs:watch": "jsdoc -c jsdoc.json --watch",
+    "type-check": "tsc --noEmit",
+    "lint": "npm run type-check && npm run format",
+    "validate": "npm run lint && npm run test && npm run build"
   },
   "devDependencies": {
+    "@jest/globals": "^30.0.5",
+    "@types/d3": "^7.4.3",
+    "@types/node": "^24.3.0",
     "autoprefixer": "^10.4.20",
+    "better-docs": "^2.7.3",
+    "chokidar": "^4.0.3",
+    "concurrently": "^9.2.0",
+    "d3": "^7.9.0",
+    "jest": "^30.0.5",
+    "jest-environment-jsdom": "^30.0.5",
+    "jsdoc": "^4.0.4",
+    "live-server": "^1.2.2",
     "postcss": "^8.4.41",
     "prettier": "^3.2.5",
-    "tailwindcss": "^3.4.10",
     "sql.js": "^1.8.0",
-    "d3": "^7.9.0"
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5.9.2"
   },
   "dependencies": {
     "@tailwindplus/elements": "^1.0.8"
