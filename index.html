@@ -422,6 +422,50 @@
       const TEMP_SI_KEY = 'eplus_temp_si';
       const TEMP_IP_KEY = 'eplus_temp_ip';
 
+      // Additional unit preference keys
+      const ENERGY_SI_KEY = 'eplus_energy_si';
+      const ENERGY_IP_KEY = 'eplus_energy_ip';
+      const POWER_IP_KEY = 'eplus_power_ip';
+
+      // Global application state variables
+      let db, dict = [], selected = new Map();
+      let favs = new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'));
+      let zoomEnabled = true;
+      let baseFreq = null;
+      let viewMode = 'time';
+      let resampleMode = 'original';
+      let resampleAgg = 'auto';
+      let scatterPair = null;
+      let scatterShowRegression = true;
+      let scatterShowDegDay = false;
+      let scatterDegDayBaseTemp = 18;
+      let scatterDegDayPeriod = 'daily';
+      let scatterDegDayMode = 'both';
+      let tempRespEnabled = false;
+      let tempRespBaseTemp = 18;
+      let tempRespPeriod = 'daily';
+      let tempRespMode = 'both';
+      let tempRespModel = null;
+      let currentXDomain = null;
+      let __rendering = false;
+      let __loadBalanceCache = null;
+
+      // Units system preferences
+      let isIP = localStorage.getItem(UNITS_KEY) === 'IP' ? true : false;
+      let prefEnergySI = localStorage.getItem(ENERGY_SI_KEY) || 'J';
+      let prefEnergyIP = localStorage.getItem(ENERGY_IP_KEY) || 'BTU';
+      let prefPowerIP = localStorage.getItem(POWER_IP_KEY) || 'Btu/h';
+      let prefTempSI = localStorage.getItem(TEMP_SI_KEY) || 'C';
+      let prefTempIP = localStorage.getItem(TEMP_IP_KEY) || 'F';
+
+      // Chart palette derived from Tailwind color tokens
+      const palette = [
+        '#1565c0', '#c62828', '#2e7d32', '#ed6c02', '#5e35b1',
+        '#d81b60', '#00695c', '#ef6c00', '#1976d2', '#388e3c',
+        '#f57c00', '#7b1fa2', '#c2185b', '#0097a7', '#fbc02d',
+        '#455a64', '#6a1b9a', '#00796b', '#f9a825', '#424242'
+      ];
+
       // DOM utility function
       const $ = (id) => document.getElementById(id);
 
@@ -499,17 +543,241 @@
         return html;
       }
 
-// Placeholder for remaining JavaScript modules
+      // Unit conversion functions
+      function unitKind(units) {
+        const u = String(units).toLowerCase();
+        if (
+          u.includes('wh') ||
+          u.includes('joule') ||
+          u === 'j' ||
+          u.includes('kwh') ||
+          u.includes('mwh')
+        )
+          return 'energy';
+        if (
+          u.includes('btu/h') ||
+          u.includes('btuh') ||
+          /\bw(?!h)\b/.test(u) ||
+          u.includes('watt') ||
+          u.includes('ton')
+        )
+          return 'power';
+        if (
+          u === 'c' ||
+          u.includes('celsius') ||
+          u === 'k' ||
+          u.includes('kelvin') ||
+          u === 'f' ||
+          u.includes('fahrenheit')
+        )
+          return 'temperature';
+        return 'other';
+      }
+      
+      function toJoules(value, units) {
+        const u = String(units || '').toLowerCase();
+        if (u.includes('mwh')) return value * 3.6e9;
+        if (u.includes('kwh')) return value * 3.6e6;
+        if (u.includes('wh')) return value * 3600;
+        if (u.includes('joule') || u === 'j') return value;
+        return null;
+      }
 
-// Library loader module
-// Database operations module  
-// Signals processing module
-// Export functionality module
-// Filters management module
-// Charts rendering module
-// Reports generation module
+      // Fallback functions to prevent recursion
+      const __orig_convertUnits = (v) => v;
+      const __orig_convertUnitLabel = (u) => u || '';
 
-console.log('[src] Modular JavaScript structure loaded - placeholder modules');
+      function convertUnits(value, units) {
+        if (value == null || !isFinite(value)) return value;
+        if (!units) return value;
+        const kind = unitKind(units);
+        if (isIP) {
+          const u = String(units).toLowerCase();
+          if (u === 'c' || u.includes('celsius')) return (value * 9) / 5 + 32;
+          if (kind === 'energy') {
+            let J = toJoules(value, units);
+            if (J == null) J = value;
+            let btu = J / 1055.06;
+            if (prefEnergyIP === 'kBTU') return btu / 1e3;
+            if (prefEnergyIP === 'MMBTU') return btu / 1e6;
+            return btu;
+          }
+          if (kind === 'power') {
+            let v = value;
+            const ul = String(units).toLowerCase();
+            if (ul.includes('w') && !ul.includes('wh')) v = value * 3.412141633;
+            if (prefPowerIP === 'Tons') return v / 12000;
+            return v;
+          }
+          if (kind === 'temperature') {
+            if (prefTempIP === 'F') {
+              if (/c|celsius/.test(String(units).toLowerCase())) return (value * 9) / 5 + 32;
+              if (/k|kelvin/.test(String(units).toLowerCase()))
+                return ((value - 273.15) * 9) / 5 + 32;
+            }
+            return value;
+          }
+          return __orig_convertUnits(value, units);
+        } else {
+          if (kind === 'energy') {
+            let J = toJoules(value, units);
+            if (J == null) J = value;
+            if (prefEnergySI === 'kWh') return J / 3.6e6;
+            if (prefEnergySI === 'MWh') return J / 3.6e9;
+            return J;
+          }
+          if (kind === 'temperature') {
+            const ul = String(units).toLowerCase();
+            let cVal;
+            if (ul === 'c' || ul.includes('celsius')) cVal = value;
+            else if (ul === 'k' || ul.includes('kelvin')) cVal = value - 273.15;
+            else if (ul === 'f' || ul.includes('fahrenheit')) cVal = ((value - 32) * 5) / 9;
+            else cVal = value;
+            if (prefTempSI === 'K') return cVal + 273.15;
+            return cVal; // C
+          }
+          return __orig_convertUnits(value, units);
+        }
+      }
+      
+      function convertUnitLabel(units) {
+        if (!units) return units || '';
+        const kind = unitKind(units);
+        if (isIP) {
+          const u = String(units).toLowerCase();
+          if (u === 'c' || u.includes('celsius')) return 'F';
+          if (kind === 'energy') return prefEnergyIP;
+          if (kind === 'power') return prefPowerIP === 'Tons' ? 'tons' : 'Btu/h';
+          if (kind === 'temperature') return prefTempIP;
+          return __orig_convertUnitLabel(units);
+        } else {
+          if (kind === 'energy') return prefEnergySI;
+          if (kind === 'temperature') return prefTempSI;
+          return __orig_convertUnitLabel(units);
+        }
+      }
+
+      // Core utility functions
+      function chartColors() {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        return {
+          grid: isDark ? '#374151' : '#e5e7eb',
+          text: isDark ? '#d1d5db' : '#374151',
+          muted: isDark ? '#6b7280' : '#9ca3af',
+          bg: isDark ? '#111827' : '#ffffff',
+        };
+      }
+
+      function toObjects(result) {
+        if (!result[0]) return [];
+        const cols = result[0].columns;
+        return result[0].values.map((row) => Object.fromEntries(cols.map((c, i) => [c, row[i]])));
+      }
+
+      function quantile(sorted, p) {
+        if (sorted.length === 0) return null;
+        const i = (sorted.length - 1) * p;
+        const lower = Math.floor(i);
+        const upper = Math.ceil(i);
+        const w = i % 1;
+        return sorted[lower] * (1 - w) + sorted[upper] * w;
+      }
+
+      function computeStats(values) {
+        const finite = values.filter(isFinite);
+        if (!finite.length) return { count: 0 };
+        const sorted = [...finite].sort((a, b) => a - b);
+        const sum = finite.reduce((a, b) => a + b, 0);
+        return {
+          count: finite.length,
+          sum,
+          mean: sum / finite.length,
+          min: sorted[0],
+          max: sorted[sorted.length - 1],
+          q1: quantile(sorted, 0.25),
+          median: quantile(sorted, 0.5),
+          q3: quantile(sorted, 0.75),
+        };
+      }
+
+      function fmt(n) {
+        if (!isFinite(n)) return '—';
+        const abs = Math.abs(n);
+        if (abs >= 1e9) return (n / 1e9).toFixed(1) + 'G';
+        if (abs >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+        if (abs >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+        return n.toFixed(abs < 10 ? 2 : abs < 100 ? 1 : 0);
+      }
+
+      function kpiFmt(n, opts = {}) {
+        if (!isFinite(n)) return '—';
+        const { compact = true, maxDigits = 3, forceSign = false } = opts;
+        const abs = Math.abs(n);
+        const sign = forceSign && n > 0 ? '+' : '';
+        if (compact && abs >= 1e9) return sign + (n / 1e9).toFixed(1) + 'G';
+        if (compact && abs >= 1e6) return sign + (n / 1e6).toFixed(1) + 'M';
+        if (compact && abs >= 1e3) return sign + (n / 1e3).toFixed(1) + 'k';
+        if (abs >= 100) return sign + n.toFixed(0);
+        if (abs >= 10) return sign + n.toFixed(Math.min(1, maxDigits - 2));
+        if (abs >= 1) return sign + n.toFixed(Math.min(2, maxDigits - 1));
+        if (abs >= 0.1) return sign + n.toFixed(Math.min(3, maxDigits));
+        if (abs >= 0.01) return sign + n.toFixed(Math.min(4, maxDigits + 1));
+        return sign + n.toExponential(Math.max(0, maxDigits - 1));
+      }
+
+      function downloadFile(name, text) {
+        try {
+          const blob = new Blob([text], { type: 'text/plain' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = name;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          console.error('Download failed', e);
+        }
+      }
+
+      // Library loading functionality for D3 and SQL.js
+      
+      function loadExternalScript(url) {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.onload = resolve;
+          script.onerror = reject;
+          script.src = url;
+          document.head.appendChild(script);
+        });
+      }
+
+      async function ensureD3() {
+        if (!window.d3) {
+          const url =
+            (window.__LIB_URLS__ && window.__LIB_URLS__.d3) ||
+            'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
+          await loadExternalScript(url);
+        }
+      }
+
+      let SQL;
+      async function ensureSql() {
+        if (SQL) return SQL;
+        if (typeof window.initSqlJs !== 'function') {
+          const url =
+            (window.__LIB_URLS__ && window.__LIB_URLS__.sqljs) ||
+            'https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/sql-wasm.js';
+          await loadExternalScript(url);
+        }
+        const wasmUrl =
+          (window.__LIB_URLS__ && window.__LIB_URLS__.sqlwasm) ||
+          'https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/sql-wasm.wasm';
+        SQL = await window.initSqlJs({ locateFile: () => wasmUrl });
+        return SQL;
+      }
 
       // Theme management functionality
       
@@ -544,10 +812,271 @@ console.log('[src] Modular JavaScript structure loaded - placeholder modules');
         }
       })();
 
-// Placeholder modules for demonstration
+      // Database operations and SQLite functionality
+      
+      let db; // Global database instance
+      let dict = []; // Data dictionary cache
+      let buildingAreaCache = null; // Building area cache
+
+      async function readDbFile(file) {
+        const SQLMod = await ensureSql();
+        const u8 = new Uint8Array(await file.arrayBuffer());
+        db = new SQLMod.Database(u8);
+        return db;
+      }
+      
+      async function readDbUrl(url) {
+        const SQLMod = await ensureSql();
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to fetch database: ' + url);
+        const u8 = new Uint8Array(await res.arrayBuffer());
+        db = new SQLMod.Database(u8);
+        return db;
+      }
+      
+      function queryDictionary() {
+        const sql = `
+      SELECT ReportDataDictionaryIndex AS id, IsMeter, Type, IndexGroup, KeyValue AS key,
+             Name, ReportingFrequency AS freq, Units
+      FROM ReportDataDictionary
+      WHERE ReportingFrequency IN ('Hourly','Monthly')
+      ORDER BY IsMeter DESC, IndexGroup, Name, key;`;
+        dict = toObjects(db.exec(sql));
+        // Invalidate load balance cache (new DB or changed dict)
+        __loadBalanceCache = null;
+        return dict;
+      }
+      
+      function queryTimeSeries(dictId) {
+        const stmt = db.prepare(`
+      SELECT rd.Value AS value, t.EnvironmentPeriodIndex AS env, t.SimulationDays AS sday,
+             t.Month AS month, t.Day AS day, t.Hour AS hour, t.Minute AS minute,
+             t.IntervalType AS interval, t.TimeIndex AS tindex
+      FROM ReportData rd JOIN Time t ON t.TimeIndex = rd.TimeIndex
+      WHERE rd.ReportDataDictionaryIndex = ?
+      ORDER BY t.TimeIndex;`);
+        stmt.bind([dictId]);
+        const rows = [];
+        while (stmt.step()) rows.push(stmt.getAsObject());
+        stmt.free();
+        return rows;
+      }
+
+      async function getBuildingArea() {
+        if (buildingAreaCache != null) return buildingAreaCache;
+        try {
+          // Preferred direct query (AnnualBuildingUtilityPerformanceSummary)
+          try {
+            const direct = db.exec(`SELECT Value AS total_building_area_m2
+              FROM TabularDataWithStrings
+              WHERE ReportName='AnnualBuildingUtilityPerformanceSummary'
+                AND TableName='Building Area'
+                AND RowName='Total Building Area'
+                AND ColumnName='Area'
+              LIMIT 1`);
+            if (direct[0]?.values?.[0]?.[0]) {
+              const area = parseFloat(direct[0].values[0][0]);
+              if (area > 0) {
+                buildingAreaCache = area;
+                return area;
+              }
+            }
+          } catch {}
+          // Detect available columns (older sql schemas may differ)
+          let hasRow = true,
+            hasCol = true;
+          try {
+            const info = db.exec('PRAGMA table_info(TabularData)');
+            const cols = new Set((info[0]?.values || []).map((r) => String(r[1]).toLowerCase()));
+            hasRow = cols.has('rowname');
+            hasCol = cols.has('columnname');
+          } catch {}
+          let q1 = [];
+          if (hasRow && hasCol) {
+            try {
+              q1 = db.exec(
+                `SELECT Value FROM TabularData WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') AND (LOWER(ColumnName)='area' OR LOWER(ColumnName) LIKE '%m2%') LIMIT 1;`,
+              );
+            } catch {}
+          }
+          if (q1[0]?.values?.[0]?.[0]) {
+            const area = parseFloat(q1[0].values[0][0]);
+            if (area > 0) {
+              buildingAreaCache = area;
+              return area;
+            }
+          }
+          // Fallback parse strings table if RowName exists
+          if (hasRow) {
+            let q2 = [];
+            try {
+              q2 = db.exec(
+                `SELECT Value FROM TabularDataWithStrings WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') LIMIT 10;`,
+              );
+            } catch {}
+            if (q2[0]) {
+              for (const row of q2[0].values) {
+                const val = parseFloat(String(row[0]));
+                if (val > 0) {
+                  buildingAreaCache = val;
+                  return val;
+                }
+              }
+            }
+          }
+          buildingAreaCache = 0; // not found
+          return 0;
+        } catch (e) {
+          console.warn('getBuildingArea failed', e);
+          buildingAreaCache = 0;
+          return 0;
+        }
+      }
 
 
-// Placeholder modules for demonstration
+      // Signal processing and data transformation functionality
+      
+      function timeLabel(r) {
+        const hh = String(r.hour ?? 0).padStart(2, '0');
+        const mm = String(r.minute ?? 0).padStart(2, '0');
+        const md = `${String(r.month || 1).padStart(2, '0')}/${String(r.day || 1).padStart(
+          2,
+          '0',
+        )}`;
+        return `Env ${r.env} — ${md} ${hh}:${mm}`;
+      }
+      
+      function toHourlyPoints(rows) {
+        const year = 2000;
+        return rows.map((r) => ({
+          x: Date.UTC(
+            year + (r.env || 0) - 1,
+            (r.month || 1) - 1,
+            r.day || 1,
+            r.hour || 0,
+            r.minute || 0,
+          ),
+          y: Number(r.value),
+          label: timeLabel(r),
+          // carry through grouping fields to avoid Date roll-over issues (e.g., hour 24)
+          env: r.env || 1,
+          month: r.month || 1,
+          day: r.day || 1,
+          hour: r.hour || 0,
+          minute: r.minute || 0,
+        }));
+      }
+      
+      function toMonthlyPoints(rows) {
+        return rows.map((r) => ({
+          xLabel: `E${r.env}-M${String(r.month || 1).padStart(2, '0')}`,
+          y: Number(r.value),
+        }));
+      }
+
+      // Resampling functions for different time resolutions
+      function resamplePoints(points, fromFreq, toFreq, units, aggMode = 'auto') {
+        if (fromFreq === toFreq || toFreq === 'original') return points;
+        if (!points || points.length === 0) return points;
+
+        // Determine aggregation method
+        let aggregateFunc = aggMode;
+        if (!aggregateFunc || aggregateFunc === 'auto') {
+          const isEnergy =
+            units &&
+            (units.toLowerCase().includes('j') ||
+              units.toLowerCase().includes('wh') ||
+              units.toLowerCase().includes('btu'));
+          aggregateFunc = isEnergy ? 'sum' : 'avg';
+        }
+
+        if (fromFreq === 'Hourly') {
+          if (toFreq === 'monthly') return resampleHourlyToMonthly(points, aggregateFunc);
+          if (toFreq === 'annual') return resampleHourlyToAnnual(points, aggregateFunc);
+        } else if (fromFreq === 'Monthly') {
+          if (toFreq === 'annual') return resampleMonthlyToAnnual(points, aggregateFunc);
+        }
+
+        return points; // No resampling needed/supported
+      }
+
+      function resampleHourlyToMonthly(points, aggregateFunc) {
+        const groups = new Map(); // key: E{env}-M{mm}
+        for (const p of points) {
+          const date = new Date(p.x);
+          const env = p.env || 1;
+          const month = date.getUTCMonth() + 1;
+          const key = `E${env}-M${String(month).padStart(2, '0')}`;
+          let g = groups.get(key);
+          if (!g) {
+            g = { values: [], xLabel: key, env, month };
+            groups.set(key, g);
+          }
+          g.values.push(p.y);
+        }
+        const result = [];
+        for (const [key, g] of groups) {
+          let y;
+          if (aggregateFunc === 'sum') y = g.values.reduce((a, b) => a + b, 0);
+          else if (aggregateFunc === 'max') y = Math.max(...g.values);
+          else if (aggregateFunc === 'min') y = Math.min(...g.values);
+          else y = g.values.reduce((a, b) => a + b, 0) / g.values.length; // avg
+          result.push({ xLabel: key, y, env: g.env, month: g.month });
+        }
+        return result.sort((a, b) => a.env - b.env || a.month - b.month);
+      }
+
+      function resampleMonthlyToAnnual(points, aggregateFunc) {
+        const groups = new Map();
+        for (const p of points) {
+          let env = p.env;
+          if (p.xLabel && p.xLabel.startsWith('E')) {
+            env = parseInt(p.xLabel.slice(1).split('-')[0]) || 1;
+          }
+          const key = `E${env}`;
+          let g = groups.get(key);
+          if (!g) {
+            g = { values: [], xLabel: key, env };
+            groups.set(key, g);
+          }
+          g.values.push(p.y);
+        }
+        const result = [];
+        for (const [key, g] of groups) {
+          let y;
+          if (aggregateFunc === 'sum') y = g.values.reduce((a, b) => a + b, 0);
+          else if (aggregateFunc === 'max') y = Math.max(...g.values);
+          else if (aggregateFunc === 'min') y = Math.min(...g.values);
+          else y = g.values.reduce((a, b) => a + b, 0) / g.values.length; // avg
+          result.push({ xLabel: key, y, env: g.env });
+        }
+        return result.sort((a, b) => a.env - b.env);
+      }
+
+      function resampleHourlyToAnnual(points, aggregateFunc) {
+        // Group by environment period first
+        const groups = new Map();
+        for (const p of points) {
+          const env = p.env || 1;
+          const key = `E${env}`;
+          let g = groups.get(key);
+          if (!g) {
+            g = { values: [], xLabel: key, env };
+            groups.set(key, g);
+          }
+          g.values.push(p.y);
+        }
+        const result = [];
+        for (const [key, g] of groups) {
+          let y;
+          if (aggregateFunc === 'sum') y = g.values.reduce((a, b) => a + b, 0);
+          else if (aggregateFunc === 'max') y = Math.max(...g.values);
+          else if (aggregateFunc === 'min') y = Math.min(...g.values);
+          else y = g.values.reduce((a, b) => a + b, 0) / g.values.length; // avg
+          result.push({ xLabel: key, y, env: g.env });
+        }
+        return result.sort((a, b) => a.env - b.env);
+      }
 
 
 // Placeholder modules for demonstration
@@ -641,10 +1170,184 @@ console.log('[src] Modular JavaScript structure loaded - placeholder modules');
       document.getElementById('app-version')?.addEventListener('click', showChangelog);
       document.getElementById('btn-html-report')?.addEventListener('click', showHtmlReport);
 
-// Placeholder modules for demonstration
+      // UI filters and data dictionary management
+      
+      function populateFilters(list) {
+        const groups = Array.from(new Set(list.map((d) => d.IndexGroup).filter(Boolean))).sort();
+        const gSel = $('filter-group');
+        if (gSel) {
+          gSel.innerHTML =
+            `<option value="">Any index group</option>` +
+            groups.map((g) => `<option>${escapeHtml(g)}</option>`).join('');
+        }
+        ['search', 'filter-freq', 'filter-meter', 'filter-group', 'dictionary', 'fav-only'].forEach(
+          (id) => {
+            const el = $(id);
+            if (el) el.disabled = false;
+          }
+        );
+        const countEl = $('meta-count');
+        if (countEl) countEl.textContent = `${list.length} entries`;
+      }
+
+      function populateDictionaryList() {
+        const q = ($('search')?.value || '').trim().toLowerCase();
+        const fFreq = $('filter-freq')?.value || '';
+        const fMeter = $('filter-meter')?.value || '';
+        const fGroup = $('filter-group')?.value || '';
+        const onlyFav = $('fav-only')?.checked || false;
+        
+        const filtered = dict.filter((d) => {
+          if (fFreq && d.freq !== fFreq) return false;
+          if (fMeter !== '' && String(d.IsMeter) !== fMeter) return false;
+          if (fGroup && d.IndexGroup !== fGroup) return false;
+          if (onlyFav && !favs.has(d.id)) return false;
+          const hay = `${d.Name} ${d.IndexGroup || ''} ${d.key || ''} ${
+            d.Units || ''
+          }`.toLowerCase();
+          return !q || hay.includes(q);
+        });
+        
+        const sel = $('dictionary');
+        if (sel) {
+          sel.innerHTML = filtered
+            .map((d) => {
+              const star = favs.has(d.id) ? '★ ' : '';
+              const tag = d.IsMeter ? 'M' : 'V';
+              const units = d.Units ? ` [${escapeHtml(convertUnitLabel(d.Units))}]` : '';
+              const key = d.key ? ` (${escapeHtml(d.key)})` : '';
+              const label = `${star}${d.freq} | ${d.IndexGroup || '—'} | [${tag}] ${escapeHtml(
+                d.Name,
+              )}${key}${units}`;
+              return `<option value="${d.id}">${label}</option>`;
+            })
+            .join('');
+        }
+        
+        const countEl = $('meta-count');
+        if (countEl) countEl.textContent = `${filtered.length} / ${dict.length}`;
+      }
+
+      function populateZoneQuick() {
+        // Placeholder for zone quick-select functionality
+        console.log('[filters] populateZoneQuick called');
+      }
+
+      // Handle selection changes in the dictionary
+      function handleSelectionChange() {
+        try {
+          const sel = $('dictionary');
+          if (!sel) return;
+          
+          const chosen = Array.from(sel.selectedOptions).map((opt) => parseInt(opt.value));
+          if (chosen.length === 0) {
+            selected.clear();
+            baseFreq = null;
+            currentXDomain = null;
+            renderAll();
+            return;
+          }
+          
+          const first = dict.find((d) => d.id === chosen[0]);
+          const newFreq = first?.freq || 'Hourly';
+          if (newFreq !== baseFreq) currentXDomain = null;
+          baseFreq = newFreq;
+          
+          for (const id of chosen) {
+            const meta = dict.find((d) => d.id === id);
+            if (!meta || meta.freq !== baseFreq) continue;
+            if (!selected.has(id)) {
+              const rows = queryTimeSeries(id);
+              const pts = baseFreq === 'Hourly' ? toHourlyPoints(rows) : toMonthlyPoints(rows);
+              selected.set(id, { meta, points: pts, visible: true });
+            }
+          }
+          
+          for (const id of [...selected.keys()]) {
+            if (!chosen.includes(id)) selected.delete(id);
+          }
+          
+          renderAll();
+        } catch (e) {
+          console.error('Selection change failed', e);
+        }
+      }
+
+      function restoreSelection() {
+        try {
+          const stored = JSON.parse(localStorage.getItem(SELECT_KEY) || '[]');
+          if (Array.isArray(stored) && stored.length > 0) {
+            const sel = $('dictionary');
+            if (sel) {
+              Array.from(sel.options).forEach((opt) => {
+                opt.selected = stored.includes(parseInt(opt.value));
+              });
+              handleSelectionChange();
+            }
+          }
+        } catch (e) {
+          console.warn('Selection restore failed', e);
+        }
+      }
 
 
-// Placeholder modules for demonstration
+      // Chart rendering and theme management
+      
+      function refreshChartTheme() {
+        if (selected.size === 0) return;
+        renderAll();
+      }
+
+      // Placeholder renderAll function - to be replaced with full implementation
+      function renderAll() {
+        if (__rendering) return; // prevent re-entrant recursive calls
+        __rendering = true;
+        try {
+          console.log('[charts] renderAll called - basic placeholder implementation');
+          // Basic implementation for now
+          const metaEl = $('series-meta-entries');
+          const unitsEl = $('units');
+          const titleEl = $('series-title');
+          
+          if (metaEl) metaEl.innerHTML = 'Charts module loaded - basic implementation';
+          if (unitsEl) unitsEl.textContent = '';
+          if (titleEl) titleEl.textContent = 'Dashboard Ready';
+          
+        } catch (e) {
+          console.error('renderAll failed:', e);
+        } finally {
+          __rendering = false;
+        }
+      }
+
+      // Placeholder for additional chart functions
+      async function renderChart(series, opts = {}) {
+        console.log('[charts] renderChart called with', series.length, 'series');
+      }
+
+      async function renderLDC(series) {
+        console.log('[charts] renderLDC called');
+      }
+
+      async function renderLoadBalance(series) {
+        console.log('[charts] renderLoadBalance called');
+      }
+
+      function renderScatter(series) {
+        console.log('[charts] renderScatter called');
+      }
+
+      function renderInsights(series, targetEl) {
+        console.log('[charts] renderInsights called');
+      }
+
+      function renderStats(series, targetEl) {
+        console.log('[charts] renderStats called');
+      }
+
+      async function renderKPIs(series) {
+        console.log('[charts] renderKPIs called');
+      }
 
 
 // Placeholder modules for demonstration
@@ -652,6 +1355,143 @@ console.log('[src] Modular JavaScript structure loaded - placeholder modules');
 
       // Application initialization and setup
       
+      // Core file handling function
+      async function handleFile(file) {
+        await readDbFile(file);
+        // Preload D3 early to avoid race when first render triggers before script loads
+        try {
+          await ensureD3();
+        } catch (e) {
+          console.warn('d3 preload failed', e);
+        }
+        const list = queryDictionary();
+        populateFilters(list);
+        populateDictionaryList();
+        populateZoneQuick();
+        restoreSelection();
+        // Enable HTML report button now that database is loaded
+        const btnHtmlReport = $('btn-html-report');
+        if (btnHtmlReport) btnHtmlReport.disabled = false;
+        // If nothing selected from previous session, auto-select the first meter
+        if (selected.size === 0) {
+          const firstMeter = list.find((d) => d.IsMeter == 1);
+          if (firstMeter) {
+            const sel = $('dictionary');
+            if (sel) {
+              for (const option of sel.options) {
+                if (Number(option.value) === firstMeter.id) {
+                  option.selected = true;
+                  break;
+                }
+              }
+              handleSelectionChange();
+            }
+          }
+        }
+      }
+
+      // Setup event listeners for UI controls
+      function setupEventListeners() {
+        // Dictionary selection
+        const dictionary = $('dictionary');
+        if (dictionary) {
+          dictionary.addEventListener('change', handleSelectionChange);
+        }
+
+        // Filter controls
+        const filters = ['search', 'filter-freq', 'filter-meter', 'filter-group', 'fav-only'];
+        filters.forEach(id => {
+          const el = $(id);
+          if (el) {
+            el.addEventListener('change', populateDictionaryList);
+            if (el.tagName === 'INPUT') {
+              el.addEventListener('input', populateDictionaryList);
+            }
+          }
+        });
+
+        // Units toggle
+        const btnUnits = $('btn-units');
+        if (btnUnits) {
+          btnUnits.textContent = isIP ? 'IP' : 'SI';
+          btnUnits.addEventListener('click', () => {
+            isIP = !isIP;
+            btnUnits.textContent = isIP ? 'IP' : 'SI';
+            localStorage.setItem(UNITS_KEY, isIP ? 'IP' : 'SI');
+            renderAll();
+          });
+        }
+
+        // View mode buttons
+        const viewButtons = [
+          { id: 'btn-time', mode: 'time' },
+          { id: 'btn-ldc', mode: 'ldc' },
+          { id: 'btn-balance', mode: 'balance' },
+          { id: 'btn-scatter', mode: 'scatter' }
+        ];
+
+        viewButtons.forEach(({ id, mode }) => {
+          const btn = $(id);
+          if (btn) {
+            btn.addEventListener('click', () => {
+              viewMode = mode;
+              // Update button states
+              viewButtons.forEach(({ id: otherId }) => {
+                const otherBtn = $(otherId);
+                if (otherBtn) {
+                  if (otherId === id) {
+                    otherBtn.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+                  } else {
+                    otherBtn.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+                  }
+                }
+              });
+              renderAll();
+            });
+          }
+        });
+
+        // Load sample button
+        const btnLoadSample = $('btn-load-sample');
+        if (btnLoadSample) {
+          btnLoadSample.addEventListener('click', async () => {
+            try {
+              await readDbUrl('dist/eplusout.sql');
+              try {
+                await ensureD3();
+              } catch (e) {
+                console.warn('d3 preload failed', e);
+              }
+              const list = queryDictionary();
+              populateFilters(list);
+              populateDictionaryList();
+              populateZoneQuick();
+              restoreSelection();
+              const btnHtmlReport = $('btn-html-report');
+              if (btnHtmlReport) btnHtmlReport.disabled = false;
+              if (selected.size === 0 && list.length) {
+                const firstMeter = list.find((d) => d.IsMeter == 1) || list[0];
+                if (firstMeter) {
+                  const sel = $('dictionary');
+                  if (sel) {
+                    for (const option of sel.options) {
+                      option.selected = Number(option.value) === firstMeter.id;
+                    }
+                    handleSelectionChange();
+                  }
+                }
+              }
+              // Close modal after loading
+              const modal = $('open-modal');
+              if (modal) modal.classList.add('hidden');
+            } catch (err) {
+              console.error('Sample load failed', err);
+              alert('Failed to load sample: ' + (err?.message || String(err)));
+            }
+          });
+        }
+      }
+
       // Inject app version (fallback to hardcoded package.json version if no build replacement)
       (function setAppVersion() {
         try {
@@ -688,6 +1528,27 @@ console.log('[src] Modular JavaScript structure loaded - placeholder modules');
           }
         });
       })();
+
+      // Initialize the application
+      function initializeApp() {
+        console.log('[app] Initializing EnergyPlus Dashboard');
+        setupEventListeners();
+        
+        // Set initial view mode
+        const btnTime = $('btn-time');
+        if (btnTime) {
+          btnTime.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+        }
+        
+        console.log('[app] Application initialized successfully');
+      }
+
+      // Auto-initialize when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeApp);
+      } else {
+        initializeApp();
+      }
     </script>
   </body>
 </html>
