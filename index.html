@@ -189,7 +189,61 @@
     </header>
 
     <!-- Open Database Modal -->
-<!-- Placeholder for remaining modal components -->
+<!-- Open Database Modal -->
+<div
+  id="open-backdrop"
+  class="hidden fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm z-40"
+></div>
+<div
+  id="open-modal"
+  class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="open-title"
+>
+  <div
+    class="w-[min(96vw,56rem)] aspect-square max-h-[90vh] rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark shadow-xl flex flex-col"
+  >
+    <div
+      class="flex justify-between items-center px-4 py-3 border-b border-border dark:border-border-dark"
+    >
+      <h2 id="open-title" class="text-base font-semibold">Open eplusout.sql</h2>
+      <button
+        id="open-close"
+        class="text-sm px-2 py-1 border rounded bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+      >
+        Close
+      </button>
+    </div>
+    <div class="p-4 flex flex-col gap-4 flex-1 overflow-hidden">
+      <div
+        id="open-drop"
+        class="flex-1 min-h-[12rem] text-center border-2 border-dashed rounded-md border-border dark:border-border-dark bg-panel-2/40 dark:bg-panel-2-dark/40 overflow-hidden"
+      >
+        <label
+          for="file-input"
+          class="block w-full h-full grid place-items-center cursor-pointer select-none"
+        >
+          <div>
+            <div class="text-sm font-medium mb-1">Drag & drop your eplusout.sql here</div>
+            <div class="text-xs text-muted dark:text-muted-dark">or click to choose a file</div>
+          </div>
+        </label>
+        <input id="file-input" type="file" accept=".sql,.sqlite,.db" class="hidden" />
+      </div>
+      <div class="mt-0 flex items-center justify-between">
+        <div class="text-xs text-muted dark:text-muted-dark">Accepted: .sql, .sqlite, .db</div>
+        <button
+          id="open-load-sample"
+          type="button"
+          class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+        >
+          Load Sample
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 
     <main
@@ -458,12 +512,6 @@
        * @namespace GlobalState
        * @description Global application state variables for database, UI, and chart management
        */
-      
-      /** @type {Database} SQLite database instance */
-      let db;
-      
-      /** @type {Array<Object>} Data dictionary cache from database */
-      let dict = [];
       
       /** @type {Map<number, Object>} Currently selected signals/meters */
       let selected = new Map();
@@ -1157,7 +1205,79 @@
       }
 
 
-// Placeholder modules for demonstration
+      /**
+       * @fileoverview Data export functionality for CSV generation
+       * Provides CSV export capabilities for selected time series data
+       * @author EnergyPlus Dashboard
+       */
+
+      /**
+       * Export selected time series data as CSV format
+       * @param {Map<number, Object>} selectedSeries - Map of selected signal IDs to their data
+       * @returns {string} CSV formatted string
+       */
+      function exportCSV(selectedSeries) {
+        if (!selectedSeries || selectedSeries.size === 0) {
+          return 'No data selected for export';
+        }
+
+        try {
+          // Get all selected series data
+          const series = Array.from(selectedSeries.values());
+          
+          // Find the maximum length of data across all series
+          let maxLength = 0;
+          series.forEach(s => {
+            if (s.data && s.data.length > maxLength) {
+              maxLength = s.data.length;
+            }
+          });
+
+          if (maxLength === 0) {
+            return 'No time series data available for export';
+          }
+
+          // Build CSV header
+          const headers = ['Timestamp'];
+          series.forEach(s => {
+            const units = convertUnitLabel(s.units) || s.units || '';
+            const label = units ? `${s.name} (${units})` : s.name;
+            headers.push(label);
+          });
+
+          // Build CSV rows
+          const rows = [headers.join(',')];
+          
+          for (let i = 0; i < maxLength; i++) {
+            const row = [];
+            
+            // Add timestamp (use first series' timestamp)
+            const timestamp = series[0].data && series[0].data[i] ? series[0].data[i].timestamp : '';
+            row.push(timestamp);
+            
+            // Add values for each series
+            series.forEach(s => {
+              let value = '';
+              if (s.data && s.data[i]) {
+                const rawValue = s.data[i].value;
+                if (rawValue != null && isFinite(rawValue)) {
+                  const convertedValue = convertUnits(rawValue, s.units);
+                  value = convertedValue != null ? convertedValue : rawValue;
+                }
+              }
+              row.push(value);
+            });
+            
+            rows.push(row.join(','));
+          }
+
+          return rows.join('\\n');
+          
+        } catch (error) {
+          console.error('CSV export failed:', error);
+          return 'Error: Failed to export CSV data - ' + (error.message || String(error));
+        }
+      }
 
 
       // Modal management functionality
@@ -1431,6 +1551,294 @@
 // Placeholder modules for demonstration
 
 
+      /**
+       * @fileoverview File handling functionality for database loading
+       * Provides file input, drag-and-drop, and database opening capabilities
+       * @author EnergyPlus Dashboard
+       */
+
+      /**
+       * Show the file opening modal
+       */
+      function showOpen() {
+        const modal = $('open-modal');
+        const backdrop = $('open-backdrop');
+        const mainGrid = $('main-grid');
+        
+        if (modal) modal.classList.remove('hidden');
+        if (backdrop) backdrop.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        if (mainGrid) mainGrid.setAttribute('inert', '');
+        
+        // Ensure dropzone is initialized
+        const dropZone = $('open-drop');
+        if (dropZone) enableDropZone(dropZone);
+      }
+
+      /**
+       * Hide the file opening modal
+       */
+      function hideOpen() {
+        const modal = $('open-modal');
+        const backdrop = $('open-backdrop');
+        const mainGrid = $('main-grid');
+        
+        if (modal) modal.classList.add('hidden');
+        if (backdrop) backdrop.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+        if (mainGrid) mainGrid.removeAttribute('inert');
+      }
+
+      /**
+       * Enable drag and drop functionality for a drop zone element
+       * @param {HTMLElement} el - The drop zone element
+       */
+      function enableDropZone(el) {
+        if (!el) return;
+        
+        const highlight = () =>
+          el.classList.add(
+            'ring-2',
+            'ring-accent',
+            'dark:ring-accent-dark',
+            'ring-offset-2',
+            'ring-offset-panel',
+            'dark:ring-offset-panel-dark',
+          );
+        
+        const unhighlight = () =>
+          el.classList.remove(
+            'ring-2',
+            'ring-accent',
+            'dark:ring-accent-dark',
+            'ring-offset-2',
+            'ring-offset-panel',
+            'dark:ring-offset-panel-dark',
+          );
+        
+        ['dragenter', 'dragover'].forEach((evt) =>
+          el.addEventListener(evt, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            highlight();
+          }),
+        );
+        
+        ['dragleave', 'drop'].forEach((evt) =>
+          el.addEventListener(evt, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            unhighlight();
+          }),
+        );
+        
+        el.addEventListener('drop', async (e) => {
+          const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+          if (f) {
+            try {
+              await handleFile(f);
+              hideOpen();
+            } catch (err) {
+              console.warn('Drop file load failed', err);
+              alert('Failed to open database: ' + (err && err.message ? err.message : String(err)));
+            }
+          }
+        });
+      }
+
+      /**
+       * Handle file input change events
+       * @param {Event} e - The change event
+       */
+      async function handleFileInputChange(e) {
+        try {
+          const f = e.target.files && e.target.files[0];
+          if (!f) return; // cancelled
+          await handleFile(f);
+          hideOpen();
+        } catch (err) {
+          console.warn('File load failed', err);
+          alert('Failed to open database: ' + (err && err.message ? err.message : String(err)));
+        }
+      }
+
+      /**
+       * Setup file handling event listeners
+       */
+      function setupFileHandling() {
+        // Open button
+        const btnOpen = $('btn-open');
+        if (btnOpen) {
+          btnOpen.addEventListener('click', showOpen);
+        }
+
+        // Modal close handlers
+        const openClose = $('open-close');
+        const openBackdrop = $('open-backdrop');
+        if (openClose) openClose.addEventListener('click', hideOpen);
+        if (openBackdrop) openBackdrop.addEventListener('click', hideOpen);
+
+        // File input handlers
+        const fileInput = $('file-input');
+        if (fileInput) {
+          fileInput.addEventListener('click', (e) => {
+            // Ensure same-file re-selection triggers change on all browsers
+            try {
+              e.target.value = '';
+            } catch {}
+          });
+          fileInput.addEventListener('change', handleFileInputChange);
+        }
+
+        // Load sample button
+        const btnLoadSample = $('open-load-sample');
+        if (btnLoadSample) {
+          btnLoadSample.addEventListener('click', async () => {
+            try {
+              await readDbUrl('dist/eplusout.sql');
+              try {
+                await ensureD3();
+              } catch (e) {
+                console.warn('d3 preload failed', e);
+              }
+              const list = queryDictionary();
+              populateFilters(list);
+              populateDictionaryList();
+              populateZoneQuick();
+              restoreSelection();
+              const btnHtmlReport = $('btn-html-report');
+              if (btnHtmlReport) btnHtmlReport.disabled = false;
+              if (selected.size === 0 && list.length) {
+                const firstMeter = list.find((d) => d.IsMeter == 1) || list[0];
+                if (firstMeter) {
+                  const sel = $('dictionary');
+                  if (sel) {
+                    for (const option of sel.options) {
+                      option.selected = Number(option.value) === firstMeter.id;
+                    }
+                    handleSelectionChange();
+                  }
+                }
+              }
+              hideOpen();
+            } catch (err) {
+              console.error('Sample load failed', err);
+              alert('Failed to load sample: ' + (err?.message || String(err)));
+            }
+          });
+        }
+
+        // Initialize dropzone for existing modal
+        const dropZone = $('open-drop');
+        if (dropZone) enableDropZone(dropZone);
+
+        // Global body drag-and-drop
+        enableBodyDropZone();
+      }
+
+      /**
+       * Enable drag and drop on the entire body for convenience
+       */
+      function enableBodyDropZone() {
+        document.body.addEventListener('dragover', (e) => {
+          e.preventDefault();
+        });
+
+        document.body.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+          if (f && f.name.match(/\.(sql|sqlite|db)$/i)) {
+            try {
+              await handleFile(f);
+            } catch (err) {
+              console.warn('Body drop file load failed', err);
+              alert('Failed to open database: ' + (err && err.message ? err.message : String(err)));
+            }
+          }
+        });
+      }
+
+      /**
+       * @fileoverview Additional UI event handlers for main application buttons
+       * Provides export functionality and other missing event handlers
+       * @author EnergyPlus Dashboard
+       */
+
+      /**
+       * Export selected data as CSV
+       */
+      function handleExport() {
+        if (selected.size === 0) return;
+        downloadFile('series.csv', exportCSV(selected));
+      }
+
+      /**
+       * Handle dictionary double-click for favorites
+       * @param {Event} e - The double-click event
+       */
+      function handleDictionaryDoubleClick(e) {
+        const sel = $('dictionary');
+        const opt = sel.selectedOptions[0];
+        if (!opt) return;
+        const id = Number(opt.value);
+        if (favs.has(id)) favs.delete(id);
+        else favs.add(id);
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favs]));
+        populateDictionaryList();
+      }
+
+      /**
+       * Setup additional UI event handlers
+       */
+      function setupAdditionalEventHandlers() {
+        // Export button
+        const btnExport = $('btn-export');
+        if (btnExport) {
+          btnExport.addEventListener('click', handleExport);
+        }
+
+        // Dictionary double-click for favorites
+        const dictionary = $('dictionary');
+        if (dictionary) {
+          dictionary.addEventListener('dblclick', handleDictionaryDoubleClick);
+        }
+
+        // Enable theme toggle if it exists
+        const themeToggle = $('theme-toggle');
+        if (themeToggle) {
+          themeToggle.addEventListener('click', () => {
+            const current = document.documentElement.getAttribute('data-theme') || 'light';
+            const next = current === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem(THEME_KEY, next);
+          });
+        }
+
+        // Enable units settings if they exist
+        const unitsSettings = ['energy-si', 'energy-ip', 'power-ip', 'temp-si', 'temp-ip'];
+        unitsSettings.forEach(id => {
+          const el = $(id);
+          if (el) {
+            el.addEventListener('change', () => {
+              // Update unit preferences based on setting changes
+              if (id === 'energy-si') prefEnergySI = el.value;
+              if (id === 'energy-ip') prefEnergyIP = el.value;
+              if (id === 'power-ip') prefPowerIP = el.value;
+              if (id === 'temp-si') prefTempSI = el.value;
+              if (id === 'temp-ip') prefTempIP = el.value;
+              
+              // Save to localStorage
+              localStorage.setItem(id.replace('-', '_').toUpperCase() + '_KEY', el.value);
+              
+              // Re-render if data is loaded
+              if (selected.size > 0) {
+                renderAll();
+              }
+            });
+          }
+        });
+      }
+
       // Application initialization and setup
       
       // Core file handling function
@@ -1611,6 +2019,8 @@
       function initializeApp() {
         console.log('[app] Initializing EnergyPlus Dashboard');
         setupEventListeners();
+        setupFileHandling();
+        setupAdditionalEventHandlers();
         
         // Set initial view mode
         const btnTime = $('btn-time');

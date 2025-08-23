@@ -45,12 +45,6 @@
        * @description Global application state variables for database, UI, and chart management
        */
       
-      /** @type {Database} SQLite database instance */
-      let db;
-      
-      /** @type {Array<Object>} Data dictionary cache from database */
-      let dict = [];
-      
       /** @type {Map<number, Object>} Currently selected signals/meters */
       let selected = new Map();
       

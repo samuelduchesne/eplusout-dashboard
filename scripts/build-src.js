@@ -47,6 +47,8 @@ function buildHTML() {
   const filtersJS = readFile(path.join(srcDir, 'js', 'ui', 'filters.js'));
   const chartsJS = readFile(path.join(srcDir, 'js', 'ui', 'charts.js'));
   const reportsJS = readFile(path.join(srcDir, 'js', 'ui', 'reports.js'));
+  const fileHandlingJS = readFile(path.join(srcDir, 'js', 'ui', 'file-handling.js'));
+  const additionalHandlersJS = readFile(path.join(srcDir, 'js', 'ui', 'additional-handlers.js'));
   const appJS = readFile(path.join(srcDir, 'js', 'app.js'));
 
   // Assemble the complete HTML
@@ -87,6 +89,10 @@ ${filtersJS}
 ${chartsJS}
 
 ${reportsJS}
+
+${fileHandlingJS}
+
+${additionalHandlersJS}
 
 ${appJS}
     </script>

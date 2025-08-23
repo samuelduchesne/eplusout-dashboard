@@ -178,6 +178,8 @@
       function initializeApp() {
         console.log('[app] Initializing EnergyPlus Dashboard');
         setupEventListeners();
+        setupFileHandling();
+        setupAdditionalEventHandlers();
         
         // Set initial view mode
         const btnTime = $('btn-time');

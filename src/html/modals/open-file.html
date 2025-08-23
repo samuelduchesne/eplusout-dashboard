@@ -1,1 +1,55 @@
-<!-- Placeholder for remaining modal components -->
+<!-- Open Database Modal -->
+<div
+  id="open-backdrop"
+  class="hidden fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm z-40"
+></div>
+<div
+  id="open-modal"
+  class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="open-title"
+>
+  <div
+    class="w-[min(96vw,56rem)] aspect-square max-h-[90vh] rounded-lg border border-border dark:border-border-dark bg-panel dark:bg-panel-dark shadow-xl flex flex-col"
+  >
+    <div
+      class="flex justify-between items-center px-4 py-3 border-b border-border dark:border-border-dark"
+    >
+      <h2 id="open-title" class="text-base font-semibold">Open eplusout.sql</h2>
+      <button
+        id="open-close"
+        class="text-sm px-2 py-1 border rounded bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark"
+      >
+        Close
+      </button>
+    </div>
+    <div class="p-4 flex flex-col gap-4 flex-1 overflow-hidden">
+      <div
+        id="open-drop"
+        class="flex-1 min-h-[12rem] text-center border-2 border-dashed rounded-md border-border dark:border-border-dark bg-panel-2/40 dark:bg-panel-2-dark/40 overflow-hidden"
+      >
+        <label
+          for="file-input"
+          class="block w-full h-full grid place-items-center cursor-pointer select-none"
+        >
+          <div>
+            <div class="text-sm font-medium mb-1">Drag & drop your eplusout.sql here</div>
+            <div class="text-xs text-muted dark:text-muted-dark">or click to choose a file</div>
+          </div>
+        </label>
+        <input id="file-input" type="file" accept=".sql,.sqlite,.db" class="hidden" />
+      </div>
+      <div class="mt-0 flex items-center justify-between">
+        <div class="text-xs text-muted dark:text-muted-dark">Accepted: .sql, .sqlite, .db</div>
+        <button
+          id="open-load-sample"
+          type="button"
+          class="px-2.5 py-1.5 text-sm shrink-0 border rounded bg-panel dark:bg-panel-dark border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark"
+        >
+          Load Sample
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
