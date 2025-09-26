@@ -5054,11 +5054,37 @@
           return;
         }
         // Prepare stacked dataset; one pseudo series per category
-        const paletteLocal = palette; // reuse global palette
-        const catSeries = CATS.filter((c) => !missing.includes(c.label)).map((c, i) => ({
+        // Semantic color mapping for Load Balance categories (intuitive colors for energy concepts)
+        const loadBalanceColors = {
+          // Heating - warm red (intuitive for heating)
+          heating: document.documentElement.classList.contains('dark') ? '#f87171' : '#dc2626',
+          // Cooling - cool blue (intuitive for cooling)
+          cooling: document.documentElement.classList.contains('dark') ? '#60a5fa' : '#2563eb',
+          // Internal gains - warm amber (people/equipment heat)
+          internal: document.documentElement.classList.contains('dark') ? '#fbbf24' : '#f59e0b',
+          // Window solar - bright orange (solar energy)
+          solar: document.documentElement.classList.contains('dark') ? '#fb923c' : '#ea580c',
+          // Infiltration gain - light orange
+          inf_gain: document.documentElement.classList.contains('dark') ? '#fdba74' : '#f97316',
+          // Infiltration loss - light blue
+          inf_loss: document.documentElement.classList.contains('dark') ? '#7dd3fc' : '#0ea5e9',
+          // Ventilation gain - coral/salmon
+          vent_gain: document.documentElement.classList.contains('dark') ? '#fda4af' : '#f43f5e',
+          // Ventilation loss - teal/cyan
+          vent_loss: document.documentElement.classList.contains('dark') ? '#67e8f9' : '#06b6d4',
+          // Window conduction - slate blue
+          cond_gain: document.documentElement.classList.contains('dark') ? '#a78bfa' : '#7c3aed',
+          // Wall conduction - blue-gray
+          cond_loss: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b',
+          // Storage - purple
+          storage: document.documentElement.classList.contains('dark') ? '#c084fc' : '#9333ea',
+        };
+        const catSeries = CATS.filter((c) => !missing.includes(c.label)).map((c) => ({
           id: c.id,
           meta: { Name: c.label, Units: 'J' },
-          color: paletteLocal[i % paletteLocal.length],
+          color:
+            loadBalanceColors[c.id] ||
+            (document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b'),
           points: monthLabels.map((ml) => ({ xLabel: ml, y: catTotals.get(c.id).get(ml) || 0 })),
         }));
         // Convert to display units (using convertUnits on value in Joules)

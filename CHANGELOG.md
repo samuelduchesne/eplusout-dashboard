@@ -4,11 +4,9 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
-### Added (Unreleased)
-
 ### Changed (Unreleased)
 
-### Fixed (Unreleased)
+- Improved Load Balance chart color palette with semantic color mapping: heating uses intuitive warm red colors, cooling uses cool blues, window solar uses bright orange, internal gains use amber/yellow, and infiltration/ventilation/conduction categories use appropriate warm/cool color distinctions. Colors automatically adapt for light and dark mode themes.
 
 ## [0.4.0] - 2025-08-22
 
