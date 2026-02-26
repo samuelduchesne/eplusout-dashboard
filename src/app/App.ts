@@ -1,0 +1,5437 @@
+/* eslint-disable */
+// @ts-nocheck
+import * as d3Module from 'd3';
+import initSqlJs from 'sql.js';
+import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
+import { createLogger } from '../services/Logger';
+import { DataLoadError, QueryError } from '../services/errors';
+import { solveLinearSystem } from '../utils/math/Regression';
+
+const logger = createLogger('app');
+
+export function bootstrapApp(): void {
+  (function () {
+    const d3 = d3Module;
+    const THEME_KEY = 'eplus_theme';
+    const UNITS_KEY = 'eplus_units_mode';
+    const FAVORITES_KEY = 'eplus_favs';
+    const SELECT_KEY = 'eplus_selected_ids';
+    const COLLAPSE_KEY = 'eplus_signals_collapsed';
+    const TEMP_SI_KEY = 'eplus_temp_si';
+    const TEMP_IP_KEY = 'eplus_temp_ip';
+    const SAMPLE_DB_URL = 'assets/eplusout.sql';
+
+    function getPreferredTheme() {
+      const s = localStorage.getItem(THEME_KEY);
+      return s === 'light' || s === 'dark'
+        ? s
+        : matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
+    }
+    // Inject app version (fallback to hardcoded package.json version if no build replacement)
+    (function setAppVersion() {
+      try {
+        const v = window.__APP_VERSION__ || '0.0.1';
+        const el = document.getElementById('app-version');
+        if (el) el.textContent = 'v' + v;
+      } catch (error) {
+        logger.debug('Ignored recoverable error', { error });
+      }
+    })();
+    // Changelog modal logic
+    function escapeHtml(s) {
+      return String(s).replace(
+        /[&<>"']/g,
+        (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m],
+      );
+    }
+    function mdToHtml(md) {
+      const lines = md.split(/\r?\n/);
+      let html = '',
+        listOpen = false;
+      for (const raw of lines) {
+        const line = raw.trimEnd();
+        if (!line) {
+          if (listOpen) {
+            html += '</ul>';
+            listOpen = false;
+          }
+          html += '';
+          continue;
+        }
+        if (line.startsWith('### ')) {
+          if (listOpen) {
+            html += '</ul>';
+            listOpen = false;
+          }
+          html += '<h3 class="mt-4 text-sm font-semibold">' + escapeHtml(line.slice(4)) + '</h3>';
+          continue;
+        }
+        if (line.startsWith('## ')) {
+          if (listOpen) {
+            html += '</ul>';
+            listOpen = false;
+          }
+          html += '<h2 class="mt-5 text-base font-semibold">' + escapeHtml(line.slice(3)) + '</h2>';
+          continue;
+        }
+        if (line.startsWith('# ')) {
+          if (listOpen) {
+            html += '</ul>';
+            listOpen = false;
+          }
+          html += '<h1 class="mt-5 text-lg font-bold">' + escapeHtml(line.slice(2)) + '</h1>';
+          continue;
+        }
+        if (line.startsWith('- ')) {
+          if (!listOpen) {
+            html += '<ul class="list-disc ml-5 mt-2 space-y-1">';
+            listOpen = true;
+          }
+          html += '<li class="text-xs">' + escapeHtml(line.slice(2)) + '</li>';
+          continue;
+        }
+        // paragraph
+        if (listOpen) {
+          html += '</ul>';
+          listOpen = false;
+        }
+        html += '<p class="text-xs leading-relaxed mt-2">' + escapeHtml(line) + '</p>';
+      }
+      if (listOpen) html += '</ul>';
+      return html;
+    }
+    function showChangelog() {
+      const backdrop = document.getElementById('changelog-backdrop');
+      const modal = document.getElementById('changelog-modal');
+      if (!backdrop || !modal) return;
+      backdrop.classList.remove('hidden');
+      modal.classList.remove('hidden');
+      // Load only once
+      const body = document.getElementById('changelog-body');
+      if (body && !body.dataset.loaded) {
+        const embed =
+          window.__CHANGELOG_MD__ && typeof window.__CHANGELOG_MD__ === 'string'
+            ? window.__CHANGELOG_MD__
+            : null;
+        const ghOwner = 'samuelduchesne';
+        const ghRepo = 'eplusout-dashboard';
+        const branch = 'main';
+        const ghUrl = `https://raw.githubusercontent.com/${ghOwner}/${ghRepo}/${branch}/CHANGELOG.md`;
+        const loadRemote = () =>
+          fetch(ghUrl, { cache: 'no-store' }).then((r) => (r.ok ? r.text() : Promise.reject()));
+        const loadLocal = () =>
+          fetch('CHANGELOG.md').then((r) => (r.ok ? r.text() : Promise.reject()));
+        const render = (txt) => {
+          body.innerHTML = mdToHtml(txt);
+          body.dataset.loaded = '1';
+        };
+        if (embed) {
+          render(embed);
+        } else {
+          loadRemote()
+            .catch(() =>
+              location.protocol === 'file:' ? Promise.reject('file-scheme') : loadLocal(),
+            )
+            .then(render)
+            .catch((err) => {
+              if (err === 'file-scheme') {
+                body.innerHTML =
+                  '<p class="text-xs text-muted dark:text-muted-dark">Open via a local web server to auto-fetch the changelog (e.g. <code>python -m http.server</code>). Or ensure it is embedded at build.</p>';
+              } else {
+                // final fallback: show minimal guidance
+                body.innerHTML =
+                  '<p class="text-xs text-danger dark:text-danger-dark">Changelog unavailable.</p>';
+              }
+            });
+        }
+      }
+      modal.focus();
+    }
+    function hideChangelog() {
+      document.getElementById('changelog-backdrop')?.classList.add('hidden');
+      document.getElementById('changelog-modal')?.classList.add('hidden');
+    }
+    function showHtmlReport() {
+      const backdrop = document.getElementById('html-report-backdrop');
+      const modal = document.getElementById('html-report-modal');
+      if (!backdrop || !modal) return;
+      backdrop.classList.remove('hidden');
+      modal.classList.remove('hidden');
+      // Generate report content
+      generateHtmlReport();
+      modal.focus();
+    }
+    function hideHtmlReport() {
+      document.getElementById('html-report-backdrop')?.classList.add('hidden');
+      document.getElementById('html-report-modal')?.classList.add('hidden');
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        hideChangelog();
+        hideHtmlReport();
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (e.target.id === 'changelog-backdrop') hideChangelog();
+      if (e.target.id === 'html-report-backdrop') hideHtmlReport();
+    });
+    document.getElementById('app-version')?.addEventListener('click', showChangelog);
+    document.getElementById('btn-html-report')?.addEventListener('click', showHtmlReport);
+    // New Issue launcher
+    (function setupIssueButton() {
+      const btn = document.getElementById('btn-report');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        try {
+          const ghOwner = 'samuelduchesne';
+          const ghRepo = 'eplusout-dashboard';
+          const version = (window.__APP_VERSION__ || '').trim() || 'dev';
+          const theme = document.documentElement.getAttribute('data-theme') || '';
+          const units = localStorage.getItem('eplus_units_mode') || 'SI';
+          const ua = navigator.userAgent || '';
+          const body = [
+            '### What happened?',
+            '',
+            'A clear and concise description of the problem. Include steps to reproduce if possible.',
+            '',
+            '### Expected behavior',
+            '',
+            '',
+            '### Screenshots or screen recording',
+            '',
+            '',
+            '---',
+            `App version: ${version}`,
+            `Theme: ${theme}`,
+            `Units: ${units}`,
+            `User agent: ${ua}`,
+          ].join('\n');
+          const params = new URLSearchParams({
+            title: '[Bug]: ',
+            labels: 'bug',
+            body,
+          });
+          const url = `https://github.com/${ghOwner}/${ghRepo}/issues/new?${params.toString()}`;
+          window.open(url, '_blank', 'noopener');
+        } catch (e) {
+          // Fallback to issue chooser
+          window.open(
+            'https://github.com/samuelduchesne/eplusout-dashboard/issues/new/choose',
+            '_blank',
+            'noopener',
+          );
+        }
+      });
+    })();
+    // Open modal Esc + backdrop close
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hideOpen();
+    });
+    document.getElementById('open-backdrop')?.addEventListener('click', hideOpen);
+    // HTML Report TOC mobile resize
+    (function () {
+      const KEY = 'eplus_htmlreport_toc_h_px';
+      const toc = document.getElementById('html-report-toc');
+      const resizer = document.getElementById('html-report-toc-resizer');
+      if (!toc || !resizer) return;
+      function isMobile() {
+        return window.innerWidth < 768; // md breakpoint
+      }
+      function applyHeight(px) {
+        if (!isMobile()) {
+          toc.style.removeProperty('height');
+          toc.style.removeProperty('maxHeight');
+          return;
+        }
+        const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+        const h = clamp(px, 160, Math.round(window.innerHeight * 0.8));
+        toc.style.height = h + 'px';
+        toc.style.maxHeight = h + 'px';
+      }
+      // Initialize from storage only on mobile
+      if (isMobile()) {
+        const stored = parseInt(localStorage.getItem(KEY) || '260', 10);
+        applyHeight(stored);
+      }
+      let dragging = false;
+      let startY = 0;
+      let startH = 0;
+      function onMove(ev) {
+        if (!dragging) return;
+        const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
+        const dy = y - startY;
+        applyHeight(startH + dy);
+        if (ev.cancelable) ev.preventDefault();
+      }
+      function onUp() {
+        if (!dragging) return;
+        dragging = false;
+        document.body.classList.remove('select-none', 'cursor-row-resize');
+        const h = parseInt(toc.style.height || '0', 10);
+        if (isFinite(h) && h > 0) localStorage.setItem(KEY, String(h));
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onUp);
+        window.removeEventListener('touchcancel', onUp);
+      }
+      function onDown(ev) {
+        if (!isMobile()) return;
+        dragging = true;
+        startY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+        startH = toc.getBoundingClientRect().height;
+        document.body.classList.add('select-none', 'cursor-row-resize');
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('touchend', onUp);
+        window.addEventListener('touchcancel', onUp);
+      }
+      resizer.addEventListener('mousedown', onDown);
+      resizer.addEventListener('touchstart', onDown, { passive: true });
+      window.addEventListener('resize', () => {
+        // Remove explicit height on up-breakpoint
+        if (!isMobile()) {
+          toc.style.removeProperty('height');
+          toc.style.removeProperty('maxHeight');
+        } else {
+          const h = parseInt(localStorage.getItem(KEY) || '260', 10);
+          applyHeight(h);
+        }
+      });
+    })();
+    function applyTheme(t) {
+      // Maintain legacy data-theme attribute (for remaining CSS variable usages)
+      document.documentElement.setAttribute('data-theme', t);
+      // Ensure Tailwind dark: variants work
+      document.documentElement.classList.toggle('dark', t === 'dark');
+      const b = document.getElementById('btn-theme');
+      if (b) {
+        const lbl = t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+        b.title = lbl;
+        b.setAttribute('aria-label', lbl);
+      }
+    }
+    function toggleTheme() {
+      const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = cur === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      localStorage.setItem(THEME_KEY, next);
+      refreshChartTheme();
+    }
+    document.getElementById('btn-theme').addEventListener('click', toggleTheme);
+    applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());
+    // Auto-sync with system preference; if user wants to lock a theme they can toggle twice quickly (we'll honor lock if we add a sentinel later)
+    try {
+      const media = matchMedia('(prefers-color-scheme: dark)');
+      const systemListener = (ev) => {
+        // If stored value is 'light' or 'dark', still update to keep in sync per user request
+        applyTheme(ev.matches ? 'dark' : 'light');
+        refreshChartTheme();
+      };
+      if (media.addEventListener) media.addEventListener('change', systemListener);
+      else if (media.addListener) media.addListener(systemListener); // Safari <14 fallback
+    } catch (error) {
+      logger.debug('Ignored recoverable error', { error });
+    }
+
+    function copyToClipboard(text, button) {
+      const showResult = (ok) => {
+        const originalText = button?.textContent ?? '';
+        if (button) {
+          button.textContent = ok ? 'Copied!' : 'Copy failed';
+          if (ok) button.classList.add('bg-accent', 'text-white', 'dark:bg-accent-dark');
+          setTimeout(() => {
+            button.textContent = originalText || 'Copy';
+            if (ok) button.classList.remove('bg-accent', 'text-white', 'dark:bg-accent-dark');
+          }, 1500);
+        }
+      };
+      // Preferred modern API (requires secure context such as http://localhost or https)
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard
+          .writeText(text)
+          .then(() => showResult(true))
+          .catch(() => {
+            // Fallback below if navigator.clipboard fails
+            try {
+              const ta = document.createElement('textarea');
+              ta.value = text;
+              ta.setAttribute('readonly', '');
+              ta.style.position = 'absolute';
+              ta.style.left = '-9999px';
+              document.body.appendChild(ta);
+              ta.select();
+              const ok = document.execCommand('copy');
+              ta.remove();
+              showResult(!!ok);
+            } catch {
+              showResult(false);
+            }
+          });
+        return;
+      }
+      // Legacy fallback for file:// or non-secure contexts
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'absolute';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        showResult(!!ok);
+      } catch {
+        showResult(false);
+      }
+    }
+
+    // Rich clipboard write: HTML + TSV with fallback to plain TSV
+    async function copyRich(tsv, html, button) {
+      const show = (ok) => {
+        const originalText = button?.textContent ?? '';
+        if (!button) return;
+        button.textContent = ok ? 'Copied!' : 'Copy failed';
+        if (ok) button.classList.add('bg-accent', 'text-white', 'dark:bg-accent-dark');
+        setTimeout(() => {
+          button.textContent = originalText || 'Copy';
+          if (ok) button.classList.remove('bg-accent', 'text-white', 'dark:bg-accent-dark');
+        }, 1500);
+      };
+      try {
+        if (
+          window.isSecureContext &&
+          navigator.clipboard &&
+          typeof navigator.clipboard.write === 'function' &&
+          typeof window.ClipboardItem === 'function'
+        ) {
+          const item = new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([tsv], { type: 'text/plain' }),
+          });
+          await navigator.clipboard.write([item]);
+          show(true);
+          return;
+        }
+        // fallback to writeText if available
+        if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(tsv);
+          show(true);
+          return;
+        }
+      } catch (error) {
+        logger.debug('Ignored recoverable error', { error });
+      }
+      // legacy fallback via textarea (TSV only)
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = tsv;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'absolute';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        show(!!ok);
+      } catch {
+        show(false);
+      }
+    }
+
+    // Safe Base64 for Unicode strings (for embedding CSV in data-* attributes)
+    function b64EncodeUnicode(str) {
+      try {
+        return btoa(unescape(encodeURIComponent(str)));
+      } catch (e) {
+        // Fallback via TextEncoder
+        const bytes = new TextEncoder().encode(str);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        return btoa(binary);
+      }
+    }
+    function b64DecodeUnicode(b64) {
+      try {
+        return decodeURIComponent(escape(atob(b64)));
+      } catch (e) {
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return new TextDecoder().decode(bytes);
+      }
+    }
+
+    function generateTableWithCopy(title, data, columns) {
+      if (!data || data.length === 0) {
+        return `<div class="mb-6">
+                <h3 class="text-base font-semibold mb-3">${escapeHtml(title)}</h3>
+                <p class="text-muted dark:text-muted-dark text-sm">No data available</p>
+              </div>`;
+      }
+
+      const tableId = title.toLowerCase().replace(/[^a-z0-9]/g, '-');
+      const headers = columns || Object.keys(data[0]);
+
+      // Generate TSV content for copying (safer across locales)
+      const tsvRow = (row) =>
+        headers.map((col) => String(row[col] ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t');
+      const tsvContent = [headers.join('\t'), ...data.map(tsvRow)].join('\n');
+      const tsvB64 = b64EncodeUnicode(tsvContent);
+
+      // Generate minimal HTML table for rich clipboard
+      let htmlTable = '<table><thead><tr>';
+      for (const h of headers) htmlTable += '<th>' + escapeHtml(h) + '</th>';
+      htmlTable += '</tr></thead><tbody>';
+      for (const row of data) {
+        htmlTable += '<tr>';
+        for (const col of headers)
+          htmlTable += '<td>' + escapeHtml(String(row[col] ?? '')) + '</td>';
+        htmlTable += '</tr>';
+      }
+      htmlTable += '</tbody></table>';
+      const htmlB64 = b64EncodeUnicode(htmlTable);
+
+      let html = `<div class="mb-6" id="${tableId}">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-base font-semibold">${escapeHtml(title)}</h3>
+                <button type="button" data-tsvb64="${tsvB64}" data-htmlb64="${htmlB64}"
+                  class="btn-copy-csv px-2 py-1 text-xs border rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark border-border dark:border-border-dark transition-colors"
+                >
+                  Copy
+                </button>
+              </div>
+              <div class="overflow-x-auto border border-border dark:border-border-dark rounded">
+                <table class="w-full text-sm">
+                  <thead class="bg-panel-2 dark:bg-panel-2-dark">
+                    <tr>`;
+
+      headers.forEach((header) => {
+        html += `<th class="px-3 py-2 text-left border-b border-border dark:border-border-dark font-medium">${escapeHtml(
+          header,
+        )}</th>`;
+      });
+
+      html += `</tr>
+                  </thead>
+                  <tbody>`;
+
+      data.forEach((row, i) => {
+        const bgClass = i % 2 === 0 ? 'bg-white dark:bg-bg-dark' : 'bg-panel dark:bg-panel-dark';
+        html += `<tr class="${bgClass}">`;
+        headers.forEach((col) => {
+          const value = row[col] || '';
+          html += `<td class="px-3 py-2 border-b border-border dark:border-border-dark">${escapeHtml(
+            String(value),
+          )}</td>`;
+        });
+        html += '</tr>';
+      });
+
+      html += `</tbody>
+                </table>
+              </div>
+            </div>`;
+
+      return html;
+    }
+
+    // Delegate Copy clicks anywhere in the document (handles dynamic content)
+    document.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest && e.target.closest('button.btn-copy-csv');
+      if (!btn) return;
+      const tsvB64 = btn.getAttribute('data-tsvb64') || '';
+      const htmlB64 = btn.getAttribute('data-htmlb64') || '';
+      let tsv = '',
+        html = '';
+      try {
+        tsv = b64DecodeUnicode(tsvB64);
+      } catch (error) {
+        logger.debug('Ignored recoverable error', { error });
+      }
+      try {
+        html = b64DecodeUnicode(htmlB64);
+      } catch (error) {
+        logger.debug('Ignored recoverable error', { error });
+      }
+      copyRich(tsv, html, btn);
+    });
+
+    function generateHtmlReport() {
+      if (!db) {
+        document.getElementById('html-report-body').innerHTML =
+          '<div class="text-center py-8 text-danger dark:text-danger-dark">No database loaded. Please load an eplusout.sql file first.</div>';
+        return;
+      }
+
+      try {
+        const sections = [];
+        const tocItems = [];
+
+        // Building Summary Section
+        const buildingSummary = generateBuildingSummary();
+        if (buildingSummary.content) {
+          sections.push(buildingSummary.content);
+          tocItems.push(buildingSummary.toc);
+        }
+
+        // Annual Building Utility Performance Summary
+        const utilityPerformance = generateUtilityPerformanceSummary();
+        if (utilityPerformance.content) {
+          sections.push(utilityPerformance.content);
+          tocItems.push(utilityPerformance.toc);
+        }
+
+        // HVAC Sizing Summary
+        const hvacSizing = generateHvacSizingSummary();
+        if (hvacSizing.content) {
+          sections.push(hvacSizing.content);
+          tocItems.push(hvacSizing.toc);
+        }
+
+        // Component Sizing Summary
+        const componentSizing = generateComponentSizingSummary();
+        if (componentSizing.content) {
+          sections.push(componentSizing.content);
+          tocItems.push(componentSizing.toc);
+        }
+
+        // Energy Meters Summary
+        const energyMeters = generateEnergyMetersSummary();
+        if (energyMeters.content) {
+          sections.push(energyMeters.content);
+          tocItems.push(energyMeters.toc);
+        }
+
+        // Update TOC with collapsible sub-headers
+        function renderToc(items) {
+          let html = '';
+          for (const it of items) {
+            const hasKids = Array.isArray(it.children) && it.children.length > 0;
+            const toggle = hasKids
+              ? `<button type="button" class="toc-toggle mr-1 inline-flex items-center justify-center w-4 h-4 text-muted dark:text-muted-dark" aria-expanded="false" aria-label="Expand">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path d="M7 5l6 5-6 5V5z"/></svg>
+                       </button>`
+              : '';
+            html += `<div class="toc-item flex items-center ${
+              hasKids ? '' : 'pl-4'
+            }">\n${toggle}\n<a href="#${it.id}" data-target="${
+              it.id
+            }" class="flex-1 block px-2 py-1 text-xs hover:bg-panel dark:hover:bg-panel-dark rounded transition-colors">${escapeHtml(
+              it.title,
+            )}</a>\n</div>`;
+            if (hasKids) {
+              html += `<div class="toc-children hidden pl-7">`;
+              for (const ch of it.children) {
+                html += `<a href="#${ch.id}" data-target="${
+                  ch.id
+                }" class="block px-2 py-1 text-xs hover:bg-panel dark:hover:bg-panel-dark rounded transition-colors">${escapeHtml(
+                  ch.title,
+                )}</a>`;
+              }
+              html += `</div>`;
+            }
+          }
+          return html;
+        }
+
+        const navEl = document.getElementById('html-report-nav');
+        navEl.innerHTML = renderToc(tocItems);
+        // TOC interactions: toggle and smooth scroll
+        navEl.addEventListener('click', (ev) => {
+          const toggleBtn = ev.target.closest && ev.target.closest('button.toc-toggle');
+          if (toggleBtn) {
+            const item = toggleBtn.parentElement; // .toc-item
+            const kids = item && item.nextElementSibling;
+            if (kids && kids.classList.contains('toc-children')) {
+              const expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+              toggleBtn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+              kids.classList.toggle('hidden', expanded);
+              const svg = toggleBtn.querySelector('svg');
+              if (svg) svg.style.transform = expanded ? '' : 'rotate(90deg)';
+            }
+            ev.preventDefault();
+            return;
+          }
+          const a = ev.target.closest && ev.target.closest('a[data-target]');
+          if (a) {
+            ev.preventDefault();
+            const id = a.getAttribute('data-target');
+            const target = document.getElementById(id);
+            if (target) target.scrollIntoView({ behavior: 'smooth' });
+          }
+        });
+
+        // Update main content
+        const reportBody = document.getElementById('html-report-body');
+        if (sections.length === 0) {
+          reportBody.innerHTML =
+            '<div class="text-center py-8 text-muted dark:text-muted-dark">No tabular report data found in this database.</div>';
+        } else {
+          reportBody.innerHTML = sections.join('');
+        }
+      } catch (error) {
+        console.error('Error generating HTML report:', error);
+        document.getElementById('html-report-body').innerHTML =
+          `<div class="text-center py-8 text-danger dark:text-danger-dark">Error generating report: ${escapeHtml(
+            error.message,
+          )}</div>`;
+      }
+    }
+
+    function generateBuildingSummary() {
+      try {
+        const results = db.exec(`
+                SELECT TableName, RowName, ColumnName, Value, Units, ReportForString
+                FROM TabularDataWithStrings 
+                WHERE ReportName = 'AnnualBuildingUtilityPerformanceSummary'
+                  AND TableName = 'Building Area'
+                ORDER BY RowName, ColumnName
+              `);
+
+        if (!results[0] || !results[0].values.length) {
+          return { content: '', toc: null };
+        }
+
+        const data = results[0].values.map((row) => ({
+          Description: row[1], // RowName
+          Value: row[3], // Value
+          Units: row[4] || '', // Units
+        }));
+
+        const content = `<div class="mb-8" id="building-summary">
+                <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Building Summary</h2>
+                ${generateTableWithCopy('Building Area', data, ['Description', 'Value', 'Units'])}
+              </div>`;
+
+        return {
+          content,
+          toc: { id: 'building-summary', title: 'Building Summary' },
+        };
+      } catch (error) {
+        console.warn('Error generating building summary:', error);
+        return { content: '', toc: null };
+      }
+    }
+
+    function generateUtilityPerformanceSummary() {
+      try {
+        const results = db.exec(`
+                SELECT TableName, RowName, ColumnName, Value, Units
+                FROM TabularDataWithStrings 
+                WHERE ReportName = 'AnnualBuildingUtilityPerformanceSummary'
+                  AND TableName IN ('End Uses', 'End Uses By Subcategory')
+                ORDER BY TableName, RowName, ColumnName
+              `);
+
+        if (!results[0] || !results[0].values.length) {
+          return { content: '', toc: null };
+        }
+
+        const endUsesData = results[0].values
+          .filter((row) => row[0] === 'End Uses')
+          .map((row) => ({
+            'End Use': row[1], // RowName
+            Category: row[2], // ColumnName
+            Value: row[3], // Value
+            Units: row[4] || '', // Units
+          }));
+
+        const subCategoryData = results[0].values
+          .filter((row) => row[0] === 'End Uses By Subcategory')
+          .map((row) => ({
+            'End Use': row[1], // RowName
+            Subcategory: row[2], // ColumnName
+            Value: row[3], // Value
+            Units: row[4] || '', // Units
+          }));
+
+        const sectionId = 'utility-performance';
+        let content = `<div class="mb-8" id="${sectionId}">
+                <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Annual Building Utility Performance Summary</h2>`;
+        const children = [];
+
+        if (endUsesData.length > 0) {
+          const subId = `${sectionId}--end-uses`;
+          content += `<div id="${subId}">`;
+          content += generateTableWithCopy('End Uses', endUsesData, [
+            'End Use',
+            'Category',
+            'Value',
+            'Units',
+          ]);
+          content += `</div>`;
+          children.push({ id: subId, title: 'End Uses' });
+        }
+
+        if (subCategoryData.length > 0) {
+          const subId2 = `${sectionId}--end-uses-by-subcategory`;
+          content += `<div id="${subId2}">`;
+          content += generateTableWithCopy('End Uses By Subcategory', subCategoryData, [
+            'End Use',
+            'Subcategory',
+            'Value',
+            'Units',
+          ]);
+          content += `</div>`;
+          children.push({ id: subId2, title: 'End Uses By Subcategory' });
+        }
+
+        content += '</div>';
+
+        return {
+          content,
+          toc: { id: sectionId, title: 'Utility Performance Summary', children },
+        };
+      } catch (error) {
+        console.warn('Error generating utility performance summary:', error);
+        return { content: '', toc: null };
+      }
+    }
+
+    function generateHvacSizingSummary() {
+      try {
+        const results = db.exec(`
+                SELECT TableName, RowName, ColumnName, Value, Units
+                FROM TabularDataWithStrings 
+                WHERE ReportName = 'HVACSizingSummary'
+                ORDER BY TableName, RowName, ColumnName
+              `);
+
+        if (!results[0] || !results[0].values.length) {
+          return { content: '', toc: null };
+        }
+
+        // Group by table name
+        const tables = {};
+        results[0].values.forEach((row) => {
+          const tableName = row[0];
+          if (!tables[tableName]) tables[tableName] = [];
+          tables[tableName].push({
+            Component: row[1], // RowName
+            Property: row[2], // ColumnName
+            Value: row[3], // Value
+            Units: row[4] || '', // Units
+          });
+        });
+
+        const sectionId = 'hvac-sizing';
+        let content = `<div class="mb-8" id="${sectionId}">
+                <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">HVAC Sizing Summary</h2>`;
+
+        const children = [];
+        Object.entries(tables).forEach(([tableName, data]) => {
+          const subId = `${sectionId}--${tableName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+          content += `<div id="${subId}">`;
+          content += generateTableWithCopy(tableName, data, [
+            'Component',
+            'Property',
+            'Value',
+            'Units',
+          ]);
+          content += `</div>`;
+          children.push({ id: subId, title: tableName });
+        });
+
+        content += '</div>';
+
+        return {
+          content,
+          toc: { id: sectionId, title: 'HVAC Sizing Summary', children },
+        };
+      } catch (error) {
+        console.warn('Error generating HVAC sizing summary:', error);
+        return { content: '', toc: null };
+      }
+    }
+
+    function generateComponentSizingSummary() {
+      try {
+        const results = db.exec(`
+                SELECT TableName, RowName, ColumnName, Value, Units
+                FROM TabularDataWithStrings 
+                WHERE ReportName = 'ComponentSizingSummary'
+                ORDER BY TableName, RowName, ColumnName
+              `);
+
+        if (!results[0] || !results[0].values.length) {
+          return { content: '', toc: null };
+        }
+
+        // Group by table name
+        const tables = {};
+        results[0].values.forEach((row) => {
+          const tableName = row[0];
+          if (!tables[tableName]) tables[tableName] = [];
+          tables[tableName].push({
+            Component: row[1], // RowName
+            Property: row[2], // ColumnName
+            Value: row[3], // Value
+            Units: row[4] || '', // Units
+          });
+        });
+
+        const sectionId = 'component-sizing';
+        let content = `<div class="mb-8" id="${sectionId}">
+                <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Component Sizing Summary</h2>`;
+
+        const children = [];
+        Object.entries(tables).forEach(([tableName, data]) => {
+          const subId = `${sectionId}--${tableName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+          content += `<div id="${subId}">`;
+          content += generateTableWithCopy(tableName, data, [
+            'Component',
+            'Property',
+            'Value',
+            'Units',
+          ]);
+          content += `</div>`;
+          children.push({ id: subId, title: tableName });
+        });
+
+        content += '</div>';
+
+        return {
+          content,
+          toc: { id: sectionId, title: 'Component Sizing Summary', children },
+        };
+      } catch (error) {
+        console.warn('Error generating component sizing summary:', error);
+        return { content: '', toc: null };
+      }
+    }
+
+    function generateEnergyMetersSummary() {
+      try {
+        const results = db.exec(`
+                SELECT Name, Type, Units, 
+                       COUNT(*) as DataPoints,
+                       MIN(rd.Value) as MinValue,
+                       MAX(rd.Value) as MaxValue,
+                       AVG(rd.Value) as AvgValue,
+                       SUM(rd.Value) as TotalValue
+                FROM ReportDataDictionary rdd
+                LEFT JOIN ReportData rd ON rdd.ReportDataDictionaryIndex = rd.ReportDataDictionaryIndex
+                WHERE rdd.IsMeter = 1 
+                  AND rdd.ReportingFrequency = 'Hourly'
+                GROUP BY rdd.ReportDataDictionaryIndex, Name, Type, Units
+                ORDER BY Name
+              `);
+
+        if (!results[0] || !results[0].values.length) {
+          return { content: '', toc: null };
+        }
+
+        const data = results[0].values.map((row) => ({
+          'Meter Name': row[0],
+          Type: row[1],
+          Units: row[2] || '',
+          'Data Points': row[3] || 0,
+          'Min Value': row[4] ? Number(row[4]).toFixed(2) : 'N/A',
+          'Max Value': row[5] ? Number(row[5]).toFixed(2) : 'N/A',
+          'Avg Value': row[6] ? Number(row[6]).toFixed(2) : 'N/A',
+          'Total Value': row[7] ? Number(row[7]).toFixed(2) : 'N/A',
+        }));
+
+        const content = `<div class="mb-8" id="energy-meters">
+                <h2 class="text-lg font-bold mb-4 border-b border-border dark:border-border-dark pb-2">Energy Meters Summary</h2>
+                ${generateTableWithCopy('Energy Meters', data, [
+                  'Meter Name',
+                  'Type',
+                  'Units',
+                  'Data Points',
+                  'Min Value',
+                  'Max Value',
+                  'Avg Value',
+                  'Total Value',
+                ])}
+              </div>`;
+
+        return {
+          content,
+          toc: { id: 'energy-meters', title: 'Energy Meters Summary' },
+        };
+      } catch (error) {
+        console.warn('Error generating energy meters summary:', error);
+        return { content: '', toc: null };
+      }
+    }
+
+    async function ensureD3() {
+      if (!window.d3) window.d3 = d3;
+    }
+    let SQL;
+    async function ensureSql() {
+      if (SQL) return SQL;
+      SQL = await initSqlJs({ locateFile: () => sqlWasmUrl });
+      return SQL;
+    }
+
+    const $ = (id) => document.getElementById(id);
+    // Chart theme colors (replaces legacy cssVar helper)
+    function chartColors() {
+      const dark = document.documentElement.classList.contains('dark');
+      return dark
+        ? {
+            axis: '#9fb0c3',
+            grid: '#223042',
+            tooltipBg: 'rgba(20,25,32,0.95)',
+            text: '#e6eef7',
+            border: '#223042',
+            accent: '#2563eb',
+            accentStrong: '#1d4ed8',
+          }
+        : {
+            axis: '#334155',
+            grid: 'rgb(229 231 235 / 1)',
+            tooltipBg: 'rgba(255,255,255,0.98)',
+            text: '#0b1220',
+            border: '#e2e8f0',
+            accent: '#2563eb',
+            accentStrong: '#1d4ed8',
+          };
+    }
+    function toObjects(result) {
+      if (!Array.isArray(result) || !result[0]) return [];
+      const first = result[0];
+      const cols = Array.isArray(first.columns)
+        ? first.columns
+        : Array.isArray(first.lc)
+          ? first.lc
+          : [];
+      const rows = Array.isArray(first.values) ? first.values : [];
+      if (!cols.length || !rows.length) return [];
+      return rows.map((row) => {
+        const out = {};
+        for (let i = 0; i < cols.length; i++) {
+          out[cols[i]] = Array.isArray(row) ? row[i] : undefined;
+        }
+        return out;
+      });
+    }
+    function quantile(sorted, p) {
+      if (!sorted.length) return NaN;
+      const idx = (sorted.length - 1) * p;
+      const lo = Math.floor(idx),
+        hi = Math.ceil(idx);
+      if (lo === hi) return sorted[lo];
+      return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+    }
+    function computeStats(values) {
+      const n = values.length;
+      if (!n) return { count: 0 };
+      let sum = 0,
+        min = Infinity,
+        max = -Infinity;
+      for (const v of values) {
+        sum += v;
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+      const mean = sum / n;
+      const s = [...values].sort((a, b) => a - b);
+      return {
+        count: n,
+        sum,
+        min,
+        p05: quantile(s, 0.05),
+        mean,
+        median: quantile(s, 0.5),
+        p95: quantile(s, 0.95),
+        max,
+      };
+    }
+    function fmt(n) {
+      if (n == null || isNaN(n)) return '—';
+      const a = Math.abs(n);
+      if (a >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+      if (a >= 1e3) return (n / 1e3).toFixed(2) + 'k';
+      if (a === 0 || a >= 1) return n.toFixed(2);
+      return n.toPrecision(3);
+    }
+    // KPI specific formatting: thousands separators; no decimals for large numbers
+    function kpiFmt(n, opts = {}) {
+      if (n == null || !isFinite(n)) return '—';
+      const abs = Math.abs(n);
+      // Allow explicit decimals override
+      if (opts.decimals != null) {
+        return new Intl.NumberFormat('en-US', {
+          minimumFractionDigits: opts.decimals,
+          maximumFractionDigits: opts.decimals,
+        }).format(n);
+      }
+      if (abs >= 1000) {
+        return new Intl.NumberFormat('en-US', {
+          maximumFractionDigits: 0,
+        }).format(Math.round(n));
+      }
+      if (abs >= 100) {
+        return new Intl.NumberFormat('en-US', {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }).format(n);
+      }
+      return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(n);
+    }
+    function downloadFile(name, text) {
+      const blob = new Blob([text], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(a.href);
+      a.remove();
+    }
+
+    let db,
+      dict = [],
+      selected = new Map();
+    let favs = new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'));
+    let zoomEnabled = true; // always on
+    let baseFreq = null;
+    let viewMode = 'time';
+    // scatter pairing state: store chosen x and y series ids (from currently selected list order)
+    let scatterPair = null; // {x:id,y:id}
+    let scatterShowRegression = true;
+    // Degree-day temperature response state (scatter view only)
+    let scatterShowDegDay = false; // whether panel visible
+    let scatterDegDayBaseTemp = 18; // balance temperature (C or displayed unit)
+    let scatterDegDayPeriod = 'daily'; // 'daily' | 'monthly'
+    let scatterDegDayMode = 'both'; // 'heating' | 'cooling' | 'both'
+    // Time-series temperature response (degree-day) overlay state
+    let tempRespEnabled = false;
+    let tempRespBaseTemp = 18; // same interpretation as scatter (display scale)
+    let tempRespPeriod = 'daily'; // daily or monthly aggregation for fitting when hourly baseFreq
+    let tempRespMode = 'both';
+    let tempRespModel = null; // cache of last model {intercept,hCoeff,cCoeff,r2,useH,useC,predSeriesId,predPoints,energyUnits,label}
+    // Preserve current hourly x-domain across redraws (zoom + resize)
+    let currentXDomain = null;
+    // Global crosshair state to sync vertical guideline across multiple time-series charts
+    let __hoverXMs = null; // number | null (UTC ms)
+    const __crosshairSubs = new Set(); // Set<(ms:number|null, source:any)=>void>
+    function __setHoverX(ms, source) {
+      __hoverXMs = ms;
+      __crosshairSubs.forEach((fn) => {
+        try {
+          fn(ms, source);
+        } catch (error) {
+          logger.debug('Ignored recoverable error', { error });
+        }
+      });
+    }
+    // Global band crosshair state (for Monthly/Annual bar charts), keyed by xLabel
+    let __hoverBandKey = null; // string | null
+    const __crosshairBandSubs = new Set(); // Set<(key:string|null, source:any)=>void>
+    function __setHoverBand(key, source) {
+      __hoverBandKey = key;
+      __crosshairBandSubs.forEach((fn) => {
+        try {
+          fn(key, source);
+        } catch (error) {
+          logger.debug('Ignored recoverable error', { error });
+        }
+      });
+    }
+    // Time resolution resampling state
+    let resampleMode = 'original'; // 'original' | 'hourly' | 'monthly' | 'annual'
+    let resampleAgg = 'auto'; // 'auto' | 'sum' | 'avg' | 'max' | 'min'
+
+    // No special guards needed with label-for approach
+
+    let isIP = localStorage.getItem(UNITS_KEY) === 'IP' ? true : false;
+    const btnUnits = $('btn-units');
+    if (btnUnits) {
+      btnUnits.textContent = isIP ? 'IP' : 'SI';
+      btnUnits.addEventListener('click', () => {
+        isIP = !isIP;
+        btnUnits.textContent = isIP ? 'IP' : 'SI';
+        localStorage.setItem(UNITS_KEY, isIP ? 'IP' : 'SI');
+        renderAll();
+      });
+    }
+
+    // Units preferences + modal wiring
+    const ENERGY_SI_KEY = 'eplus_energy_unit_si';
+    const ENERGY_IP_KEY = 'eplus_energy_unit_ip';
+    const POWER_IP_KEY = 'eplus_power_unit_ip';
+    let prefEnergySI = localStorage.getItem(ENERGY_SI_KEY) || 'J';
+    let prefEnergyIP = localStorage.getItem(ENERGY_IP_KEY) || 'BTU';
+    let prefPowerIP = localStorage.getItem(POWER_IP_KEY) || 'Btu/h';
+
+    const btnUnitsSettings = $('btn-units-settings');
+    const unitsModal = $('units-modal');
+    const unitsBackdrop = $('units-backdrop');
+    const unitsClose = $('units-close');
+    const unitsSave = $('units-save');
+    const selSiEnergy = $('sel-si-energy');
+    const selIpEnergy = $('sel-ip-energy');
+    const selIpPower = $('sel-ip-power');
+    // Temperature prefs
+    let prefTempSI = localStorage.getItem(TEMP_SI_KEY) || 'C'; // C or K
+    let prefTempIP = localStorage.getItem(TEMP_IP_KEY) || 'F'; // F (future: R)
+
+    function showUnits() {
+      selSiEnergy.value = prefEnergySI;
+      selIpEnergy.value = prefEnergyIP;
+      selIpPower.value = prefPowerIP;
+      const siTempSel = $('sel-si-temp');
+      const ipTempSel = $('sel-ip-temp');
+      if (siTempSel) siTempSel.value = prefTempSI;
+      if (ipTempSel) ipTempSel.value = prefTempIP;
+      unitsModal.classList.remove('hidden');
+      unitsBackdrop.classList.remove('hidden');
+    }
+    function hideUnits() {
+      unitsModal.classList.add('hidden');
+      unitsBackdrop.classList.add('hidden');
+    }
+    btnUnitsSettings?.addEventListener('click', showUnits);
+    unitsClose?.addEventListener('click', hideUnits);
+    unitsBackdrop?.addEventListener('click', hideUnits);
+    unitsSave?.addEventListener('click', () => {
+      prefEnergySI = selSiEnergy.value;
+      prefEnergyIP = selIpEnergy.value;
+      prefPowerIP = selIpPower.value;
+      const siTempSel = $('sel-si-temp');
+      const ipTempSel = $('sel-ip-temp');
+      if (siTempSel) prefTempSI = siTempSel.value;
+      if (ipTempSel) prefTempIP = ipTempSel.value;
+      localStorage.setItem(ENERGY_SI_KEY, prefEnergySI);
+      localStorage.setItem(ENERGY_IP_KEY, prefEnergyIP);
+      localStorage.setItem(POWER_IP_KEY, prefPowerIP);
+      localStorage.setItem(TEMP_SI_KEY, prefTempSI);
+      localStorage.setItem(TEMP_IP_KEY, prefTempIP);
+      hideUnits();
+      renderAll();
+    });
+
+    function unitKind(units) {
+      if (!units) return 'other';
+      const u = String(units).toLowerCase();
+      if (
+        u.includes('wh') ||
+        u.includes('joule') ||
+        u === 'j' ||
+        u.includes('kwh') ||
+        u.includes('mwh')
+      )
+        return 'energy';
+      if (
+        u.includes('btu/h') ||
+        u.includes('btuh') ||
+        /\bw(?!h)\b/.test(u) ||
+        u.includes('watt') ||
+        u.includes('ton')
+      )
+        return 'power';
+      if (
+        u === 'c' ||
+        u.includes('celsius') ||
+        u === 'k' ||
+        u.includes('kelvin') ||
+        u === 'f' ||
+        u.includes('fahrenheit')
+      )
+        return 'temperature';
+      return 'other';
+    }
+    function toJoules(value, units) {
+      const u = String(units || '').toLowerCase();
+      if (u.includes('mwh')) return value * 3.6e9;
+      if (u.includes('kwh')) return value * 3.6e6;
+      if (u.includes('wh')) return value * 3600;
+      if (u.includes('joule') || u === 'j') return value;
+      return null;
+    }
+
+    // NOTE: Avoid capturing a hoisted previous convertUnits; identity fallbacks prevent recursion.
+    const __orig_convertUnits = (v) => v;
+    const __orig_convertUnitLabel = (u) => u || '';
+
+    function convertUnits(value, units) {
+      if (value == null || !isFinite(value)) return value;
+      if (!units) return value;
+      const kind = unitKind(units);
+      if (isIP) {
+        const u = String(units).toLowerCase();
+        if (u === 'c' || u.includes('celsius')) return (value * 9) / 5 + 32;
+        if (kind === 'energy') {
+          let J = toJoules(value, units);
+          if (J == null) J = value;
+          let btu = J / 1055.06;
+          if (prefEnergyIP === 'kBTU') return btu / 1e3;
+          if (prefEnergyIP === 'MMBTU') return btu / 1e6;
+          return btu;
+        }
+        if (kind === 'power') {
+          let v = value;
+          const ul = String(units).toLowerCase();
+          if (ul.includes('w') && !ul.includes('wh')) v = value * 3.412141633;
+          if (prefPowerIP === 'Tons') return v / 12000;
+          return v;
+        }
+        if (kind === 'temperature') {
+          // Incoming likely C; already converted above. If preference IP temp differs (future), handle here.
+          if (prefTempIP === 'F') {
+            if (/c|celsius/.test(String(units).toLowerCase())) return (value * 9) / 5 + 32;
+            if (/k|kelvin/.test(String(units).toLowerCase()))
+              return ((value - 273.15) * 9) / 5 + 32;
+          }
+          return value;
+        }
+        return __orig_convertUnits(value, units);
+      } else {
+        if (kind === 'energy') {
+          let J = toJoules(value, units);
+          if (J == null) J = value;
+          if (prefEnergySI === 'kWh') return J / 3.6e6;
+          if (prefEnergySI === 'MWh') return J / 3.6e9;
+          return J;
+        }
+        if (kind === 'temperature') {
+          const ul = String(units).toLowerCase();
+          let cVal;
+          if (ul === 'c' || ul.includes('celsius')) cVal = value;
+          else if (ul === 'k' || ul.includes('kelvin')) cVal = value - 273.15;
+          else if (ul === 'f' || ul.includes('fahrenheit')) cVal = ((value - 32) * 5) / 9;
+          else cVal = value;
+          if (prefTempSI === 'K') return cVal + 273.15;
+          return cVal; // C
+        }
+        return __orig_convertUnits(value, units);
+      }
+    }
+    function convertUnitLabel(units) {
+      if (!units) return units || '';
+      const kind = unitKind(units);
+      if (isIP) {
+        const u = String(units).toLowerCase();
+        if (u === 'c' || u.includes('celsius')) return 'F';
+        if (kind === 'energy') return prefEnergyIP;
+        if (kind === 'power') return prefPowerIP === 'Tons' ? 'tons' : 'Btu/h';
+        if (kind === 'temperature') return prefTempIP;
+        return __orig_convertUnitLabel(units);
+      } else {
+        if (kind === 'energy') return prefEnergySI;
+        if (kind === 'temperature') return prefTempSI;
+        return __orig_convertUnitLabel(units);
+      }
+    }
+
+    // Helper: label for opposite unit system (only energy/power for now)
+    function convertUnitLabelOpposite(units) {
+      if (!units) return '';
+      const kind = unitKind(units);
+      if (isIP) {
+        // left IP, right SI
+        if (kind === 'energy') return prefEnergySI;
+        if (kind === 'power') return 'W';
+        if (kind === 'temperature') return prefTempSI;
+      } else {
+        // left SI, right IP
+        if (kind === 'energy') return prefEnergyIP;
+        if (kind === 'power') return prefPowerIP === 'Tons' ? 'tons' : 'Btu/h';
+        if (kind === 'temperature') return prefTempIP;
+      }
+      return '';
+    }
+    // Convert a displayed tick value (already in current system) to opposite system.
+    function convertDisplayedToOpposite(v, origUnits) {
+      if (!isFinite(v)) return v;
+      const kind = unitKind(origUnits);
+      if (kind === 'energy') {
+        if (isIP) {
+          // IP -> SI
+          let J; // build J from current displayed IP unit
+          if (prefEnergyIP === 'BTU') J = v * 1055.06;
+          else if (prefEnergyIP === 'kBTU') J = v * 1000 * 1055.06;
+          else if (prefEnergyIP === 'MMBTU') J = v * 1e6 * 1055.06;
+          else J = v * 1055.06; // fallback
+          if (prefEnergySI === 'J') return J;
+          if (prefEnergySI === 'kWh') return J / 3.6e6;
+          if (prefEnergySI === 'MWh') return J / 3.6e9;
+          return J;
+        } else {
+          // SI -> IP
+          let J;
+          if (prefEnergySI === 'J') J = v;
+          else if (prefEnergySI === 'kWh') J = v * 3.6e6;
+          else if (prefEnergySI === 'MWh') J = v * 3.6e9;
+          else J = v;
+          const BTU = J / 1055.06;
+          if (prefEnergyIP === 'BTU') return BTU;
+          if (prefEnergyIP === 'kBTU') return BTU / 1000;
+          if (prefEnergyIP === 'MMBTU') return BTU / 1e6;
+          return BTU;
+        }
+      }
+      if (kind === 'power') {
+        if (isIP) {
+          // IP -> SI (W)
+          let Btuh;
+          if (prefPowerIP === 'Tons') Btuh = v * 12000;
+          else Btuh = v; // v is in Btu/h already
+          const W = Btuh * 0.29307107; // 1 Btu/h =0.29307107 W
+          return W;
+        } else {
+          // SI -> IP
+          const W = v;
+          if (prefPowerIP === 'Tons') return W / 0.29307107 / 12000; // W -> Btu/h -> tons
+          return W / 0.29307107; // Btu/h
+        }
+      }
+      if (kind === 'temperature') {
+        if (isIP) {
+          // IP displayed -> SI opposite prefer C or K
+          let c;
+          if (prefTempIP === 'F') c = ((v - 32) * 5) / 9;
+          else c = v; // future other scales
+          if (prefTempSI === 'K') return c + 273.15;
+          return c;
+        } else {
+          // SI displayed -> IP opposite (F)
+          let c;
+          if (prefTempSI === 'K') c = v - 273.15;
+          else c = v;
+          if (prefTempIP === 'F') return (c * 9) / 5 + 32;
+          return c;
+        }
+      }
+      return v; // other kinds not converted
+    }
+
+    function refreshChartTheme() {
+      if (selected.size === 0) return;
+      renderAll();
+    }
+    async function readDbFile(file) {
+      try {
+        const SQLMod = await ensureSql();
+        const u8 = new Uint8Array(await file.arrayBuffer());
+        db = new SQLMod.Database(u8);
+        return db;
+      } catch (error) {
+        throw new DataLoadError('Failed to load local database file', {
+          fileName: file?.name,
+          error,
+        });
+      }
+    }
+    async function readDbUrl(url) {
+      try {
+        const SQLMod = await ensureSql();
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to fetch database: ' + url);
+        const u8 = new Uint8Array(await res.arrayBuffer());
+        db = new SQLMod.Database(u8);
+        return db;
+      } catch (error) {
+        throw new DataLoadError('Failed to load database from URL', { url, error });
+      }
+    }
+    function queryDictionary() {
+      try {
+        const sql = `
+          SELECT ReportDataDictionaryIndex AS id, IsMeter, Type, IndexGroup, KeyValue AS key,
+                 Name, ReportingFrequency AS freq, Units
+          FROM ReportDataDictionary
+          WHERE ReportingFrequency IN ('Hourly','Monthly')
+          ORDER BY IsMeter DESC, IndexGroup, Name, key;`;
+        dict = toObjects(db.exec(sql));
+        // Invalidate load balance cache (new DB or changed dict)
+        __loadBalanceCache = null;
+        return dict;
+      } catch (error) {
+        logger.error('queryDictionary failed', { error });
+        throw new QueryError('Failed querying dictionary metadata', { error });
+      }
+    }
+    function queryTimeSeries(dictId) {
+      try {
+        const stmt = db.prepare(`
+          SELECT rd.Value AS value, t.EnvironmentPeriodIndex AS env, t.SimulationDays AS sday,
+                 t.Month AS month, t.Day AS day, t.Hour AS hour, t.Minute AS minute,
+                 t.IntervalType AS interval, t.TimeIndex AS tindex
+          FROM ReportData rd JOIN Time t ON t.TimeIndex = rd.TimeIndex
+          WHERE rd.ReportDataDictionaryIndex = ?
+          ORDER BY t.TimeIndex;`);
+        stmt.bind([dictId]);
+        const rows = [];
+        while (stmt.step()) rows.push(stmt.getAsObject());
+        stmt.free();
+        return rows;
+      } catch (error) {
+        throw new QueryError('Failed querying time series data', { dictId, error });
+      }
+    }
+
+    function timeLabel(r) {
+      const hh = String(r.hour ?? 0).padStart(2, '0');
+      const mm = String(r.minute ?? 0).padStart(2, '0');
+      const md = `${String(r.month || 1).padStart(2, '0')}/${String(r.day || 1).padStart(2, '0')}`;
+      return `Env ${r.env} — ${md} ${hh}:${mm}`;
+    }
+    function toHourlyPoints(rows) {
+      const year = 2000;
+      return rows.map((r) => ({
+        x: Date.UTC(
+          year + (r.env || 0) - 1,
+          (r.month || 1) - 1,
+          r.day || 1,
+          r.hour || 0,
+          r.minute || 0,
+        ),
+        y: Number(r.value),
+        label: timeLabel(r),
+        // carry through grouping fields to avoid Date roll-over issues (e.g., hour 24)
+        env: r.env || 1,
+        month: r.month || 1,
+        day: r.day || 1,
+        hour: r.hour || 0,
+        minute: r.minute || 0,
+      }));
+    }
+    function toMonthlyPoints(rows) {
+      return rows.map((r) => ({
+        xLabel: `E${r.env}-M${String(r.month || 1).padStart(2, '0')}`,
+        y: Number(r.value),
+      }));
+    }
+
+    // Resampling functions for different time resolutions
+    function resamplePoints(points, fromFreq, toFreq, units, aggMode = 'auto') {
+      if (fromFreq === toFreq || toFreq === 'original') return points;
+      if (!points || points.length === 0) return points;
+
+      // Determine aggregation method
+      let aggregateFunc = aggMode;
+      if (!aggregateFunc || aggregateFunc === 'auto') {
+        const isEnergy =
+          units &&
+          (units.toLowerCase().includes('j') ||
+            units.toLowerCase().includes('wh') ||
+            units.toLowerCase().includes('btu'));
+        aggregateFunc = isEnergy ? 'sum' : 'avg';
+      }
+
+      if (fromFreq === 'Hourly') {
+        if (toFreq === 'monthly') return resampleHourlyToMonthly(points, aggregateFunc);
+        if (toFreq === 'annual') return resampleHourlyToAnnual(points, aggregateFunc);
+      } else if (fromFreq === 'Monthly') {
+        if (toFreq === 'annual') return resampleMonthlyToAnnual(points, aggregateFunc);
+      }
+
+      return points; // No resampling needed/supported
+    }
+
+    function resampleHourlyToMonthly(points, aggregateFunc) {
+      const groups = new Map(); // key: E{env}-M{mm}
+      for (const p of points) {
+        const env = p.env || 1;
+        const mm = String(p.month || 1).padStart(2, '0');
+        const key = `E${env}-M${mm}`;
+        let g = groups.get(key);
+        if (!g) {
+          g = { values: [], ord: (env - 1) * 12 + (parseInt(mm) - 1), firstX: p.x };
+          groups.set(key, g);
+        }
+        g.values.push(p.y);
+        if (p.x < g.firstX) g.firstX = p.x;
+      }
+      const result = [];
+      // sort by env then month using ord; fall back to firstX
+      const entries = [...groups.entries()].sort((a, b) => {
+        const oa = a[1].ord ?? a[1].firstX;
+        const ob = b[1].ord ?? b[1].firstX;
+        return oa - ob;
+      });
+      for (const [key, g] of entries) {
+        const value = aggregateValues(g.values, aggregateFunc);
+        result.push({ xLabel: key, y: value, x: g.firstX });
+      }
+      return result;
+    }
+
+    function resampleHourlyToAnnual(points, aggregateFunc) {
+      const groups = new Map(); // key: E{env}
+      for (const p of points) {
+        const env = p.env || 1;
+        const key = `E${env}`;
+        let g = groups.get(key);
+        if (!g) {
+          g = { values: [], ord: env - 1, firstX: p.x };
+          groups.set(key, g);
+        }
+        g.values.push(p.y);
+        if (p.x < g.firstX) g.firstX = p.x;
+      }
+      const entries = [...groups.entries()].sort((a, b) => (a[1].ord ?? 0) - (b[1].ord ?? 0));
+      const result = entries.map(([key, g]) => ({
+        xLabel: key,
+        y: aggregateValues(g.values, aggregateFunc),
+        x: g.firstX,
+      }));
+      return result;
+    }
+
+    function resampleMonthlyToAnnual(points, aggregateFunc) {
+      const groups = new Map();
+      for (const p of points) {
+        // Prefer env carried over; else parse from label
+        let env = p.env;
+        if (!env) {
+          const match = p.xLabel && p.xLabel.match(/E(\d+)-M(\d+)/);
+          if (!match) continue;
+          env = Number(match[1]) || 1;
+        }
+        const key = `E${env}`;
+        let g = groups.get(key);
+        if (!g) {
+          g = { values: [], ord: env - 1 };
+          groups.set(key, g);
+        }
+        g.values.push(p.y);
+      }
+      const entries = [...groups.entries()].sort((a, b) => (a[1].ord ?? 0) - (b[1].ord ?? 0));
+      return entries.map(([key, g]) => ({
+        xLabel: key,
+        y: aggregateValues(g.values, aggregateFunc),
+      }));
+    }
+
+    function aggregateValues(values, mode) {
+      if (!values || values.length === 0) return 0;
+      let sum = 0;
+      let min = Infinity;
+      let max = -Infinity;
+      for (const v of values) {
+        const n = Number(v) || 0;
+        sum += n;
+        if (n < min) min = n;
+        if (n > max) max = n;
+      }
+      switch (mode) {
+        case 'sum':
+          return sum;
+        case 'avg':
+          return sum / values.length;
+        case 'min':
+          return min;
+        case 'max':
+          return max;
+        default:
+          return sum / values.length; // fallback to average
+      }
+    }
+
+    function exportCSV(seriesMap) {
+      const header =
+        baseFreq === 'Hourly'
+          ? ['datetime_utc', 'value', 'series_id']
+          : ['label', 'value', 'series_id'];
+      const rows = [header.join(',')];
+      seriesMap.forEach((v, id) => {
+        const series = v.points;
+        const units = v.meta.Units || '';
+        for (const d of series) {
+          const val = convertUnits(d.y, units);
+          const x = Number.isFinite(d.x) ? new Date(d.x).toISOString() : d.xLabel || '';
+          rows.push(`${JSON.stringify(x)},${val},${id}`);
+        }
+      });
+      return rows.join('\n');
+    }
+
+    // Chart palette derived from Tailwind color tokens (light theme values defined in tailwind.config.js)
+    const palette = [
+      '#2563eb', // chart-1 / accent
+      '#16a34a', // chart-2
+      '#9333ea', // chart-3
+      '#dc2626', // chart-4
+      '#f59e0b', // chart-5
+      '#0891b2', // chart-6
+      '#64748b', // chart-7
+      '#4f46e5', // chart-8
+      '#059669', // chart-9
+      '#d946ef', // chart-10
+    ];
+
+    // Cache for load balance aggregated monthly category data (raw Joules)
+    // Invalidated whenever the dictionary is re-queried (new database loaded)
+    let __loadBalanceCache = null; // { monthLabels, catTotals, missing }
+
+    let __rendering = false;
+    function renderAll() {
+      if (__rendering) return; // prevent re-entrant recursive calls
+      __rendering = true;
+      try {
+        const metaEl = $('series-meta-entries');
+        const unitsEl = $('units');
+        const titleEl = $('series-title');
+        const metas = [...selected.values()].map((v) => v.meta);
+        const normalizeFlag = viewMode === 'time' && $('ldc-normalize')?.checked === true;
+        const resolutionText =
+          resampleMode === 'original'
+            ? baseFreq
+            : resampleMode === 'hourly'
+              ? 'Hourly'
+              : resampleMode === 'monthly'
+                ? 'Monthly'
+                : resampleMode === 'annual'
+                  ? 'Annual'
+                  : baseFreq;
+        titleEl.textContent = metas.length
+          ? `${resolutionText} • ${metas.length} series`
+          : 'Series';
+        const consistentUnits = metas.every((m) => m.Units === metas[0]?.Units);
+        unitsEl.textContent = metas.length
+          ? consistentUnits
+            ? convertUnitLabel(metas[0]?.Units || '')
+            : '(mixed units)'
+          : '';
+        metaEl.innerHTML = metas
+          .map(
+            (m) =>
+              `<span class='text-muted dark:text-muted-dark'>${
+                m.IsMeter ? 'Meter' : 'Variable'
+              }:</span><span>${escapeHtml(m.Name)}${m.key ? ` (${escapeHtml(m.key)})` : ''}</span>`,
+          )
+          .join('');
+        const visibleEntries = [...selected.entries()].filter(([, v]) => v.visible !== false);
+        const series = visibleEntries.map(([id, v], i) => {
+          // Apply resampling to the points
+          const resampledPoints = resamplePoints(
+            v.points,
+            baseFreq,
+            resampleMode,
+            v.meta.Units,
+            resampleAgg,
+          );
+          return {
+            id,
+            meta: v.meta,
+            color: palette[i % palette.length],
+            points: resampledPoints,
+            visible: v.visible !== false,
+          };
+        });
+        if (viewMode === 'ldc') {
+          if (baseFreq !== 'Hourly') {
+            $('legend').innerHTML = '';
+            $('chart').innerHTML = '';
+            $('insights').innerHTML = 'Load duration curves require Hourly data.';
+            $('units').textContent = '(n/a)';
+          } else {
+            renderLDC(series);
+          }
+        } else if (viewMode === 'balance') {
+          // Show loading state while load balance aggregates (can be heavy on first run)
+          const chartEl = $('chart');
+          if (chartEl) {
+            chartEl.innerHTML = `<div id='lb-loading' class='absolute inset-0 flex flex-col gap-3 items-center justify-center text-center bg-panel/40 dark:bg-panel-dark/40 backdrop-blur-sm'>
+      <div class='w-8 h-8 border-2 border-accent dark:border-accent-dark border-t-transparent rounded-full animate-spin' aria-hidden='true'></div>
+      <div class='text-[11px] px-3 py-1.5 rounded bg-panel-2 dark:bg-panel-2-dark border border-border dark:border-border-dark shadow-md text-muted dark:text-muted-dark' role='status' aria-live='polite'>Loading load balance…</div>
+    </div>`;
+          }
+          // Allow at least one paint cycle before heavy work:
+          // rAF fires before paint, so a single rAF still blocks showing the spinner.
+          // Use setTimeout (or a double rAF) to yield so the spinner renders first.
+          requestAnimationFrame(() =>
+            setTimeout(() => {
+              renderLoadBalance(series).finally(() => {
+                const l = document.getElementById('lb-loading');
+                if (l && l.parentElement === chartEl) l.remove();
+              });
+            }, 0),
+          );
+        } else {
+          if (viewMode === 'scatter') {
+            // Scatter view remains single-panel
+            const multi = $('multi-charts');
+            multi?.classList?.add('hidden');
+            $('single-chart-panel')?.classList?.remove('hidden');
+            renderScatter(series);
+            renderStats(series);
+          } else {
+            // Time series: group by original SQL units string
+            const byUnits = new Map();
+            for (const s of series) {
+              const u = s.meta.Units || '';
+              if (!byUnits.has(u)) byUnits.set(u, []);
+              byUnits.get(u).push(s);
+            }
+            const multi = $('multi-charts');
+            const single = $('single-chart-panel');
+            if (byUnits.size <= 1) {
+              // Single-chart path
+              single?.classList?.remove('hidden');
+              multi?.classList?.add('hidden');
+              renderChart(series, { normalize: normalizeFlag });
+              renderInsights(series);
+              renderKPIs(series);
+              renderStats(series);
+              if (normalizeFlag && metas.length) unitsEl.textContent = '%';
+            } else if (multi) {
+              // Multi-chart path
+              single?.classList?.add('hidden');
+              multi.classList.remove('hidden');
+              multi.innerHTML = '';
+              // Clear top-level KPIs since per-group KPIs are not shown yet
+              const k = $('kpis');
+              if (k) k.innerHTML = '';
+              let groupIdx = 0;
+              for (const [u, arr] of byUnits.entries()) {
+                groupIdx++;
+                const panel = document.createElement('div');
+                panel.className = 'flex flex-col gap-2';
+                const header = document.createElement('div');
+                header.className =
+                  'flex items-center justify-between text-xs text-muted dark:text-muted-dark';
+                header.innerHTML = `<span>Unit group ${groupIdx} • ${
+                  arr.length
+                } series</span><span>${escapeHtml(convertUnitLabel(u) || u || '')}</span>`;
+                panel.appendChild(header);
+                const legend = document.createElement('div');
+                legend.className = 'flex flex-wrap gap-2 items-center';
+                panel.appendChild(legend);
+                const chart = document.createElement('div');
+                chart.className =
+                  'w-full h-[360px] max-[768px]:h-[280px] max-[480px]:h-[220px] relative';
+                panel.appendChild(chart);
+                const insightsEl = document.createElement('div');
+                insightsEl.className =
+                  'rounded-md border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark p-2 text-xs';
+                panel.appendChild(insightsEl);
+                const statsEl = document.createElement('div');
+                statsEl.className = 'grid grid-cols-8 gap-2';
+                panel.appendChild(statsEl);
+                renderChart(arr, {
+                  normalize: normalizeFlag,
+                  containerEl: chart,
+                  legendEl: legend,
+                });
+                renderInsights(arr, insightsEl);
+                renderStats(arr, statsEl);
+                multi.appendChild(panel);
+              }
+            }
+          }
+        }
+        // export button state
+        {
+          const has = selected.size > 0;
+          const b = $('btn-export');
+          if (b) b.disabled = !has;
+        }
+      } finally {
+        __rendering = false;
+      }
+    }
+
+    async function handleSelectionChange() {
+      try {
+        const selEl = $('dictionary');
+        const chosen = [...selEl.selectedOptions].map((o) => Number(o.value));
+        localStorage.setItem(SELECT_KEY, JSON.stringify(chosen));
+        if (chosen.length === 0) {
+          selected.clear();
+          baseFreq = null;
+          currentXDomain = null;
+          renderAll();
+          return;
+        }
+        const first = dict.find((d) => d.id === chosen[0]);
+        const newFreq = first?.freq || 'Hourly';
+        if (newFreq !== baseFreq) currentXDomain = null;
+        baseFreq = newFreq;
+        for (const id of chosen) {
+          const meta = dict.find((d) => d.id === id);
+          if (!meta || meta.freq !== baseFreq) continue;
+          if (!selected.has(id)) {
+            const rows = queryTimeSeries(id);
+            const pts = baseFreq === 'Hourly' ? toHourlyPoints(rows) : toMonthlyPoints(rows);
+            selected.set(id, { meta, points: pts, visible: true });
+          }
+        }
+        for (const id of [...selected.keys()]) {
+          if (!chosen.includes(id)) selected.delete(id);
+        }
+        renderAll();
+      } catch (e) {
+        console.error('Selection change failed', e);
+      }
+    }
+
+    function renderInsights(series, targetEl) {
+      const el = targetEl || $('insights');
+      if (series.length === 0) {
+        el.textContent = '';
+        return;
+      }
+      const lines = series.map((s) => {
+        const vals = s.points.map((p) => convertUnits(p.y, s.meta.Units));
+        const st = computeStats(vals);
+        const maxIdx = vals.indexOf(Math.max(...vals));
+        const when = s.points[maxIdx];
+        const whenTxt = when?.label || when?.xLabel || '';
+        return `<span style='color:${s.color}'>${escapeHtml(s.meta.Name)}</span>: peak ${fmt(
+          st.max,
+        )} at ${escapeHtml(String(whenTxt))}`;
+      });
+      el.innerHTML = lines.join('<br/>');
+    }
+
+    // ================= KPIs & Stats =================
+    let buildingAreaCache = null; // in m2
+    async function getBuildingArea() {
+      if (buildingAreaCache != null) return buildingAreaCache;
+      try {
+        // Preferred direct query (AnnualBuildingUtilityPerformanceSummary)
+        try {
+          const direct = db.exec(`SELECT Value AS total_building_area_m2
+                  FROM TabularDataWithStrings
+                  WHERE ReportName='AnnualBuildingUtilityPerformanceSummary'
+                    AND TableName='Building Area'
+                    AND RowName='Total Building Area'
+                    AND ColumnName='Area'
+                    AND ReportForString LIKE 'Entire Facility%'
+                  LIMIT 1;`);
+          const val = direct[0]?.values?.[0]?.[0];
+          if (val != null) {
+            const num = Number(val);
+            if (isFinite(num) && num > 0) {
+              buildingAreaCache = num;
+              return num;
+            }
+          }
+        } catch (error) {
+          logger.debug('Ignored recoverable error', { error });
+        }
+        // Detect available columns (older sql schemas may differ)
+        let hasRow = true,
+          hasCol = true;
+        try {
+          const info = db.exec('PRAGMA table_info(TabularData)');
+          const cols = new Set((info[0]?.values || []).map((r) => String(r[1]).toLowerCase()));
+          hasRow = cols.has('rowname');
+          hasCol = cols.has('columnname');
+        } catch (error) {
+          logger.debug('Ignored recoverable error', { error });
+        }
+        let q1 = [];
+        if (hasRow && hasCol) {
+          try {
+            q1 = db.exec(
+              `SELECT Value FROM TabularData WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') AND (LOWER(ColumnName)='area' OR LOWER(ColumnName) LIKE '%m2%') LIMIT 1;`,
+            );
+          } catch (error) {
+            logger.debug('Ignored recoverable error', { error });
+          }
+        }
+        if (q1[0]?.values?.[0]?.[0]) {
+          const v = Number(q1[0].values[0][0]);
+          if (isFinite(v) && v > 0) {
+            buildingAreaCache = v;
+            return v;
+          }
+        }
+        // Fallback parse strings table if RowName exists
+        if (hasRow) {
+          let q2 = [];
+          try {
+            q2 = db.exec(
+              `SELECT Value FROM TabularDataWithStrings WHERE (LOWER(RowName) LIKE '%net conditioned building area%' OR LOWER(RowName) LIKE '%total building area%' OR LOWER(RowName) LIKE '%building area%') LIMIT 10;`,
+            );
+          } catch (error) {
+            logger.debug('Ignored recoverable error', { error });
+          }
+          if (q2[0]) {
+            for (const row of q2[0].values) {
+              const m = /([0-9]+(?:\.[0-9]+)?)/.exec(row[0]);
+              if (m) {
+                const v = Number(m[1]);
+                if (isFinite(v) && v > 0) {
+                  buildingAreaCache = v;
+                  return v;
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Area query failed', e);
+      }
+      buildingAreaCache = null;
+      return null;
+    }
+
+    function annualEnergyFromPoints(points, units) {
+      if (!points || !points.length) return null; // Expect energy values per interval (Hourly or Monthly)
+      // Convert each y (raw) to Joules (if convertible) else attempt numeric sum
+      let totalJ = 0;
+      let hasJ = true;
+      for (const p of points) {
+        const raw = p.y;
+        const J = toJoules(raw, units);
+        if (J == null) {
+          hasJ = false;
+          break;
+        }
+        totalJ += J;
+      }
+      if (hasJ) return { J: totalJ };
+      // fallback treat value already in preferred converted units
+      const vals = points.map((p) => convertUnits(p.y, units)).filter((v) => isFinite(v));
+      return {
+        value: vals.reduce((a, b) => a + b, 0),
+        units: convertUnitLabel(units),
+      };
+    }
+
+    function loadFactor(points, units) {
+      if (baseFreq !== 'Hourly' || !points.length) return null;
+      const vals = points.map((p) => convertUnits(p.y, units));
+      const st = computeStats(vals);
+      if (!st.max || st.max === 0) return null;
+      return st.mean / st.max;
+    }
+
+    async function renderKPIs(series) {
+      const el = $('kpis');
+      el.innerHTML = '';
+      if (!series.length) return;
+      const primary = series[0];
+      const isMeter = primary.meta.IsMeter == 1;
+      const kpiItems = []; // {title,value,desc}
+      if (isMeter) {
+        const annual = annualEnergyFromPoints(primary.points, primary.meta.Units);
+        if (annual) {
+          let displayVal = '—',
+            label = 'Annual Energy';
+          if (annual.J != null) {
+            // convert to current preferred energy unit
+            let val;
+            let unitLbl;
+            if (isIP) {
+              const kWh = annual.J / 3.6e6; // always compute kWh for cost/EUI
+              // Convert to chosen IP energy unit by converting J -> chosen label through existing convertUnits path
+              val = convertUnits(annual.J, 'J');
+              unitLbl = convertUnitLabel('J');
+              displayVal = `${kpiFmt(val)} ${unitLbl}`;
+            } else {
+              val = convertUnits(annual.J, 'J');
+              unitLbl = convertUnitLabel('J');
+              displayVal = `${kpiFmt(val)} ${unitLbl}`;
+            }
+            kpiItems.push({
+              title: label,
+              value: displayVal,
+              desc: 'Total annual energy summed over all intervals for the selected meter.',
+            });
+            // EUI if area available
+            const area = await getBuildingArea();
+            if (area) {
+              const kWh = annual.J / 3.6e6;
+              let euiVal, euiUnits;
+              if (isIP) {
+                // kBtu/ft2 or MMBtu/ft2 depending on energy unit selection
+                const ft2 = area * 10.7639;
+                const kBtu = kWh * 3.412141633;
+                if (prefEnergyIP === 'MMBTU') {
+                  euiVal = kBtu / 1000 / ft2;
+                  euiUnits = 'MMBtu/ft²';
+                } else if (prefEnergyIP === 'kBTU') {
+                  euiVal = kBtu / ft2;
+                  euiUnits = 'kBtu/ft²';
+                } else {
+                  euiVal = (kBtu / ft2) * 1000;
+                  euiUnits = 'Btu/ft²';
+                }
+              } else {
+                const m2 = area;
+                const kWhVal = kWh;
+                if (prefEnergySI === 'MWh') {
+                  euiVal = kWhVal / 1000 / m2;
+                  euiUnits = 'MWh/m²';
+                } else if (prefEnergySI === 'kWh') {
+                  euiVal = kWhVal / m2;
+                  euiUnits = 'kWh/m²';
+                } else {
+                  // J
+                  euiVal = annual.J / m2;
+                  euiUnits = 'J/m²';
+                }
+              }
+              kpiItems.push({
+                title: 'EUI',
+                value: `${kpiFmt(euiVal)} ${euiUnits}`,
+                desc: 'Energy Use Intensity: annual energy divided by building floor area.',
+              });
+            } else {
+              kpiItems.push({
+                title: 'EUI',
+                value: 'Area?',
+                desc: 'Energy Use Intensity. Floor area not found in tabular output.',
+              });
+            }
+          } else if (annual.value != null) {
+            kpiItems.push({
+              title: label,
+              value: `${kpiFmt(annual.value)} ${annual.units || ''}`,
+              desc: 'Total annual energy summed over all intervals for the selected meter.',
+            });
+          }
+        }
+      }
+      // Peak demand & timestamp already computed in insights; replicate for first series
+      const vals = primary.points.map((p) => convertUnits(p.y, primary.meta.Units));
+      const st = computeStats(vals);
+      if (isFinite(st.max)) {
+        const idx = vals.indexOf(st.max);
+        const when = primary.points[idx];
+        const whenTxt = when?.label || when?.xLabel || '';
+        kpiItems.push({
+          title: 'Peak',
+          value: `${kpiFmt(st.max)} ${convertUnitLabel(primary.meta.Units)}
+    <span class='block text-[10px] text-muted dark:text-muted-dark truncate'>${escapeHtml(
+      whenTxt,
+    )}</span>`,
+          desc: 'Maximum interval value and when it occurred.',
+        });
+      }
+      const lf = loadFactor(primary.points, primary.meta.Units);
+      if (lf) {
+        kpiItems.push({
+          title: 'Load Factor',
+          value: (lf * 100).toFixed(1) + '%',
+          desc: 'Average / peak over the Weather Run Period (Hourly data only).',
+        });
+      }
+      // Tariff cost (energy + demand) if annual energy computed and hourly
+      if (baseFreq === 'Hourly' && isMeter) {
+        const cost = computeTariffCost(primary);
+        if (cost) {
+          kpiItems.push({
+            title: 'Cost (est.)',
+            value: `$${kpiFmt(
+              cost.total,
+            )}<span class='block text-[10px] text-muted dark:text-muted-dark'>E:$${kpiFmt(
+              cost.energy,
+            )} D:$${kpiFmt(cost.demand)}</span>`,
+            desc: 'Simple cost estimate: flat $/kWh energy plus monthly peak demand charges.',
+          });
+        }
+      }
+      // Energy balance (only if facility meter)
+      if (/electricity:facility/i.test(primary.meta.Name || '')) {
+        const eb = await computeEnergyBalance('Electricity');
+        if (eb) {
+          const cls =
+            Math.abs(eb.residualPct) > 5
+              ? 'text-danger dark:text-danger-dark font-semibold'
+              : 'text-muted dark:text-muted-dark';
+          kpiItems.push({
+            title: 'Elec Balance',
+            value: `<span class='${cls}'>${kpiFmt(eb.residualPct, {
+              decimals: 1,
+            })}%</span>`,
+            desc: 'Residual between Electricity:Facility and the sum of end-use electricity meters.',
+          });
+        }
+      }
+      // Render
+      el.innerHTML = kpiItems
+        .map(
+          (
+            k,
+          ) => `<div class="relative group p-2 rounded-md border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark flex flex-col min-w-[110px]" data-tip="${escapeHtml(
+            k.desc || '',
+          )}">
+                <span class="flex items-center justify-between gap-1">
+                  <span class="text-[10px] uppercase tracking-wide text-muted dark:text-muted-dark">${escapeHtml(
+                    k.title,
+                  )}</span>
+                  <button type="button" class="kpi-help text-[10px] w-4 h-4 leading-none inline-flex items-center justify-center border border-border dark:border-border-dark rounded cursor-help" aria-label="Info" tabindex="0">?</button>
+                </span>
+                <span class="text-sm leading-tight mt-0.5">${k.value}</span>
+              </div>`,
+        )
+        .join('');
+      attachKpiTooltips();
+    }
+
+    // Tooltip logic for KPI cards (hover + tap)
+    let kpiTooltipEl = null;
+    let kpiActiveBtn = null;
+    function ensureKpiTooltip() {
+      if (!kpiTooltipEl) {
+        kpiTooltipEl = document.createElement('div');
+        kpiTooltipEl.id = 'kpi-tooltip';
+        kpiTooltipEl.className =
+          'pointer-events-none text-xs max-w-[200px] z-40 fixed hidden px-2.5 py-1.5 rounded-md border border-border dark:border-border-dark bg-panel dark:bg-panel-dark shadow-lg';
+        document.body.appendChild(kpiTooltipEl);
+      }
+      return kpiTooltipEl;
+    }
+    function showKpiTooltip(target, text) {
+      const tip = ensureKpiTooltip();
+      tip.innerHTML = escapeHtml(text);
+      const rect = target.getBoundingClientRect();
+      const top = rect.top - 8;
+      const left = Math.min(window.innerWidth - 220, rect.left);
+      tip.style.top = (top < 8 ? rect.bottom + 8 : top) + 'px';
+      tip.style.left = left + 'px';
+      tip.classList.remove('hidden');
+    }
+    function hideKpiTooltip() {
+      if (kpiTooltipEl) kpiTooltipEl.classList.add('hidden');
+      kpiActiveBtn = null;
+    }
+    function attachKpiTooltips() {
+      const helps = document.querySelectorAll('#kpis .kpi-help, #tariff-pop .kpi-help');
+      helps.forEach((btn) => {
+        const parent = btn.closest('[data-tip]');
+        const text = parent?.getAttribute('data-tip') || '';
+        const enter = () => {
+          if (!text) return;
+          showKpiTooltip(btn, text);
+        };
+        const leave = (e) => {
+          if (e.type === 'mouseleave' && kpiActiveBtn === btn) return;
+          if (!kpiActiveBtn) hideKpiTooltip();
+        };
+        btn.addEventListener('mouseenter', enter);
+        btn.addEventListener('focus', enter);
+        btn.addEventListener('mouseleave', leave);
+        btn.addEventListener('blur', () => {
+          if (kpiActiveBtn !== btn) hideKpiTooltip();
+        });
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (kpiActiveBtn === btn) {
+            kpiActiveBtn = null;
+            hideKpiTooltip();
+          } else {
+            kpiActiveBtn = btn;
+            showKpiTooltip(btn, text);
+          }
+        });
+      });
+      document.addEventListener('click', (e) => {
+        if (kpiActiveBtn && !e.target.closest('#kpis') && !e.target.closest('#tariff-pop'))
+          hideKpiTooltip();
+      });
+      window.addEventListener(
+        'scroll',
+        () => {
+          if (kpiActiveBtn) hideKpiTooltip();
+        },
+        true,
+      );
+    }
+
+    function renderStats(series, targetEl) {
+      const el = targetEl || $('stats');
+      if (!el) return;
+      if (!series.length) {
+        el.innerHTML = '';
+        return;
+      }
+      // Build header row + one row per series
+      const cols = ['Series', 'Min', 'P05', 'Mean', 'Median', 'P95', 'Max'];
+      const rows = [
+        `<div class='contents'>${cols
+          .map(
+            (c) =>
+              `<div class="text-[10px] font-semibold uppercase tracking-wide text-muted dark:text-muted-dark">${c}</div>`,
+          )
+          .join('')}</div>`,
+      ];
+      series.forEach((s) => {
+        const vals = s.points.map((p) => convertUnits(p.y, s.meta.Units));
+        const st = computeStats(vals);
+        rows.push(`<div class='contents'>
+              <div class='text-[10px] truncate' style='color:${s.color}'>${escapeHtml(
+                s.meta.Name,
+              )}</div>
+              <div class='text-[11px]'>${fmt(st.min)}</div>
+              <div class='text-[11px]'>${fmt(st.p05)}</div>
+              <div class='text-[11px]'>${fmt(st.mean)}</div>
+              <div class='text-[11px]'>${fmt(st.median)}</div>
+              <div class='text-[11px]'>${fmt(st.p95)}</div>
+              <div class='text-[11px]'>${fmt(st.max)}</div>
+            </div>`);
+      });
+      el.className = 'grid gap-x-3 gap-y-1 items-center'; // responsive grid auto-flow
+      el.style.gridTemplateColumns = 'repeat(7,minmax(0,1fr))';
+      el.innerHTML = rows.join('');
+    }
+
+    // Energy Balance
+    const energyBalanceCache = {};
+    async function computeEnergyBalance(kind) {
+      // kind e.g. 'Electricity'
+      const key = kind.toLowerCase();
+      if (energyBalanceCache[key]) return energyBalanceCache[key];
+      try {
+        const names = [
+          'Facility',
+          'Heating',
+          'Cooling',
+          'InteriorLights',
+          'ExteriorLights',
+          'InteriorEquipment',
+          'ExteriorEquipment',
+          'Fans',
+          'Pumps',
+          'HeatRejection',
+          'Humidification',
+          'HeatRecovery',
+          'WaterSystems',
+          'Refrigeration',
+          'Cogeneration',
+        ];
+        function findDict(name) {
+          return dict.find((d) => d.Name === `${kind}:${name}` && d.freq === 'Monthly');
+        }
+        const fac = findDict('Facility');
+        if (!fac) return null;
+        const rowsFacility = queryTimeSeries(fac.id);
+        const totalFac = rowsFacility.reduce((a, r) => a + Number(r.value || 0), 0);
+        let sumComponents = 0;
+        names
+          .filter((n) => n !== 'Facility')
+          .forEach((n) => {
+            const m = findDict(n);
+            if (m) {
+              const rs = queryTimeSeries(m.id);
+              const s = rs.reduce((a, r) => a + Number(r.value || 0), 0);
+              sumComponents += s;
+            }
+          });
+        if (totalFac <= 0) return null;
+        const residual = totalFac - sumComponents;
+        const residualPct = (residual / totalFac) * 100;
+        const out = {
+          facilityJ: totalFac,
+          componentsJ: sumComponents,
+          residualJ: residual,
+          residualPct,
+        };
+        energyBalanceCache[key] = out;
+        return out;
+      } catch (e) {
+        console.warn('Energy balance failed', e);
+        return null;
+      }
+    }
+
+    // Tariff simple cost model
+    const TARIFF_ENERGY_KEY = 'eplus_tariff_energy_rate'; // legacy single
+    const TARIFF_ENERGY_KEY_ELEC = 'eplus_tariff_energy_rate_elec';
+    const TARIFF_ENERGY_KEY_DH = 'eplus_tariff_energy_rate_dh';
+    const TARIFF_ENERGY_KEY_DC = 'eplus_tariff_energy_rate_dc';
+    const TARIFF_DEMAND_KEY = 'eplus_tariff_demand_rate';
+    let rateElec = parseFloat(
+      localStorage.getItem(TARIFF_ENERGY_KEY_ELEC) ||
+        localStorage.getItem(TARIFF_ENERGY_KEY) ||
+        '0.10',
+    );
+    let rateDH = parseFloat(localStorage.getItem(TARIFF_ENERGY_KEY_DH) || '0.06');
+    let rateDC = parseFloat(localStorage.getItem(TARIFF_ENERGY_KEY_DC) || '0.08');
+    let tariffDemandRate = parseFloat(localStorage.getItem(TARIFF_DEMAND_KEY) || '12'); // $/kW-month (electricity only)
+    // Backwards compatibility variable
+    let tariffEnergyRate = rateElec;
+
+    function getFuelKind(meta) {
+      if (!meta || meta.IsMeter != 1) return 'other';
+      const name = (meta.Name || '').toLowerCase();
+      if (name.includes('electric')) return 'electricity';
+      if (name.includes('districtheating') || name.includes('district heating'))
+        return 'districtheating';
+      if (name.includes('districtcooling') || name.includes('district cooling'))
+        return 'districtcooling';
+      return 'other';
+    }
+    function computeTariffCost(seriesObj) {
+      try {
+        const pts = seriesObj.points;
+        if (!pts.length || baseFreq !== 'Hourly') return null; // annual energy J sum to kWh
+        const unit = seriesObj.meta.Units;
+        const kind = getFuelKind(seriesObj.meta);
+        let totalJ = 0;
+        for (const p of pts) {
+          const J = toJoules(p.y, unit);
+          if (J == null) return null;
+          totalJ += J;
+        }
+        const totalKWh = totalJ / 3.6e6;
+        let energyRate = tariffEnergyRate;
+        if (kind === 'electricity') energyRate = rateElec;
+        else if (kind === 'districtheating') energyRate = rateDH;
+        else if (kind === 'districtcooling') energyRate = rateDC;
+        const energyCost = totalKWh * energyRate;
+        // Demand: compute kW per hour (kWh for that hour) => kW
+        const byMonth = new Map();
+        pts.forEach((p) => {
+          const date = new Date(p.x);
+          const m = date.getUTCFullYear() + '-' + (date.getUTCMonth() + 1);
+          const kW = (toJoules(p.y, unit) || 0) / 3.6e6;
+          const cur = byMonth.get(m) || { peak: 0 };
+          if (kW > cur.peak) cur.peak = kW;
+          byMonth.set(m, cur);
+        });
+        let demandCost = 0;
+        if (kind === 'electricity') {
+          byMonth.forEach((v) => {
+            demandCost += v.peak * tariffDemandRate;
+          });
+        }
+        return {
+          energy: energyCost,
+          demand: demandCost,
+          total: energyCost + demandCost,
+          kind,
+        };
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Tariff popover UI
+    function injectTariffUI() {
+      if (document.getElementById('tariff-btn')) return;
+      const container =
+        document.querySelector('#toolbar-actions') || document.querySelector('#series-meta');
+      if (!container) return;
+      const btn = document.createElement('button');
+      btn.id = 'tariff-btn';
+      btn.className =
+        'px-2 py-1 text-xs border rounded bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark';
+      btn.textContent = '$';
+      btn.title = 'Tariff settings';
+      container.appendChild(btn);
+      const pop = document.createElement('div');
+      pop.id = 'tariff-pop';
+      pop.className =
+        'hidden z-50 w-64 border border-border dark:border-border-dark rounded-md bg-panel dark:bg-panel-dark shadow-lg p-3 text-xs';
+      pop.style.position = 'fixed';
+      pop.innerHTML = `<div class='flex justify-between items-center mb-1'><strong class='text-xs'>Tariff</strong><button id='tariff-close' class='px-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark' aria-label='Close'>✕</button></div>
+            <div class='space-y-2'>
+            <label class='block' data-tip='Electricity volumetric charge ($/kWh). Applied to total annual electric kWh.'>
+              <span class='flex items-center justify-between'>
+                <span>Electricity ($/kWh)</span>
+                <button type='button' class='kpi-help ml-2 cursor-help select-none text-muted dark:text-muted-dark px-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark'>?</button>
+              </span>
+              <input id='tariff-energy-elec' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark' value='${rateElec}'>
+            </label>
+            <label class='block' data-tip='District heating volumetric charge ($/kWh equivalent). Applied to total annual DistrictHeating kWh.'>
+              <span class='flex items-center justify-between'>
+                <span>District Heating ($/kWh)</span>
+                <button type='button' class='kpi-help ml-2 cursor-help select-none text-muted dark:text-muted-dark px-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark'>?</button>
+              </span>
+              <input id='tariff-energy-dh' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark' value='${rateDH}'>
+            </label>
+            <label class='block' data-tip='District cooling volumetric charge ($/kWh equivalent). Applied to total annual DistrictCooling kWh.'>
+              <span class='flex items-center justify-between'>
+                <span>District Cooling ($/kWh)</span>
+                <button type='button' class='kpi-help ml-2 cursor-help select-none text-muted dark:text-muted-dark px-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark'>?</button>
+              </span>
+              <input id='tariff-energy-dc' type='number' step='0.0001' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark' value='${rateDC}'>
+            </label>
+            <label class='block' data-tip="Monthly demand charge for electricity: each month's highest hourly kW times this rate, summed over all months.">
+              <span class='flex items-center justify-between'>
+                <span>Demand Rate ($/kW-mo)</span>
+                <button type='button' class='kpi-help ml-2 cursor-help select-none text-muted dark:text-muted-dark px-1 rounded hover:bg-panel-2 dark:hover:bg-panel-2-dark'>?</button>
+              </span>
+              <input id='tariff-demand' type='number' step='0.01' class='mt-0.5 w-full border rounded px-1 py-0.5 bg-panel-2 dark:bg-panel-2-dark border-border dark:border-border-dark' value='${tariffDemandRate}'>
+            </label>
+            </div>
+      <div class='flex justify-end gap-2 mt-3'><button id='tariff-save' class='px-3 py-1.5 rounded bg-accent-strong dark:bg-accent-strong-dark text-white text-xs'>Save</button></div>`;
+      // attach KPI-style tooltips for tariff help buttons
+      setTimeout(() => {
+        attachKpiTooltips();
+      }, 0);
+      document.body.appendChild(pop);
+      btn.addEventListener('click', () => {
+        if (pop.classList.contains('hidden')) {
+          const r = btn.getBoundingClientRect();
+          const margin = 6;
+          const w = 260;
+          let left = Math.min(window.innerWidth - w - 8, Math.max(8, r.right - w));
+          let top = r.bottom + margin;
+          if (top + pop.offsetHeight > window.innerHeight) {
+            top = r.top - pop.offsetHeight - margin;
+          }
+          pop.style.left = left + 'px';
+          pop.style.top = top + 'px';
+          pop.classList.remove('hidden');
+        } else {
+          pop.classList.add('hidden');
+        }
+      });
+      pop
+        .querySelector('#tariff-close')
+        .addEventListener('click', () => pop.classList.add('hidden'));
+      document.addEventListener('click', (e) => {
+        if (
+          !pop.classList.contains('hidden') &&
+          !e.target.closest('#tariff-pop') &&
+          e.target !== btn
+        ) {
+          pop.classList.add('hidden');
+        }
+      });
+      pop.querySelector('#tariff-save').addEventListener('click', () => {
+        const erElec = parseFloat(pop.querySelector('#tariff-energy-elec').value);
+        const erDH = parseFloat(pop.querySelector('#tariff-energy-dh').value);
+        const erDC = parseFloat(pop.querySelector('#tariff-energy-dc').value);
+        const dr = parseFloat(pop.querySelector('#tariff-demand').value);
+        if (isFinite(erElec)) rateElec = erElec;
+        if (isFinite(erDH)) rateDH = erDH;
+        if (isFinite(erDC)) rateDC = erDC;
+        if (isFinite(dr)) tariffDemandRate = dr;
+        // keep backwards compatibility single key for electricity
+        tariffEnergyRate = rateElec;
+        localStorage.setItem(TARIFF_ENERGY_KEY_ELEC, rateElec);
+        localStorage.setItem(TARIFF_ENERGY_KEY_DH, rateDH);
+        localStorage.setItem(TARIFF_ENERGY_KEY_DC, rateDC);
+        localStorage.setItem(TARIFF_ENERGY_KEY, rateElec);
+        localStorage.setItem(TARIFF_DEMAND_KEY, tariffDemandRate);
+        pop.classList.add('hidden');
+        renderAll();
+      });
+    }
+    injectTariffUI();
+
+    async function renderChart(series, opts = {}) {
+      await ensureD3();
+      const container = opts.containerEl || $('chart');
+      // Unsubscribe any lingering crosshair subscriber from previous render in this container
+      if (container.__crosshairUnsub && typeof container.__crosshairUnsub === 'function') {
+        try {
+          container.__crosshairUnsub();
+        } catch (error) {
+          logger.debug('Ignored recoverable error', { error });
+        }
+        container.__crosshairUnsub = null;
+      }
+      if (container.__crosshairBandUnsub && typeof container.__crosshairBandUnsub === 'function') {
+        try {
+          container.__crosshairBandUnsub();
+        } catch (error) {
+          logger.debug('Ignored recoverable error', { error });
+        }
+        container.__crosshairBandUnsub = null;
+      }
+      container.innerHTML = '';
+      const rect = container.getBoundingClientRect();
+      const width = rect.width,
+        height = rect.height;
+      // Determine rendering mode from data shape: hourly points have no xLabel, monthly/annual do.
+      const firstPt = series?.[0]?.points?.[0];
+      const isHourlyEffective = firstPt && !('xLabel' in firstPt);
+      const metas = series.map((s) => s.meta);
+      let consistentUnits = metas.length && metas.every((m) => m.Units === metas[0].Units);
+      let primaryMeta = consistentUnits ? metas[0] : null;
+      if (!primaryMeta && metas.length) {
+        // Fallback: choose first if all share same unit kind (energy/power/temperature)
+        const k0 = unitKind(metas[0].Units);
+        if (
+          ['energy', 'power', 'temperature'].includes(k0) &&
+          metas.every((m) => unitKind(m.Units) === k0)
+        ) {
+          primaryMeta = metas[0];
+        }
+      }
+      const normalize = opts.normalize === true;
+      const showSecondary =
+        !normalize &&
+        primaryMeta &&
+        ['energy', 'power', 'temperature'].includes(unitKind(primaryMeta.Units));
+      const m = {
+        top: 16,
+        right: showSecondary ? 68 : 24,
+        bottom: isHourlyEffective ? 56 : 36,
+        left: 56,
+      };
+      const w = width - m.left - m.right,
+        h = height - m.top - m.bottom;
+      const {
+        axis: axisColor,
+        grid: gridColor,
+        tooltipBg,
+        text: textColor,
+        border: borderColor,
+        accent,
+        accentStrong,
+      } = chartColors();
+      const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
+      const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+      const peaks = new Map();
+      if (normalize) {
+        series.forEach((s) => {
+          const vals = s.points
+            .map((p) => convertUnits(p.y, s.meta.Units))
+            .filter((v) => isFinite(v));
+          const pk = Math.max(...vals, 0);
+          peaks.set(s.id, pk > 0 ? pk : 1);
+        });
+      }
+      function normVal(val, s) {
+        if (!normalize) return val;
+        const pk = peaks.get(s.id) || 1;
+        return (val / pk) * 100;
+      }
+      const allY = series.flatMap((s) =>
+        s.points.map((p) => normVal(convertUnits(p.y, s.meta.Units), s)),
+      );
+      const y = d3
+        .scaleLinear()
+        .domain([Math.min(0, d3.min(allY)), d3.max(allY)])
+        .nice()
+        .range([h, 0]);
+      g.append('g')
+        .attr('class', 'grid')
+        .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(''))
+        .selectAll('line')
+        .attr('stroke', gridColor)
+        .attr('stroke-opacity', 0.35);
+      g.select('.grid').select('.domain').remove();
+      if (isHourlyEffective) {
+        const fullDomain = d3.extent(series.flatMap((s) => s.points.map((p) => p.x)));
+        const x = d3.scaleUtc().domain(fullDomain).range([0, w]);
+        if (
+          currentXDomain &&
+          currentXDomain[0] >= fullDomain[0] &&
+          currentXDomain[1] <= fullDomain[1]
+        )
+          x.domain(currentXDomain);
+        else currentXDomain = null;
+        // More frequent month ticks with responsive skipping
+        const allMonths = d3.timeMonth.range(
+          d3.timeMonth.floor(fullDomain[0]),
+          d3.timeMonth.offset(fullDomain[1], 1),
+        );
+        let monthStep = 1;
+        if (w < 420) monthStep = 2; // skip every other month on small width
+        if (w < 320) monthStep = 3; // skip more on very narrow
+        const monthTicks = allMonths.filter((_, i) => i % monthStep === 0);
+        const gx = g.append('g').attr('transform', `translate(0,${h})`);
+        function applyMonthAxis() {
+          const spanMs = x.domain()[1] - x.domain()[0];
+          const days = spanMs / 86400000;
+          // If zoomed in to < 40 days, switch to default ticks for readability
+          if (days < 40) {
+            gx.call(d3.axisBottom(x).ticks(w < 480 ? (w < 360 ? 4 : 6) : 8));
+            return;
+          }
+          const allMonths = d3.timeMonth.range(
+            d3.timeMonth.floor(x.domain()[0]),
+            d3.timeMonth.offset(x.domain()[1], 1),
+          );
+          let monthStep = 1;
+          if (w < 420) monthStep = 2;
+          if (w < 320) monthStep = 3;
+          const monthTicks = allMonths.filter((_, i) => i % monthStep === 0);
+          gx.call(
+            d3
+              .axisBottom(x)
+              .tickValues(monthTicks)
+              .tickFormat((d) => d3.timeFormat('%b')(d)),
+          );
+        }
+        applyMonthAxis();
+        const gy = g.append('g').call(d3.axisLeft(y).ticks(6));
+        if (showSecondary) {
+          const oppLabel = convertUnitLabelOpposite(primaryMeta.Units);
+          const axisR = d3
+            .axisRight(y)
+            .ticks(6)
+            .tickFormat((t) => fmt(convertDisplayedToOpposite(t, primaryMeta.Units)));
+          const gyR = g.append('g').attr('transform', `translate(${w},0)`).call(axisR);
+          gyR.selectAll('path,line').attr('stroke', axisColor);
+          gyR.selectAll('text').attr('fill', axisColor);
+          if (oppLabel) {
+            g.append('text')
+              .attr('x', w)
+              .attr('y', -4)
+              .attr('text-anchor', 'end')
+              .attr('fill', axisColor)
+              .attr('font-size', '10px')
+              .text(oppLabel);
+          }
+        }
+        gx.selectAll('path,line').attr('stroke', axisColor);
+        gy.selectAll('path,line').attr('stroke', axisColor);
+        gx.selectAll('text').attr('fill', axisColor);
+        gy.selectAll('text').attr('fill', axisColor);
+        function drawSeries() {
+          for (const s of series) {
+            const line = d3
+              .line()
+              .x((d) => x(d.x))
+              .y((d) => y(normVal(convertUnits(d.y, s.meta.Units), s)));
+            g.append('path')
+              .datum(s.points)
+              .attr('fill', 'none')
+              .attr('stroke-width', 1.8)
+              .attr('stroke', s.color)
+              .attr('class', 'series')
+              .attr('d', line);
+          }
+        }
+        drawSeries();
+        // Crosshair line + per-series dots (synced across charts)
+        const crosshairG = g.append('g').attr('class', 'crosshair').style('display', 'none');
+        // Keep crosshair above bar layers
+        crosshairG.raise();
+        // Keep crosshair above all chart layers
+        crosshairG.raise();
+        const vline = crosshairG
+          .append('line')
+          .attr('y1', 0)
+          .attr('y2', h)
+          .attr('stroke', axisColor)
+          .attr('stroke-opacity', 0.5)
+          .attr('stroke-width', 1);
+        // One marker per series
+        const markers = series.map((s) =>
+          crosshairG
+            .append('circle')
+            .attr('r', 4.5)
+            .attr('fill', s.color)
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1)
+            .attr('vector-effect', 'non-scaling-stroke'),
+        );
+
+        // Temperature response model (degree-day) overlay if enabled
+        function computeTempResponseModel() {
+          tempRespModel = null;
+          // Need at least one energy series and one temperature series
+          const temps = series.filter((s) => unitKind(s.meta.Units) === 'temperature');
+          const energies = series.filter((s) => unitKind(s.meta.Units) === 'energy');
+          if (!tempRespEnabled || !temps.length || !energies.length) return;
+          const tempSeries = temps[0];
+          const energySeries = energies[0];
+          // Build daily or monthly aggregates of energy and average temperature
+          const toC = (val) => {
+            if (isIP && prefTempIP === 'F') return ((val - 32) * 5) / 9;
+            if (!isIP && prefTempSI === 'K') return val - 273.15;
+            return val;
+          };
+          const tempVals = tempSeries.points.map((p) => ({
+            x: p.x,
+            tDisp: convertUnits(p.y, tempSeries.meta.Units),
+          }));
+          const energyVals = energySeries.points.map((p) => ({
+            x: p.x,
+            eDisp: convertUnits(p.y, energySeries.meta.Units),
+          }));
+          const useMonthly = tempRespPeriod === 'monthly';
+          const groupTemps = new Map();
+          function keyFromDate(ms) {
+            const d = new Date(ms);
+            if (useMonthly) return d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1);
+            return d.toISOString().slice(0, 10);
+          }
+          tempVals.forEach((r) => {
+            const k = keyFromDate(r.x);
+            let g = groupTemps.get(k);
+            if (!g) {
+              g = { temps: [], xFirst: r.x };
+              groupTemps.set(k, g);
+            }
+            g.temps.push(r.tDisp);
+          });
+          const groupEnergy = new Map();
+          energyVals.forEach((r) => {
+            const k = keyFromDate(r.x);
+            groupEnergy.set(k, (groupEnergy.get(k) || 0) + r.eDisp);
+          });
+          const rows = [];
+          groupTemps.forEach((v, k) => {
+            if (!groupEnergy.has(k)) return; // need both
+            const avgTempDisp = v.temps.reduce((a, b) => a + b, 0) / v.temps.length;
+            // compute HDD/CDD relative to base
+            const avgC = toC(avgTempDisp);
+            const baseC = toC(tempRespBaseTemp);
+            let hddC = Math.max(0, baseC - avgC);
+            let cddC = Math.max(0, avgC - baseC);
+            if (isIP && prefTempIP === 'F') {
+              hddC = (hddC * 9) / 5;
+              cddC = (cddC * 9) / 5;
+            }
+            if (!tempRespMode.includes('heat')) hddC = tempRespMode === 'cooling' ? 0 : hddC;
+            if (!tempRespMode.includes('cool')) cddC = tempRespMode === 'heating' ? 0 : cddC;
+            rows.push({
+              key: k,
+              HDD: hddC,
+              CDD: cddC,
+              energy: groupEnergy.get(k),
+              xFirst: v.xFirst,
+            });
+          });
+          if (rows.length < 3) return; // need a few points
+          // Fit E = b + h*HDD + c*CDD with subsets per mode
+          const useH = tempRespMode === 'heating' || tempRespMode === 'both';
+          const useC = tempRespMode === 'cooling' || tempRespMode === 'both';
+          const X = [];
+          const Y = [];
+          rows.forEach((r) => {
+            const row = [1];
+            if (useH) row.push(r.HDD);
+            if (useC) row.push(r.CDD);
+            X.push(row);
+            Y.push(r.energy);
+          });
+          const mCols = X[0].length;
+          const XtX = Array.from({ length: mCols }, () => Array(mCols).fill(0));
+          const XtY = Array(mCols).fill(0);
+          for (let i = 0; i < X.length; i++) {
+            const row = X[i];
+            const yv = Y[i];
+            for (let a = 0; a < mCols; a++) {
+              XtY[a] += row[a] * yv;
+              for (let b = 0; b < mCols; b++) XtX[a][b] += row[a] * row[b];
+            }
+          }
+          const coeffs = solveLinearSystem(XtX, XtY);
+          if (!coeffs) return;
+          let idx = 0;
+          const intercept = coeffs[idx++];
+          let hCoeff = null,
+            cCoeff = null;
+          if (useH) hCoeff = coeffs[idx++];
+          if (useC) cCoeff = coeffs[idx++];
+          const meanY = Y.reduce((a, b) => a + b, 0) / Y.length;
+          let ssTot = 0,
+            ssRes = 0;
+          for (let i = 0; i < rows.length; i++) {
+            let yhat = intercept;
+            if (useH) yhat += hCoeff * rows[i].HDD;
+            if (useC) yhat += cCoeff * rows[i].CDD;
+            ssTot += (rows[i].energy - meanY) ** 2;
+            ssRes += (rows[i].energy - yhat) ** 2;
+          }
+          const r2 = ssTot ? 1 - ssRes / ssTot : 0;
+          const hourlyPred = [];
+          const energyPerKey = new Map();
+          rows.forEach((r) => {
+            let pred = intercept;
+            if (useH) pred += (hCoeff || 0) * r.HDD;
+            if (useC) pred += (cCoeff || 0) * r.CDD;
+            energyPerKey.set(r.key, pred);
+          });
+          const countsPerKey = new Map();
+          tempVals.forEach((t) => {
+            const key = keyFromDate(t.x);
+            countsPerKey.set(key, (countsPerKey.get(key) || 0) + 1);
+          });
+          tempVals.forEach((t) => {
+            const key = keyFromDate(t.x);
+            const total = energyPerKey.get(key);
+            const cnt = countsPerKey.get(key) || 1;
+            if (total != null) hourlyPred.push({ x: t.x, y: total / cnt });
+          });
+          tempRespModel = {
+            intercept,
+            hCoeff,
+            cCoeff,
+            r2,
+            useH,
+            useC,
+            predPoints: hourlyPred,
+            energyUnits: convertUnitLabel(energySeries.meta.Units),
+            label: `TempResp(${energySeries.meta.Name})`,
+          };
+        }
+        computeTempResponseModel();
+        if (tempRespModel) {
+          g.append('path')
+            .datum(tempRespModel.predPoints)
+            .attr('fill', 'none')
+            .attr('stroke', palette[3])
+            .attr('stroke-width', 1.4)
+            .attr('stroke-dasharray', '5,3')
+            .attr('class', 'series temp-response')
+            .attr(
+              'd',
+              d3
+                .line()
+                .x((d) => x(d.x))
+                .y((d) => y(normVal(d.y, { id: '__pred' }))),
+            );
+        }
+        // Legend (hourly time-series)
+        const hourlyLeg = opts.legendEl || $('legend');
+        if (hourlyLeg) {
+          hourlyLeg.innerHTML = '';
+          series.forEach((s) => {
+            const item = document.createElement('button');
+            item.className =
+              'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors';
+            if (s.visible !== false) item.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+            const swatch = document.createElement('span');
+            swatch.style.display = 'inline-block';
+            swatch.style.width = '10px';
+            swatch.style.height = '10px';
+            swatch.style.background = s.color;
+            swatch.style.borderRadius = '2px';
+            swatch.style.marginRight = '6px';
+            swatch.style.verticalAlign = 'middle';
+            item.appendChild(swatch);
+            item.appendChild(document.createTextNode(s.meta.Name));
+            item.onclick = () => {
+              const v = selected.get(s.id);
+              v.visible = !v.visible;
+              selected.set(s.id, v);
+              renderAll();
+            };
+            hourlyLeg.appendChild(item);
+          });
+          const temps = series.filter((s) => unitKind(s.meta.Units) === 'temperature');
+          const energies = series.filter((s) => unitKind(s.meta.Units) === 'energy');
+          if (temps.length && energies.length) {
+            const btn = document.createElement('button');
+            btn.className =
+              'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors';
+            if (tempRespEnabled) btn.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+            btn.innerHTML = `<span style="display:inline-block;width:10px;height:10px;background:${palette[3]};border-radius:2px;margin-right:6px;vertical-align:middle"></span>Temp Response`;
+            btn.onclick = () => {
+              tempRespEnabled = !tempRespEnabled;
+              renderAll();
+            };
+            hourlyLeg.appendChild(btn);
+          }
+        }
+        if (zoomEnabled) {
+          const brush = d3
+            .brushX()
+            .extent([
+              [0, 0],
+              [w, h],
+            ])
+            .on('end', (ev) => {
+              const sel = ev.selection;
+              if (!sel) {
+                x.domain(fullDomain);
+                currentXDomain = null;
+              } else {
+                x.domain(sel.map(x.invert));
+                currentXDomain = x.domain().slice();
+              }
+              redraw();
+              // trigger global re-render to sync other charts
+              setTimeout(() => renderAll(), 0);
+            });
+          const bG = g.append('g').attr('class', 'brush').call(brush);
+          bG.selectAll('.selection')
+            .attr('fill', accent)
+            .attr('fill-opacity', 0.15)
+            .attr('stroke', accentStrong);
+          // Ensure crosshair sits above the brush overlay
+          crosshairG.raise();
+          $('zoom-hint').classList.remove('hidden');
+        } else {
+          $('zoom-hint').classList.add('hidden');
+        }
+        function redraw() {
+          applyMonthAxis();
+          gx.selectAll('path,line').attr('stroke', axisColor);
+          gx.selectAll('text').attr('fill', axisColor);
+          g.selectAll('path.series').remove();
+          for (const s of series) {
+            g.append('path')
+              .datum(s.points)
+              .attr('class', 'series')
+              .attr('fill', 'none')
+              .attr('stroke-width', 1.8)
+              .attr('stroke', s.color)
+              .attr(
+                'd',
+                d3
+                  .line()
+                  .x((p) => x(p.x))
+                  .y((p) => y(normVal(convertUnits(p.y, s.meta.Units), s))),
+              );
+          }
+          if (tempRespModel) {
+            g.selectAll('path.temp-response').remove();
+            g.append('path')
+              .datum(tempRespModel.predPoints)
+              .attr('fill', 'none')
+              .attr('stroke', palette[3])
+              .attr('stroke-width', 1.4)
+              .attr('stroke-dasharray', '5,3')
+              .attr('class', 'series temp-response')
+              .attr(
+                'd',
+                d3
+                  .line()
+                  .x((d) => x(d.x))
+                  .y((d) => y(normVal(d.y, { id: '__pred' }))),
+              );
+          }
+          // After re-drawing series, keep crosshair on top
+          crosshairG.raise();
+        }
+        redraw();
+        svg.on('dblclick', () => {
+          x.domain(fullDomain);
+          currentXDomain = null;
+          redraw();
+          setTimeout(() => renderAll(), 0);
+        });
+        const tooltip = d3
+          .select(container)
+          .append('div')
+          .attr('class', 'chart-tooltip')
+          .style('position', 'absolute')
+          .style('pointer-events', 'none')
+          .style('background', tooltipBg)
+          .style('border', '1px solid ' + borderColor)
+          .style('color', textColor)
+          .style('padding', '6px 8px')
+          .style('border-radius', '6px')
+          .style('font-size', '12px')
+          .style('display', 'none');
+        // Per-series bisectors for nearest point at a given time
+        const seriesBisectors = series.map(() => d3.bisector((d) => d.x).left);
+        // Compute and draw crosshair + markers + tooltip for a UTC ms timestamp
+        function updateCrosshair(ms) {
+          if (ms == null) {
+            crosshairG.style('display', 'none');
+            tooltip.style('display', 'none');
+            return;
+          }
+          const date = new Date(ms);
+          if (date < x.domain()[0] || date > x.domain()[1]) {
+            crosshairG.style('display', 'none');
+            tooltip.style('display', 'none');
+            return;
+          }
+          const px = x(date);
+          vline.attr('x1', px).attr('x2', px);
+          const rows = [];
+          markers.forEach((mk, idx) => {
+            const s = series[idx];
+            const b = seriesBisectors[idx];
+            const pts = s.points;
+            if (!pts || pts.length === 0) {
+              mk.style('display', 'none');
+              return;
+            }
+            let i = b(pts, date);
+            if (i <= 0) i = 0;
+            if (i >= pts.length) i = pts.length - 1;
+            const p = pts[i];
+            const yDisp = normVal(convertUnits(p.y, s.meta.Units), s);
+            mk.style('display', null).attr('cx', x(p.x)).attr('cy', y(yDisp));
+            rows.push({
+              name: s.meta.Name,
+              color: s.color,
+              yDisp,
+              raw: convertUnits(p.y, s.meta.Units),
+              units: normalize ? '%' : convertUnitLabel(s.meta.Units),
+              label: p.label,
+            });
+          });
+          crosshairG.style('display', null);
+          // Build tooltip content: time label + per-series rows
+          if (rows.length) {
+            const timeLabel = rows[0].label || d3.utcFormat('%Y-%m-%d %H:%M')(date);
+            const tooltipNode = tooltip.node();
+            tooltipNode.replaceChildren();
+            const titleDiv = document.createElement('div');
+            const strong = document.createElement('strong');
+            strong.textContent = timeLabel;
+            titleDiv.appendChild(strong);
+            tooltipNode.appendChild(titleDiv);
+            for (const r of rows) {
+              const row = document.createElement('div');
+              const name = document.createElement('span');
+              name.style.color = r.color;
+              name.textContent = r.name;
+              row.appendChild(name);
+              row.appendChild(document.createTextNode(` — ${fmt(r.yDisp)} ${r.units || ''}`));
+              if (normalize) {
+                const raw = document.createElement('span');
+                raw.className = 'text-muted dark:text-muted-dark';
+                raw.textContent = ` (raw ${fmt(r.raw)})`;
+                row.appendChild(raw);
+              }
+              tooltipNode.appendChild(row);
+            }
+            tooltip.style('display', 'block');
+            const cw = container.clientWidth;
+            const ch = container.clientHeight;
+            const tw = tooltip.node().offsetWidth || 0;
+            const th = tooltip.node().offsetHeight || 0;
+            let left = m.left + px + 12;
+            if (left + tw > cw - 4) left = m.left + px - 12 - tw;
+            if (left < 4) left = 4;
+            let top = m.top + 8;
+            if (top + th > ch - 4) top = ch - th - 4;
+            tooltip.style('left', left + 'px').style('top', top + 'px');
+          } else {
+            tooltip.style('display', 'none');
+          }
+        }
+        // Unique id for this chart instance (for source hinting; not strictly needed)
+        const __selfId = Symbol('chart');
+        // Register for global crosshair updates
+        const __sub = (ms /*, source*/) => {
+          if (!container.isConnected) {
+            __crosshairSubs.delete(__sub);
+            return;
+          }
+          updateCrosshair(ms);
+        };
+        __crosshairSubs.add(__sub);
+        container.__crosshairUnsub = () => __crosshairSubs.delete(__sub);
+        // Local mouse interactions to drive global crosshair
+        svg
+          .on('mousemove', (ev) => {
+            const [mx] = d3.pointer(ev, g.node());
+            const x0 = x.invert(mx);
+            __setHoverX(+x0, __selfId);
+          })
+          .on('mouseleave', () => {
+            __setHoverX(null, __selfId);
+          });
+        // Inject legend item & controls for temp response
+        if (series.length && tempRespEnabled) {
+          const insights = $('insights');
+          const existing = document.getElementById('temp-resp-panel');
+          if (!existing) {
+            const panel = document.createElement('div');
+            panel.id = 'temp-resp-panel';
+            panel.className =
+              'mt-2 p-2 border border-border dark:border-border-dark rounded bg-panel-2 dark:bg-panel-2-dark flex flex-wrap gap-2 items-end text-[11px]';
+            panel.innerHTML = `<label class='flex flex-col'>Base T<input type='number' step='0.5' id='tr-base' class='mt-0.5 w-20 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark' value='${tempRespBaseTemp}'/></label>
+                  <label class='flex flex-col'>Period<select id='tr-period' class='mt-0.5 w-24 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark'><option value='daily' ${
+                    tempRespPeriod === 'daily' ? 'selected' : ''
+                  }>Daily</option><option value='monthly' ${
+                    tempRespPeriod === 'monthly' ? 'selected' : ''
+                  }>Monthly</option></select></label>
+                  <label class='flex flex-col'>Mode<select id='tr-mode' class='mt-0.5 w-28 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark'><option value='heating' ${
+                    tempRespMode === 'heating' ? 'selected' : ''
+                  }>Heating</option><option value='cooling' ${
+                    tempRespMode === 'cooling' ? 'selected' : ''
+                  }>Cooling</option><option value='both' ${
+                    tempRespMode === 'both' ? 'selected' : ''
+                  }>Heat+Cool</option></select></label>
+                  <div id='tr-summary' class='flex-1 text-xs'></div>`;
+            insights.appendChild(panel);
+            panel.querySelector('#tr-base').addEventListener('change', (e) => {
+              tempRespBaseTemp = parseFloat(e.target.value) || tempRespBaseTemp;
+              renderAll();
+            });
+            panel.querySelector('#tr-period').addEventListener('change', (e) => {
+              tempRespPeriod = e.target.value;
+              renderAll();
+            });
+            panel.querySelector('#tr-mode').addEventListener('change', (e) => {
+              tempRespMode = e.target.value;
+              renderAll();
+            });
+          }
+          const summary = document.getElementById('tr-summary');
+          if (summary) {
+            if (tempRespModel) {
+              const parts = [];
+              if (tempRespModel.useH) parts.push(`h=${fmt(tempRespModel.hCoeff)}`);
+              if (tempRespModel.useC) parts.push(`c=${fmt(tempRespModel.cCoeff)}`);
+              summary.innerHTML = `E = b + ${parts.join(' + ')} (R² ${tempRespModel.r2.toFixed(
+                3,
+              )})`;
+            } else {
+              summary.textContent = 'No model (need energy & temperature series).';
+            }
+          }
+        } else {
+          const p = document.getElementById('temp-resp-panel');
+          if (p) p.remove();
+        }
+      } else {
+        const x = d3
+          .scaleBand()
+          .domain(series[0]?.points.map((p) => p.xLabel) || [])
+          .range([0, w])
+          .padding(0.2);
+        const x1 = d3
+          .scaleBand()
+          .domain(series.map((s) => String(s.id)))
+          .range([0, x.bandwidth()])
+          .padding(0.05);
+        // Monthly bars: show all months but skip on very small widths to avoid overlap
+        const rawMonthLabels = series[0]?.points.map((p) => p.xLabel) || [];
+        const monthLabelFmt = (raw) => {
+          if (!raw) return raw;
+          const m = raw.match(/-M(\d{2})/i);
+          if (m) {
+            const idx = parseInt(m[1], 10);
+            if (idx >= 1 && idx <= 12) return d3.timeFormat('%b')(new Date(2000, idx - 1, 1));
+          }
+          // Fallback: if raw already looks like a month name, abbreviate
+          const lower = raw.toLowerCase();
+          const monthNames = [
+            'jan',
+            'feb',
+            'mar',
+            'apr',
+            'may',
+            'jun',
+            'jul',
+            'aug',
+            'sep',
+            'oct',
+            'nov',
+            'dec',
+          ];
+          const found = monthNames.find((mn) => lower.startsWith(mn));
+          if (found) return found.charAt(0).toUpperCase() + found.slice(1, 3); // Jan, Feb...
+          return raw;
+        };
+        const monthLabels = rawMonthLabels;
+        let step = 1;
+        if (w < 420) step = 2;
+        if (w < 320) step = 3;
+        const shown = monthLabels.filter((_, i) => i % step === 0);
+        const gx = g
+          .append('g')
+          .attr('transform', `translate(0,${h})`)
+          .call(d3.axisBottom(x).tickValues(shown).tickFormat(monthLabelFmt));
+        const gy = g.append('g').call(d3.axisLeft(y).ticks(6));
+        if (showSecondary) {
+          const axisR = d3
+            .axisRight(y)
+            .ticks(6)
+            .tickFormat((t) => fmt(convertDisplayedToOpposite(t, primaryMeta.Units)));
+          const gyR = g.append('g').attr('transform', `translate(${w},0)`).call(axisR);
+          gyR.selectAll('path,line').attr('stroke', axisColor);
+          gyR.selectAll('text').attr('fill', axisColor);
+          if (convertUnitLabelOpposite(primaryMeta.Units)) {
+            g.append('text')
+              .attr('x', w)
+              .attr('y', -4)
+              .attr('text-anchor', 'end')
+              .attr('fill', axisColor)
+              .attr('font-size', '10px')
+              .text(convertUnitLabelOpposite(primaryMeta.Units));
+          }
+        }
+        gx.selectAll('path,line').attr('stroke', axisColor);
+        gy.selectAll('path,line').attr('stroke', axisColor);
+        gx.selectAll('text')
+          .attr('fill', axisColor)
+          .style('text-anchor', 'end')
+          .attr('transform', 'rotate(-30)');
+        gy.selectAll('text').attr('fill', axisColor);
+        series.forEach((s) => {
+          g.selectAll(`rect.bar-${s.id}`)
+            .data(s.points)
+            .enter()
+            .append('rect')
+            .attr('x', (d) => x(d.xLabel) + x1(String(s.id)))
+            .attr('y', (d) => y(convertUnits(d.y, s.meta.Units)))
+            .attr('width', x1.bandwidth())
+            .attr('height', (d) => h - y(convertUnits(d.y, s.meta.Units)))
+            .attr('fill', s.color);
+        });
+        // Crosshair for bars: vertical line at band center + per-series dots at bar tops
+        const crosshairG = g.append('g').attr('class', 'crosshair').style('display', 'none');
+        const vline = crosshairG
+          .append('line')
+          .attr('y1', 0)
+          .attr('y2', h)
+          .attr('stroke', axisColor)
+          .attr('stroke-opacity', 0.5)
+          .attr('stroke-width', 1);
+        const markers = series.map((s) =>
+          crosshairG
+            .append('circle')
+            .attr('r', 4.5)
+            .attr('fill', s.color)
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1)
+            .attr('vector-effect', 'non-scaling-stroke'),
+        );
+        const tooltip = d3
+          .select(container)
+          .append('div')
+          .attr('class', 'chart-tooltip')
+          .style('position', 'absolute')
+          .style('pointer-events', 'none')
+          .style('background', tooltipBg)
+          .style('border', '1px solid ' + borderColor)
+          .style('color', textColor)
+          .style('padding', '6px 8px')
+          .style('border-radius', '6px')
+          .style('font-size', '12px')
+          .style('display', 'none');
+        function updateCrosshairBand(key) {
+          if (!key || !x.domain().includes(key)) {
+            crosshairG.style('display', 'none');
+            tooltip.style('display', 'none');
+            return;
+          }
+          const cx = (x(key) || 0) + x.bandwidth() / 2;
+          vline.attr('x1', cx).attr('x2', cx);
+          const rows = [];
+          series.forEach((s, idx) => {
+            const pt = s.points.find((p) => p.xLabel === key);
+            if (!pt) return markers[idx].style('display', 'none');
+            const yv = convertUnits(pt.y, s.meta.Units);
+            markers[idx]
+              .style('display', null)
+              .attr('cx', (x(key) || 0) + x1(String(s.id)) + x1.bandwidth() / 2)
+              .attr('cy', y(yv));
+            rows.push({
+              name: s.meta.Name,
+              color: s.color,
+              y: yv,
+              units: convertUnitLabel(s.meta.Units),
+            });
+          });
+          crosshairG.style('display', null);
+          const lbl = monthLabelFmt(key);
+          const tooltipNode = tooltip.node();
+          tooltipNode.replaceChildren();
+          const titleDiv = document.createElement('div');
+          const strong = document.createElement('strong');
+          strong.textContent = lbl;
+          titleDiv.appendChild(strong);
+          tooltipNode.appendChild(titleDiv);
+          rows.forEach((r) => {
+            const row = document.createElement('div');
+            const name = document.createElement('span');
+            name.style.color = r.color;
+            name.textContent = r.name;
+            row.appendChild(name);
+            row.appendChild(document.createTextNode(` — ${fmt(r.y)} ${r.units || ''}`));
+            tooltipNode.appendChild(row);
+          });
+          tooltip.style('display', 'block');
+          const cw = container.clientWidth;
+          const ch = container.clientHeight;
+          const tw = tooltip.node().offsetWidth || 0;
+          const th = tooltip.node().offsetHeight || 0;
+          let left = m.left + cx + 12;
+          if (left + tw > cw - 4) left = m.left + cx - 12 - tw;
+          if (left < 4) left = 4;
+          let top = m.top + 8;
+          if (top + th > ch - 4) top = ch - th - 4;
+          tooltip.style('left', left + 'px').style('top', top + 'px');
+        }
+        // Subscribe to global band crosshair updates
+        const __selfId = Symbol('chart');
+        const __bandSub = (key /*, source*/) => updateCrosshairBand(key);
+        __crosshairBandSubs.add(__bandSub);
+        container.__crosshairBandUnsub = () => __crosshairBandSubs.delete(__bandSub);
+        // Drive global band crosshair from local mousemove
+        svg
+          .on('mousemove', (ev) => {
+            const [mx] = d3.pointer(ev, g.node());
+            // Find nearest domain key by center distance
+            const keys = x.domain();
+            if (!keys.length) return;
+            let best = keys[0];
+            let bestDist = Infinity;
+            for (const k of keys) {
+              const cx = (x(k) || 0) + x.bandwidth() / 2;
+              const d = Math.abs(mx - cx);
+              if (d < bestDist) {
+                bestDist = d;
+                best = k;
+              }
+            }
+            __setHoverBand(best, __selfId);
+          })
+          .on('mouseleave', () => __setHoverBand(null, __selfId));
+        if (zoomEnabled) {
+          // Implement simple band zoom: click-drag creates selection over bands
+          const drag = d3
+            .brushX()
+            .extent([
+              [0, 0],
+              [w, h],
+            ])
+            .on('end', (ev) => {
+              const sel = ev.selection;
+              if (!sel) return;
+              const [x0, x1px] = sel;
+              const chosen = monthLabels.filter((ml) => {
+                const cx = (x(ml) || 0) + x.bandwidth() / 2;
+                return cx >= x0 && cx <= x1px;
+              });
+              if (chosen.length && chosen.length < monthLabels.length) {
+                const newDomain = monthLabels.slice(
+                  monthLabels.indexOf(chosen[0]),
+                  monthLabels.indexOf(chosen[chosen.length - 1]) + 1,
+                );
+                x.domain(newDomain);
+                gx.call(d3.axisBottom(x).tickValues(shown).tickFormat(monthLabelFmt));
+                gx.selectAll('path,line').attr('stroke', axisColor);
+                gx.selectAll('text')
+                  .attr('fill', axisColor)
+                  .style('text-anchor', 'end')
+                  .attr('transform', 'rotate(-30)');
+                g.selectAll('rect').remove();
+                series.forEach((s) => {
+                  g.selectAll(`rect.bar-${s.id}`)
+                    .data(s.points.filter((p) => x.domain().includes(p.xLabel)))
+                    .enter()
+                    .append('rect')
+                    .attr('x', (d) => x(d.xLabel) + x1(String(s.id)))
+                    .attr('y', (d) => y(convertUnits(d.y, s.meta.Units)))
+                    .attr('width', x1.bandwidth())
+                    .attr('height', (d) => h - y(convertUnits(d.y, s.meta.Units)))
+                    .attr('fill', s.color);
+                });
+                // keep crosshair updated after band zoom
+                updateCrosshairBand(__hoverBandKey);
+                // keep crosshair on top after bar re-render
+                crosshairG.raise();
+              }
+              g.select('.band-zoom').call(drag.move, null);
+            });
+          const bz = g.append('g').attr('class', 'band-zoom').call(drag);
+          bz.selectAll('.selection')
+            .attr('fill', accent)
+            .attr('fill-opacity', 0.15)
+            .attr('stroke', accentStrong);
+          // Ensure crosshair sits above the band-zoom overlay
+          crosshairG.raise();
+        }
+      }
+      const leg = $('legend');
+      leg.innerHTML = '';
+      series.forEach((s) => {
+        const item = document.createElement('button');
+        item.className =
+          'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors';
+        if (s.visible !== false) item.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+        const swatch = document.createElement('span');
+        swatch.style.display = 'inline-block';
+        swatch.style.width = '10px';
+        swatch.style.height = '10px';
+        swatch.style.background = s.color;
+        swatch.style.borderRadius = '2px';
+        swatch.style.marginRight = '6px';
+        swatch.style.verticalAlign = 'middle';
+        item.appendChild(swatch);
+        item.appendChild(document.createTextNode(s.meta.Name));
+        item.onclick = () => {
+          const v = selected.get(s.id);
+          v.visible = !v.visible;
+          selected.set(s.id, v);
+          renderAll();
+        };
+        leg.appendChild(item);
+      });
+      // Temperature response legend toggle (time series only, hourly resolution)
+      if (viewMode === 'time' && isHourlyEffective) {
+        const temps = series.filter((s) => unitKind(s.meta.Units) === 'temperature');
+        const energies = series.filter((s) => unitKind(s.meta.Units) === 'energy');
+        if (temps.length && energies.length) {
+          const btn = document.createElement('button');
+          btn.className =
+            'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors';
+          if (tempRespEnabled) btn.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+          btn.innerHTML = `<span style="display:inline-block;width:10px;height:10px;background:${palette[3]};border-radius:2px;margin-right:6px;vertical-align:middle"></span>Temp Response`;
+          btn.onclick = () => {
+            tempRespEnabled = !tempRespEnabled;
+            renderAll();
+          };
+          leg.appendChild(btn);
+        }
+      }
+    }
+
+    function renderScatter(series) {
+      // Temperature response / degree day regression helper functions
+      function computeDegreeDays(pointsTemp, baseTempC, freq) {
+        // pointsTemp: hourly or monthly temperature points (converted already to current display units, which could be C or F)
+        // We convert to Celsius internally for HDD/CDD math then return aggregated periods with HDD/CDD in degree-days of the display unit scale.
+        if (!pointsTemp.length) return [];
+        const isHourly = baseFreq === 'Hourly';
+        const useMonthly = freq === 'monthly' || !isHourly;
+        const toC = (val) => {
+          // detect current display unit via prefTemp* flags
+          if (isIP && prefTempIP === 'F') return ((val - 32) * 5) / 9;
+          if (!isIP && prefTempSI === 'K') return val - 273.15;
+          return val; // already C
+        };
+
+        // group key: day (UTC) or month label
+        const groups = new Map();
+        for (const p of pointsTemp) {
+          if (isHourly) {
+            const d = new Date(p.x);
+            let key;
+            if (useMonthly) key = d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1);
+            else key = d.toISOString().slice(0, 10); // YYYY-MM-DD
+            let g = groups.get(key);
+            if (!g) {
+              g = { temps: [], label: key, firstX: p.x, hours: 0 };
+              groups.set(key, g);
+            }
+            g.temps.push(p.yDisplayTemp);
+            g.hours += 1;
+          } else {
+            // Monthly temps assumed typical average => create synthetic one entry
+            const key = p.xLabel;
+            let g = groups.get(key);
+            if (!g) {
+              g = { temps: [], label: key, firstX: p.xLabel, hours: 0 };
+              groups.set(key, g);
+            }
+            g.temps.push(p.yDisplayTemp);
+            g.hours += 1; // number of monthly records (may be 1)
+          }
+        }
+        const rows = [];
+        groups.forEach((g) => {
+          if (!g.temps.length) return;
+          // For hourly we approximate daily average temperature
+          // HDD/CDD using baseTempC; positive difference only
+          const tempsC = g.temps.map(toC);
+          let avgC = tempsC.reduce((a, b) => a + b, 0) / tempsC.length;
+          let hddC = Math.max(0, baseTempC - avgC);
+          let cddC = Math.max(0, avgC - baseTempC);
+          // Convert degree-day units back to displayed temperature unit if needed
+          function back(valC) {
+            if (isIP && prefTempIP === 'F') return (valC * 9) / 5; // C difference to F difference
+            if (!isIP && prefTempSI === 'K') return valC; // deg C same magnitude as K difference
+            return valC; // C
+          }
+          rows.push({
+            key: g.label,
+            avgTempDisplay: g.temps.reduce((a, b) => a + b, 0) / g.temps.length,
+            HDD: back(hddC),
+            CDD: back(cddC),
+            hours: g.hours || (useMonthly ? 720 : 24),
+            firstX: g.firstX,
+          });
+        });
+        return rows.sort((a, b) => (a.firstX > b.firstX ? 1 : -1));
+      }
+      function fitEnergyVsDegreeDays(energyRows, ddRows, mode) {
+        // Join on key; energyRows energy sum per period, ddRows includes HDD/CDD and hours
+        const ddMap = new Map(ddRows.map((r) => [r.key, r]));
+        const joined = [];
+        energyRows.forEach((er) => {
+          const dd = ddMap.get(er.key);
+          if (!dd) return;
+          const hours = dd.hours || 24;
+          const days = hours / 24;
+          joined.push({ key: er.key, energy: er.energy, HDD: dd.HDD, CDD: dd.CDD, hours, days });
+        });
+        if (!joined.length) return null;
+        const useH = mode === 'heating' || mode === 'both';
+        const useC = mode === 'cooling' || mode === 'both';
+        // Design matrix columns: days, HDD?, CDD?  (Model: E = b*days + h*HDD + c*CDD)
+        const X = [];
+        const Y = [];
+        joined.forEach((r) => {
+          const row = [r.days];
+          if (useH) row.push(r.HDD);
+          if (useC) row.push(r.CDD);
+          X.push(row);
+          Y.push(r.energy);
+        });
+        const m = X[0].length;
+        const XtX = Array.from({ length: m }, () => Array(m).fill(0));
+        const XtY = Array(m).fill(0);
+        for (let i = 0; i < X.length; i++) {
+          const row = X[i];
+          const yv = Y[i];
+          for (let a = 0; a < m; a++) {
+            XtY[a] += row[a] * yv;
+            for (let b = 0; b < m; b++) XtX[a][b] += row[a] * row[b];
+          }
+        }
+        const coeffs = solveLinearSystem(XtX, XtY);
+        if (!coeffs) return null;
+        let idx = 0;
+        const bPerDay = coeffs[idx++];
+        let hCoeff = null,
+          cCoeff = null;
+        if (useH) hCoeff = coeffs[idx++];
+        if (useC) cCoeff = coeffs[idx++];
+        const meanY = Y.reduce((a, b) => a + b, 0) / Y.length;
+        let ssTot = 0,
+          ssRes = 0;
+        joined.forEach((r) => {
+          let yhat = bPerDay * r.days;
+          if (useH) yhat += hCoeff * r.HDD;
+          if (useC) yhat += cCoeff * r.CDD;
+          ssTot += (r.energy - meanY) ** 2;
+          ssRes += (r.energy - yhat) ** 2;
+        });
+        const r2 = ssTot ? 1 - ssRes / ssTot : 0;
+        return { bPerDay, hCoeff, cCoeff, r2, useH, useC, points: joined };
+      }
+      // Expect at least 2 visible series; use first two as X/Y or user-chosen pair
+      const container = $('chart');
+      container.innerHTML = '';
+      if (series.length < 2) {
+        container.innerHTML =
+          '<div class="text-xs text-muted dark:text-muted-dark p-3">Select at least two series for Scatter plot.</div>';
+        $('legend').innerHTML = '';
+        $('insights').textContent = '';
+        return;
+      }
+      const ordered = series.filter((s) => s.visible !== false);
+      if (ordered.length < 2) {
+        container.innerHTML =
+          '<div class="text-xs text-muted dark:text-muted-dark p-3">At least two visible series required (toggle legends).</div>';
+        return;
+      }
+      // Use scatterPair if valid; else first two
+      let sx, sy;
+      if (
+        scatterPair &&
+        ordered.some((s) => s.id === scatterPair.x) &&
+        ordered.some((s) => s.id === scatterPair.y)
+      ) {
+        sx = ordered.find((s) => s.id === scatterPair.x);
+        sy = ordered.find((s) => s.id === scatterPair.y);
+      } else {
+        sx = ordered[0];
+        sy = ordered[1];
+        scatterPair = { x: sx.id, y: sy.id };
+      }
+      // Only compare overlapping timestamps/labels; require same length/time indexes
+      const isHourly = baseFreq === 'Hourly';
+      let points = [];
+      if (isHourly) {
+        // build map from time index (x) -> value for sx, then join for sy
+        const mapX = new Map();
+        sx.points.forEach((p) => mapX.set(p.x, convertUnits(p.y, sx.meta.Units)));
+        sy.points.forEach((p) => {
+          const vx = mapX.get(p.x);
+          if (vx != null) points.push({ xVal: vx, yVal: convertUnits(p.y, sy.meta.Units), t: p.x });
+        });
+      } else {
+        // monthly label join
+        const mapX = new Map();
+        sx.points.forEach((p) => mapX.set(p.xLabel, convertUnits(p.y, sx.meta.Units)));
+        sy.points.forEach((p) => {
+          const vx = mapX.get(p.xLabel);
+          if (vx != null)
+            points.push({ xVal: vx, yVal: convertUnits(p.y, sy.meta.Units), lbl: p.xLabel });
+        });
+      }
+      if (!points.length) {
+        container.innerHTML =
+          '<div class="text-xs text-muted dark:text-muted-dark p-3">No overlapping points between selected series.</div>';
+        return;
+      }
+      // Stats & regression (ordinary least squares)
+      const n = points.length;
+      const sumX = points.reduce((a, p) => a + p.xVal, 0);
+      const sumY = points.reduce((a, p) => a + p.yVal, 0);
+      const sumXY = points.reduce((a, p) => a + p.xVal * p.yVal, 0);
+      const sumX2 = points.reduce((a, p) => a + p.xVal * p.xVal, 0);
+      const meanX = sumX / n,
+        meanY = sumY / n;
+      const denom = n * sumX2 - sumX * sumX;
+      let slope = null,
+        intercept = null,
+        r2 = null;
+      if (denom !== 0) {
+        slope = (n * sumXY - sumX * sumY) / denom;
+        intercept = meanY - slope * meanX;
+        // r^2
+        const ssTot = points.reduce((a, p) => a + Math.pow(p.yVal - meanY, 2), 0);
+        const ssRes = points.reduce(
+          (a, p) => a + Math.pow(p.yVal - (slope * p.xVal + intercept), 2),
+          0,
+        );
+        r2 = ssTot ? 1 - ssRes / ssTot : 0;
+      }
+      const {
+        axis: axisColor,
+        grid: gridColor,
+        text: textColor,
+        tooltipBg,
+        border: borderColor,
+      } = chartColors();
+      // Layout
+      const rect = container.getBoundingClientRect();
+      const width = rect.width,
+        height = rect.height;
+      const m = { top: 16, right: 32, bottom: 52, left: 60 };
+      const w = width - m.left - m.right,
+        h = height - m.top - m.bottom;
+      const xScale = d3
+        .scaleLinear()
+        .domain(d3.extent(points, (d) => d.xVal))
+        .nice()
+        .range([0, w]);
+      const yScale = d3
+        .scaleLinear()
+        .domain(d3.extent(points, (d) => d.yVal))
+        .nice()
+        .range([h, 0]);
+      const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
+      const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+      // grid
+      g.append('g')
+        .attr('class', 'grid')
+        .call(d3.axisLeft(yScale).ticks(6).tickSize(-w).tickFormat(''))
+        .selectAll('line')
+        .attr('stroke', gridColor)
+        .attr('stroke-opacity', 0.35);
+      g.select('.grid').select('.domain').remove();
+      const gx = g
+        .append('g')
+        .attr('transform', `translate(0,${h})`)
+        .call(d3.axisBottom(xScale).ticks(6));
+      const gy = g.append('g').call(d3.axisLeft(yScale).ticks(6));
+      gx.selectAll('path,line').attr('stroke', axisColor);
+      gy.selectAll('path,line').attr('stroke', axisColor);
+      gx.selectAll('text').attr('fill', axisColor);
+      gy.selectAll('text').attr('fill', axisColor);
+      let regLineEl = null;
+      function drawRegression() {
+        if (regLineEl) regLineEl.remove();
+        if (!scatterShowRegression || slope == null) return;
+        const linePts = xScale.domain().map((x) => ({ x, y: slope * x + intercept }));
+        regLineEl = g
+          .append('path')
+          .datum(linePts)
+          .attr('fill', 'none')
+          .attr('stroke', palette[0])
+          .attr('stroke-width', 1.2)
+          .attr('stroke-dasharray', '4,4')
+          .attr('opacity', 0.9)
+          .attr(
+            'd',
+            d3
+              .line()
+              .x((d) => xScale(d.x))
+              .y((d) => yScale(d.y)),
+          );
+      }
+      drawRegression();
+      const tooltip = d3
+        .select(container)
+        .append('div')
+        .style('position', 'absolute')
+        .style('pointer-events', 'none')
+        .style('background', tooltipBg)
+        .style('border', '1px solid ' + borderColor)
+        .style('color', textColor)
+        .style('padding', '6px 8px')
+        .style('border-radius', '6px')
+        .style('font-size', '12px')
+        .style('display', 'none');
+      g.selectAll('circle.pt')
+        .data(points)
+        .enter()
+        .append('circle')
+        .attr('class', 'pt')
+        .attr('cx', (p) => xScale(p.xVal))
+        .attr('cy', (p) => yScale(p.yVal))
+        .attr('r', 3)
+        .attr('fill', palette[1])
+        .attr('opacity', 0.85)
+        .on('mousemove', (ev, p) => {
+          tooltip.style('display', 'block').text(`${fmt(p.xVal)}, ${fmt(p.yVal)}`);
+          const cw = container.clientWidth;
+          const ch = container.clientHeight;
+          const tw = tooltip.node().offsetWidth || 0;
+          const th = tooltip.node().offsetHeight || 0;
+          let left = ev.offsetX + 12;
+          if (left + tw > cw - 4) left = ev.offsetX - 12 - tw;
+          if (left < 4) left = 4;
+          let top = ev.offsetY - 24;
+          if (top < 4) top = ev.offsetY + 12;
+          if (top + th > ch - 4) top = ch - th - 4;
+          tooltip.style('left', left + 'px').style('top', top + 'px');
+        })
+        .on('mouseleave', () => tooltip.style('display', 'none'));
+      // axis labels
+      g.append('text')
+        .attr('x', w / 2)
+        .attr('y', h + 40)
+        .attr('text-anchor', 'middle')
+        .attr('fill', axisColor)
+        .attr('font-size', '12px')
+        .text(`${sx.meta.Name} (${convertUnitLabel(sx.meta.Units)})`);
+      g.append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -h / 2)
+        .attr('y', -44)
+        .attr('text-anchor', 'middle')
+        .attr('fill', axisColor)
+        .attr('font-size', '12px')
+        .text(`${sy.meta.Name} (${convertUnitLabel(sy.meta.Units)})`);
+      // summary / insights
+      const statsHtml =
+        slope != null
+          ? `Slope: ${fmt(slope)} | Intercept: ${fmt(intercept)} | R²: ${r2.toFixed(3)}${
+              scatterShowRegression ? '' : ' (hidden)'
+            }`
+          : 'Insufficient variance for regression';
+      $('insights').innerHTML = `Scatter (${points.length} pts) — ${statsHtml}`;
+      // Degree day temperature response optional panel (when one axis appears to be temperature & the other energy)
+      const tempAxis =
+        unitKind(sx.meta.Units) === 'temperature'
+          ? 'x'
+          : unitKind(sy.meta.Units) === 'temperature'
+            ? 'y'
+            : null;
+      const energyAxis =
+        unitKind(sx.meta.Units) === 'energy'
+          ? 'x'
+          : unitKind(sy.meta.Units) === 'energy'
+            ? 'y'
+            : null;
+      let degDayModel = null;
+      if (tempAxis && energyAxis) {
+        try {
+          // Build period aggregates of energy and temperatures
+          const isHourly = baseFreq === 'Hourly';
+          // Choose temperature series and energy series objects
+          const tempSeries = tempAxis === 'x' ? sx : sy;
+          const energySeries = energyAxis === 'x' ? sx : sy;
+          // Extract converted values
+          const tempPts = tempSeries.points.map((p) => ({
+            x: p.x,
+            xLabel: p.xLabel,
+            yDisplayTemp: convertUnits(p.y, tempSeries.meta.Units),
+          }));
+          // Energy per interval (convert to preferred unit label energy unit) -> we'll keep in display energy unit
+          const energyPts = energySeries.points.map((p) => ({
+            x: p.x,
+            xLabel: p.xLabel,
+            val: convertUnits(p.y, energySeries.meta.Units),
+          }));
+          const ddRows = computeDegreeDays(tempPts, scatterDegDayBaseTemp, scatterDegDayPeriod);
+          // Aggregate energy by same period key
+          const energyAggMap = new Map();
+          const useMonthly = scatterDegDayPeriod === 'monthly' || baseFreq !== 'Hourly';
+          if (baseFreq === 'Hourly') {
+            energyPts.forEach((p) => {
+              const d = new Date(p.x);
+              const key = useMonthly
+                ? d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1)
+                : d.toISOString().slice(0, 10);
+              const cur = energyAggMap.get(key) || 0;
+              energyAggMap.set(key, cur + p.val);
+            });
+          } else {
+            energyPts.forEach((p) => {
+              const key = p.xLabel;
+              const cur = energyAggMap.get(key) || 0;
+              energyAggMap.set(key, cur + p.val);
+            });
+          }
+          const energyRows = Array.from(energyAggMap.entries()).map(([key, energy]) => ({
+            key,
+            energy,
+          }));
+          degDayModel = fitEnergyVsDegreeDays(energyRows, ddRows, scatterDegDayMode);
+          if (degDayModel && scatterShowDegDay) {
+            // Add overlay line(s) for energy vs temperature (convert to scatter axis units)
+            // We'll sample a range of avg temps from ddRows
+            const temps = ddRows.map((r) => r.avgTempDisplay);
+            if (temps.length) {
+              const tMin = Math.min(...temps),
+                tMax = Math.max(...temps);
+              const sample = d3.range(0, 26).map((i) => tMin + (i / 25) * (tMax - tMin));
+              // compute HDD/CDD for each sample relative to base
+              function ddFromTemp(avg) {
+                const toC = (val) => {
+                  if (isIP && prefTempIP === 'F') return ((val - 32) * 5) / 9;
+                  if (!isIP && prefTempSI === 'K') return val - 273.15;
+                  return val;
+                };
+                const avgC = toC(avg);
+                const baseC = toC(scatterDegDayBaseTemp);
+                let hddC = Math.max(0, baseC - avgC);
+                let cddC = Math.max(0, avgC - baseC);
+                if (isIP && prefTempIP === 'F') {
+                  hddC = (hddC * 9) / 5;
+                  cddC = (cddC * 9) / 5;
+                }
+                const HDD = scatterDegDayMode === 'cooling' ? 0 : hddC;
+                const CDD = scatterDegDayMode === 'heating' ? 0 : cddC;
+                // For daily sample days =1. Model: E_day = b*days + h*HDD + c*CDD => average hourly = E_day / (24*days) = (b + h*HDD + c*CDD)/24
+                let eDay = degDayModel.bPerDay * 1; // days=1
+                if (degDayModel.useH) eDay += (degDayModel.hCoeff || 0) * HDD;
+                if (degDayModel.useC) eDay += (degDayModel.cCoeff || 0) * CDD;
+                const eHourly = eDay / 24; // match hourly scatter y scale
+                return { avg, e: eHourly };
+              }
+              const overlay = sample.map(ddFromTemp);
+              // Map avg temp to x or y depending which axis is temperature
+              const linePts = overlay.map((o) =>
+                tempAxis === 'x' ? { x: o.avg, y: o.e } : { x: o.e, y: o.avg },
+              );
+              const lineGen = d3
+                .line()
+                .x((d) => (tempAxis === 'x' ? xScale(d.x) : xScale(d.x)))
+                .y((d) => (tempAxis === 'x' ? yScale(d.y) : yScale(d.y)));
+              g.append('path')
+                .datum(linePts)
+                .attr('fill', 'none')
+                .attr('stroke', palette[2])
+                .attr('stroke-width', 1.4)
+                .attr('stroke-dasharray', '6,3')
+                .attr('d', lineGen);
+            }
+          }
+        } catch (e) {
+          console.warn('Degree-day model failed', e);
+        }
+      }
+      // legend includes clickable X/Y swap and choose pair
+      const leg = $('legend');
+      leg.innerHTML = '';
+      function button(label, handler, active = true) {
+        const b = document.createElement('button');
+        b.className = 'text-xs px-2 py-1 rounded border border-border dark:border-border-dark';
+        if (active) b.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+        b.textContent = label;
+        b.onclick = handler;
+        leg.appendChild(b);
+        return b;
+      }
+      button(`X: ${sx.meta.Name}`, () => {
+        scatterPair = { x: sy.id, y: sx.id };
+        renderAll();
+      });
+      button(`Y: ${sy.meta.Name}`, () => {
+        scatterPair = { x: sy.id, y: sx.id };
+        renderAll();
+      });
+      // offer cycle through other series if more than 2
+      if (ordered.length > 2) {
+        button('Next Pair', () => {
+          const idxX = ordered.findIndex((s) => s.id === scatterPair.x);
+          const idxY = ordered.findIndex((s) => s.id === scatterPair.y);
+          const next = (i) => ordered[(i + 1) % ordered.length];
+          const newX = next(idxX);
+          let newY = next(idxY + 1);
+          if (newY.id === newX.id) newY = next(ordered.findIndex((s) => s.id === newX.id) + 1);
+          scatterPair = { x: newX.id, y: newY.id };
+          renderAll();
+        });
+      }
+      // regression toggle
+      const regBtn = button(
+        'Regression',
+        () => {
+          scatterShowRegression = !scatterShowRegression;
+          regBtn.classList.toggle('bg-panel-2');
+          regBtn.classList.toggle('dark:bg-panel-2-dark');
+          drawRegression();
+          $('insights').innerHTML = `Scatter (${points.length} pts) — ${
+            slope != null
+              ? `Slope: ${fmt(slope)} | Intercept: ${fmt(intercept)} | R²: ${r2.toFixed(3)}${
+                  scatterShowRegression ? '' : ' (hidden)'
+                }`
+              : 'Insufficient variance for regression'
+          }`;
+        },
+        scatterShowRegression,
+      );
+      if (tempAxis && energyAxis) {
+        // degree-day toggle button
+        const ddBtn = button(
+          'Deg Days',
+          () => {
+            scatterShowDegDay = !scatterShowDegDay;
+            ddBtn.classList.toggle('bg-panel-2');
+            ddBtn.classList.toggle('dark:bg-panel-2-dark');
+            renderAll();
+          },
+          scatterShowDegDay,
+        );
+      }
+      // If degree-day panel requested and available
+      if (scatterShowDegDay && tempAxis && energyAxis) {
+        const panel = document.createElement('div');
+        panel.className =
+          'mt-2 p-2 border border-border dark:border-border-dark rounded bg-panel-2 dark:bg-panel-2-dark flex flex-wrap gap-2 items-end text-[11px]';
+        panel.innerHTML = `<label class='flex flex-col'>Base T
+                <input type='number' step='0.5' id='dd-base' class='mt-0.5 w-20 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark' value='${scatterDegDayBaseTemp}' />
+              </label>
+              <label class='flex flex-col'>Period
+                <select id='dd-period' class='mt-0.5 w-24 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark'>
+                  <option value='daily' ${
+                    scatterDegDayPeriod === 'daily' ? 'selected' : ''
+                  }>Daily</option>
+                  <option value='monthly' ${
+                    scatterDegDayPeriod === 'monthly' ? 'selected' : ''
+                  }>Monthly</option>
+                </select>
+              </label>
+              <label class='flex flex-col'>Mode
+                <select id='dd-mode' class='mt-0.5 w-28 px-1 py-0.5 rounded bg-panel dark:bg-panel-dark border border-border dark:border-border-dark'>
+                  <option value='heating' ${
+                    scatterDegDayMode === 'heating' ? 'selected' : ''
+                  }>Heating</option>
+                  <option value='cooling' ${
+                    scatterDegDayMode === 'cooling' ? 'selected' : ''
+                  }>Cooling</option>
+                  <option value='both' ${
+                    scatterDegDayMode === 'both' ? 'selected' : ''
+                  }>Heat+Cool</option>
+                </select>
+              </label>
+              <div id='dd-summary' class='flex-1 text-xs'></div>
+              <div class='text-[10px] absolute right-1 top-1 cursor-pointer select-none group' id='dd-help' aria-label='Degree-day model help' style='z-index:10;'>
+                <span class='inline-block w-4 h-4 leading-4 text-center rounded-full bg-accent text-white font-medium'>?</span>
+                <div class='hidden group-hover:block absolute z-10 right-0 mt-1 w-64 p-2 text-[10px] leading-snug bg-panel dark:bg-panel-dark border border-border dark:border-border-dark rounded shadow'>
+                  <strong>Model:</strong> E = b*days + h*HDD + c*CDD<br/>
+                  b: baseload energy per day (same energy units as E/day).<br/>
+                  HDD / CDD: heating / cooling degree-days for the chosen base temperature and aggregation period, in current temperature difference units (°C·day or °F·day).<br/>
+                  h, c: incremental energy per degree-day (energy / (°·day)).<br/>
+                  For daily periods the dashed line shows predicted <em>hourly average</em> (divide daily prediction by 24) so it aligns with hourly scatter points.<br/>
+                  R²: variance explained by the model using summed period energies.
+                </div>
+              </div>`;
+        $('insights').appendChild(panel);
+        // Ensure positioning context
+        panel.style.position = 'relative';
+        panel.querySelector('#dd-base').addEventListener('change', (e) => {
+          scatterDegDayBaseTemp = parseFloat(e.target.value) || scatterDegDayBaseTemp;
+          renderAll();
+        });
+        panel.querySelector('#dd-period').addEventListener('change', (e) => {
+          scatterDegDayPeriod = e.target.value;
+          renderAll();
+        });
+        panel.querySelector('#dd-mode').addEventListener('change', (e) => {
+          scatterDegDayMode = e.target.value;
+          renderAll();
+        });
+        if (degDayModel) {
+          const parts = [];
+          if (degDayModel.useH) parts.push(`h=${fmt(degDayModel.hCoeff)}`);
+          if (degDayModel.useC) parts.push(`c=${fmt(degDayModel.cCoeff)}`);
+          panel.querySelector('#dd-summary').innerHTML =
+            `Temp response: E = b*days + ${parts.join(' + ')} (R² ${degDayModel.r2.toFixed(3)})`;
+        } else {
+          panel.querySelector('#dd-summary').textContent =
+            'No degree-day model (insufficient data).';
+        }
+      }
+    }
+
+    function toLDC(points, units, normalize) {
+      const vals = points.map((p) => convertUnits(p.y, units)).filter((v) => Number.isFinite(v));
+      if (!vals.length) return [];
+      vals.sort((a, b) => b - a);
+      const peak = vals[0];
+      const n = vals.length;
+      return vals.map((v, i) => ({
+        x: n > 1 ? (i / (n - 1)) * 100 : 0,
+        y: normalize ? (v / peak) * 100 : v,
+      }));
+    }
+
+    async function renderLDC(series) {
+      await ensureD3();
+      const container = $('chart');
+      container.innerHTML = '';
+      const rect = container.getBoundingClientRect();
+      const width = rect.width,
+        height = rect.height;
+      const m = { top: 16, right: 24, bottom: 40, left: 56 },
+        w = width - m.left - m.right,
+        h = height - m.top - m.bottom;
+      const {
+        axis: axisColor,
+        grid: gridColor,
+        text: textColor,
+        border: borderColor,
+        tooltipBg,
+        accent,
+        accentStrong,
+      } = chartColors();
+      const normalize = $('ldc-normalize')?.checked === true;
+
+      const curves = series
+        .map((s) => ({
+          ...s,
+          points: toLDC(s.points, s.meta.Units, normalize),
+        }))
+        .filter((c) => c.points.length);
+      if (!curves.length) {
+        $('insights').textContent = 'No data available for LDC.';
+        return;
+      }
+
+      const allY = curves.flatMap((c) => c.points.map((p) => p.y));
+      const rawMin = d3.min(allY);
+      const rawMax = d3.max(allY);
+      // Ensure domain includes 0 if values cross it, or if all values are on one side keep that side + 0 for reference when all negative
+      let domMin = rawMin;
+      let domMax = rawMax;
+      if (rawMin < 0 && rawMax > 0) {
+        domMin = rawMin;
+        domMax = rawMax;
+      } else if (rawMax <= 0) {
+        // all negative
+        domMin = rawMin;
+        domMax = 0; // include zero baseline for context
+      } else if (rawMin >= 0) {
+        domMin = 0; // start at zero for all positive
+        domMax = rawMax;
+      }
+      const x = d3.scaleLinear().domain([0, 100]).range([0, w]);
+      const y = d3.scaleLinear().domain([domMin, domMax]).nice().range([h, 0]);
+
+      const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
+      const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+
+      g.append('g')
+        .attr('class', 'grid')
+        .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(''))
+        .selectAll('line')
+        .attr('stroke', gridColor)
+        .attr('stroke-opacity', 0.35);
+      g.select('.grid').select('.domain').remove();
+
+      const gx = g
+        .append('g')
+        .attr('transform', `translate(0,${h})`)
+        .call(
+          d3
+            .axisBottom(x)
+            .ticks(6)
+            .tickFormat((d) => d + '%'),
+        );
+      const gy = g.append('g').call(d3.axisLeft(y).ticks(6));
+      gx.selectAll('path,line').attr('stroke', axisColor);
+      gy.selectAll('path,line').attr('stroke', axisColor);
+      gx.selectAll('text').attr('fill', axisColor);
+      gy.selectAll('text').attr('fill', axisColor);
+
+      const line = d3
+        .line()
+        .x((d) => x(d.x))
+        .y((d) => y(d.y));
+      curves.forEach((c) => {
+        g.append('path')
+          .datum(c.points)
+          .attr('fill', 'none')
+          .attr('stroke', c.color)
+          .attr('stroke-width', 1.8)
+          .attr('d', line);
+      });
+
+      // Zero baseline if needed (negative values present)
+      if (domMin < 0) {
+        g.append('line')
+          .attr('x1', 0)
+          .attr('x2', w)
+          .attr('y1', y(0))
+          .attr('y2', y(0))
+          .attr('stroke', axisColor)
+          .attr('stroke-width', 1)
+          .attr('opacity', 0.6);
+      }
+
+      [10, 50, 90].forEach((p) => {
+        const xx = x(p);
+        g.append('line')
+          .attr('x1', xx)
+          .attr('x2', xx)
+          .attr('y1', 0)
+          .attr('y2', h)
+          .attr('stroke', axisColor)
+          .attr('stroke-dasharray', '2,3')
+          .attr('opacity', 0.6);
+      });
+
+      // textColor, borderColor, tooltipBg already from chartColors()
+      const tooltip = d3
+        .select(container)
+        .append('div')
+        .style('position', 'absolute')
+        .style('pointer-events', 'none')
+        .style('background', tooltipBg)
+        .style('border', '1px solid ' + borderColor)
+        .style('color', textColor)
+        .style('padding', '6px 8px')
+        .style('border-radius', '6px')
+        .style('font-size', '12px')
+        .style('display', 'none');
+
+      svg
+        .on('mousemove', (event) => {
+          const [mx] = d3.pointer(event, g.node());
+          const px = Math.max(0, Math.min(100, x.invert(mx)));
+          const rows = curves
+            .map((c) => {
+              const a = c.points;
+              if (!a.length) return null;
+              let i = Math.floor((px / 100) * (a.length - 1));
+              i = Math.max(0, Math.min(a.length - 1, i));
+              return { name: c.meta.Name, color: c.color, y: a[i].y };
+            })
+            .filter(Boolean)
+            .sort((a, b) => b.y - a.y);
+          const unitLabel = normalize ? '%' : convertUnitLabel(curves[0].meta.Units);
+          const tooltipNode = tooltip.node();
+          tooltipNode.replaceChildren();
+          const titleDiv = document.createElement('div');
+          const strong = document.createElement('strong');
+          strong.textContent = `P${px.toFixed(0)}`;
+          titleDiv.appendChild(strong);
+          tooltipNode.appendChild(titleDiv);
+          rows.forEach((r) => {
+            const row = document.createElement('div');
+            const name = document.createElement('span');
+            name.style.color = r.color;
+            name.textContent = r.name;
+            row.appendChild(name);
+            row.appendChild(document.createTextNode(` — ${fmt(r.y)} ${unitLabel || ''}`));
+            tooltipNode.appendChild(row);
+          });
+          tooltip.style('display', 'block');
+          const cw = container.clientWidth;
+          const ch = container.clientHeight;
+          const tw = tooltip.node().offsetWidth || 0;
+          const th = tooltip.node().offsetHeight || 0;
+          let left = event.offsetX + 12;
+          if (left + tw > cw - 4) left = event.offsetX - 12 - tw;
+          if (left < 4) left = 4;
+          let top = event.offsetY - 24;
+          if (top < 4) top = event.offsetY + 12;
+          if (top + th > ch - 4) top = ch - th - 4;
+          tooltip.style('left', left + 'px').style('top', top + 'px');
+        })
+        .on('mouseleave', () => tooltip.style('display', 'none'));
+
+      const leg = $('legend');
+      leg.innerHTML = '';
+      curves.forEach((s) => {
+        const item = document.createElement('button');
+        item.className =
+          'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors';
+        if (s.visible !== false) item.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+        const swatch = document.createElement('span');
+        swatch.style.display = 'inline-block';
+        swatch.style.width = '10px';
+        swatch.style.height = '10px';
+        swatch.style.background = s.color;
+        swatch.style.borderRadius = '2px';
+        swatch.style.marginRight = '6px';
+        swatch.style.verticalAlign = 'middle';
+        item.appendChild(swatch);
+        item.appendChild(document.createTextNode(s.meta.Name));
+        item.onclick = () => {
+          const v = selected.get(s.id);
+          v.visible = !v.visible;
+          selected.set(s.id, v);
+          renderAll();
+        };
+        leg.appendChild(item);
+      });
+
+      const el = $('insights');
+      const lbl = normalize ? '(normalized to each series peak)' : '';
+      el.innerHTML = `Load duration curve ${lbl}`;
+      $('units').textContent = normalize ? '%' : convertUnitLabel(curves[0]?.meta?.Units || '');
+    }
+
+    async function renderLoadBalance(series) {
+      await ensureD3();
+      const container = $('chart');
+      const hadLoading = !!document.getElementById('lb-loading');
+      // Required variable groups (any one of the alternatives in names[] will satisfy)
+      const IDF_LOAD_BALANCE_SNIPPET = `! Load Balance Required Outputs (Monthly variant)\nOutput:Variable,*,Zone Air System Sensible Heating Energy,Monthly;\nOutput:Variable,*,Zone Air System Sensible Cooling Energy,Monthly;\n! or (Ideal Loads)\n! Output:Variable,*,Zone Ideal Loads Supply Air Sensible Heating Energy,Monthly;\n! Output:Variable,*,Zone Ideal Loads Supply Air Sensible Cooling Energy,Monthly;\n\n! Internal Gains\nOutput:Variable,*,People Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Lights Total Heating Energy,Monthly;\nOutput:Variable,*,Electric Equipment Total Heating Energy,Monthly;\nOutput:Variable,*,Hot Water Equipment Total Heating Energy,Monthly;\n\n! Solar\nOutput:Variable,*,Zone Windows Total Transmitted Solar Radiation Energy,Monthly;\n\n! Infiltration / ventilation\nOutput:Variable,*,Zone Infiltration Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Zone Infiltration Sensible Heat Loss Energy,Monthly;\nOutput:Variable,*,Zone Ventilation Sensible Heat Gain Energy,Monthly;\nOutput:Variable,*,Zone Ventilation Sensible Heat Loss Energy,Monthly;\n\n! Conduction & storage\nOutput:Variable,*,Surface Inside Face Conduction Heat Gain Energy,Monthly;\nOutput:Variable,*,Surface Inside Face Conduction Heat Loss Energy,Monthly;\nOutput:Variable,*,Surface Inside Face Conduction Heat Storage Energy,Monthly;\nOutput:Variable,*,Zone Air Heat Balance Air Energy Storage Energy,Monthly;`;
+      const CATS = [
+        {
+          id: 'heating',
+          label: 'Heating',
+          names: [
+            'Zone Air System Sensible Heating Energy',
+            'Zone Ideal Loads Supply Air Sensible Heating Energy',
+          ],
+          sign: +1,
+        },
+        {
+          id: 'cooling',
+          label: 'Cooling Needed',
+          names: [
+            'Zone Air System Sensible Cooling Energy',
+            'Zone Ideal Loads Supply Air Sensible Cooling Energy',
+          ],
+          sign: -1,
+        },
+        {
+          id: 'internal',
+          label: 'Internal Gains',
+          names: [
+            'People Sensible Heat Gain Energy',
+            'Lights Total Heating Energy',
+            'Electric Equipment Total Heating Energy',
+            'Hot Water Equipment Total Heating Energy',
+          ],
+          sign: +1,
+        },
+        {
+          id: 'solar',
+          label: 'Window Solar',
+          names: ['Zone Windows Total Transmitted Solar Radiation Energy'],
+          sign: +1,
+        },
+        {
+          id: 'inf_gain',
+          label: 'Infiltration Gain',
+          names: ['Zone Infiltration Sensible Heat Gain Energy'],
+          sign: +1,
+        },
+        {
+          id: 'inf_loss',
+          label: 'Infiltration Loss',
+          names: ['Zone Infiltration Sensible Heat Loss Energy'],
+          sign: -1,
+        },
+        {
+          id: 'vent_gain',
+          label: 'Ventilation Gain',
+          names: ['Zone Ventilation Sensible Heat Gain Energy'],
+          sign: +1,
+        },
+        {
+          id: 'vent_loss',
+          label: 'Ventilation Loss',
+          names: ['Zone Ventilation Sensible Heat Loss Energy'],
+          sign: -1,
+        },
+        {
+          id: 'cond_gain',
+          label: 'Window Conduction',
+          names: ['Surface Inside Face Conduction Heat Gain Energy'],
+          sign: +1,
+        },
+        {
+          id: 'cond_loss',
+          label: 'Wall Conduction',
+          names: ['Surface Inside Face Conduction Heat Loss Energy'],
+          sign: -1,
+        },
+        {
+          id: 'storage',
+          label: 'Air / Surface Storage',
+          names: [
+            'Surface Inside Face Conduction Heat Storage Energy',
+            'Zone Air Heat Balance Air Energy Storage Energy',
+          ],
+          sign: 0,
+        },
+      ];
+      if (!db || !dict) {
+        container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3'>Load a database first.</div>`;
+        return;
+      }
+      // Build index of dictionary names -> entries (Hourly or Monthly). Prefer Hourly if present.
+      const byName = dict
+        .filter((d) => d.freq === 'Hourly' || d.freq === 'Monthly')
+        .reduce((m, d) => {
+          (m[d.Name] ||= []).push(d);
+          return m;
+        }, {});
+      const missing = [];
+      // Helper to collect rows per category
+      function pad2(n) {
+        return String(n).padStart(2, '0');
+      }
+      // Map env-month -> category totals (in Joules, signed)
+      let monthLabelsLocal, catTotals, missingCached;
+      if (__loadBalanceCache) {
+        ({ monthLabels: monthLabelsLocal, catTotals, missing: missingCached } = __loadBalanceCache);
+        missing.push(...missingCached);
+      } else {
+        const monthKeys = new Set();
+        const catTotalsLocal = new Map();
+        CATS.forEach((c) => catTotalsLocal.set(c.id, new Map()));
+        // Pre-build filtered lists for each variable name (Hourly preferred) to avoid repeated some/filter operations inside loops
+        const nameToEntries = {};
+        for (const nm in byName) {
+          const arr = byName[nm];
+          if (!arr) continue;
+          nameToEntries[nm] = arr.some((e) => e.freq === 'Hourly')
+            ? arr.filter((e) => e.freq === 'Hourly')
+            : arr;
+        }
+        for (const cat of CATS) {
+          let anyFound = false;
+          for (const nm of cat.names) {
+            const entries = nameToEntries[nm];
+            if (!entries) continue;
+            anyFound = true;
+            for (let ei = 0; ei < entries.length; ei++) {
+              const entry = entries[ei];
+              const rows = queryTimeSeries(entry.id);
+              const mMap = catTotalsLocal.get(cat.id);
+              const sign = cat.sign;
+              const units = entry.Units;
+              for (let ri = 0; ri < rows.length; ri++) {
+                const r = rows[ri];
+                const label = `E${r.env}-M${pad2(r.month || 1)}`;
+                monthKeys.add(label);
+                let valJ = toJoules(Number(r.value), units) ?? Number(r.value);
+                if (!isFinite(valJ)) continue;
+                const applied = sign === 0 ? valJ : valJ * sign;
+                mMap.set(label, (mMap.get(label) || 0) + applied);
+              }
+            }
+          }
+          if (!anyFound) missing.push(cat.label);
+        }
+        monthLabelsLocal = [...monthKeys].sort();
+        catTotals = catTotalsLocal;
+        __loadBalanceCache = { monthLabels: monthLabelsLocal, catTotals, missing: [...missing] };
+      }
+      const monthLabels = monthLabelsLocal;
+      if (monthLabels.length === 0) {
+        container.innerHTML = `<div class='text-xs text-muted dark:text-muted-dark p-3 flex flex-col gap-2'>
+      <div class='flex items-start gap-2'>
+        <span>Required variables not present. Include these Monthly Output:Variable objects (or change Frequency to Hourly for higher fidelity).</span>
+        <button id='idf-copy-btn' class='shrink-0 p-1 rounded border border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark' title='Copy IDF snippet'>
+          <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' class='w-4 h-4'>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M8 16.5h8m-8-4h8m2 8H8.25A2.25 2.25 0 0 1 6 18.75V5.25A2.25 2.25 0 0 1 8.25 3H16.5L21 7.5v11.25A2.25 2.25 0 0 1 18.75 20.5z'/>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M16.5 3v4.5H21'/>
+          </svg>
+        </button>
+      </div>
+      <pre id='idf-snippet' class='hidden whitespace-pre-wrap text-[10px] leading-snug bg-panel-2 dark:bg-panel-2-dark p-2 rounded border border-border dark:border-border-dark max-h-40 overflow-auto'></pre>
+      <button id='idf-toggle' class='self-start text-[10px] px-2 py-1 rounded border border-border dark:border-border-dark hover:bg-panel-2 dark:hover:bg-panel-2-dark'>Show IDF Snippet</button>
+    </div>`;
+        // Attach copy / toggle handlers
+        setTimeout(() => {
+          const btn = $('idf-copy-btn');
+          const pre = $('idf-snippet');
+          const toggle = $('idf-toggle');
+          if (btn)
+            btn.addEventListener('click', () => {
+              navigator.clipboard
+                .writeText(IDF_LOAD_BALANCE_SNIPPET)
+                .then(() => {
+                  btn.classList.add('bg-accent', 'text-white', 'dark:bg-accent-dark');
+                  btn.title = 'Copied!';
+                  setTimeout(() => {
+                    btn.classList.remove('bg-accent', 'text-white', 'dark:bg-accent-dark');
+                    btn.title = 'Copy IDF snippet';
+                  }, 1400);
+                })
+                .catch(() => {});
+            });
+          if (toggle)
+            toggle.addEventListener('click', () => {
+              if (pre.classList.contains('hidden')) {
+                pre.textContent = IDF_LOAD_BALANCE_SNIPPET;
+                pre.classList.remove('hidden');
+                toggle.textContent = 'Hide IDF Snippet';
+              } else {
+                pre.classList.add('hidden');
+                toggle.textContent = 'Show IDF Snippet';
+              }
+            });
+        }, 0);
+        return;
+      }
+      // Prepare stacked dataset; one pseudo series per category
+      // Semantic color mapping for Load Balance categories (intuitive colors for energy concepts)
+      const loadBalanceColors = {
+        // Heating - warm red (intuitive for heating)
+        heating: document.documentElement.classList.contains('dark') ? '#f87171' : '#dc2626',
+        // Cooling - cool blue (intuitive for cooling)
+        cooling: document.documentElement.classList.contains('dark') ? '#60a5fa' : '#2563eb',
+        // Internal gains - warm amber (people/equipment heat)
+        internal: document.documentElement.classList.contains('dark') ? '#fbbf24' : '#f59e0b',
+        // Window solar - bright orange (solar energy)
+        solar: document.documentElement.classList.contains('dark') ? '#fb923c' : '#ea580c',
+        // Infiltration gain - light orange
+        inf_gain: document.documentElement.classList.contains('dark') ? '#fdba74' : '#f97316',
+        // Infiltration loss - light blue
+        inf_loss: document.documentElement.classList.contains('dark') ? '#7dd3fc' : '#0ea5e9',
+        // Ventilation gain - coral/salmon
+        vent_gain: document.documentElement.classList.contains('dark') ? '#fda4af' : '#f43f5e',
+        // Ventilation loss - teal/cyan
+        vent_loss: document.documentElement.classList.contains('dark') ? '#67e8f9' : '#06b6d4',
+        // Window conduction - slate blue
+        cond_gain: document.documentElement.classList.contains('dark') ? '#a78bfa' : '#7c3aed',
+        // Wall conduction - blue-gray
+        cond_loss: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b',
+        // Storage - purple
+        storage: document.documentElement.classList.contains('dark') ? '#c084fc' : '#9333ea',
+      };
+      const catSeries = CATS.filter((c) => !missing.includes(c.label)).map((c) => ({
+        id: c.id,
+        meta: { Name: c.label, Units: 'J' },
+        color:
+          loadBalanceColors[c.id] ||
+          (document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b'),
+        points: monthLabels.map((ml) => ({ xLabel: ml, y: catTotals.get(c.id).get(ml) || 0 })),
+      }));
+      // Convert to display units (using convertUnits on value in Joules)
+      catSeries.forEach((cs) => {
+        cs.points.forEach((p) => {
+          p.y = convertUnits(p.y, 'J');
+        });
+      });
+      const containerNote = missing.length
+        ? `<div class='text-xs text-warning dark:text-warning-dark mb-2'>Missing categories: ${missing.join(
+            ', ',
+          )}</div>`
+        : '';
+      // Continue with stacked positive/negative logic
+      const m = { top: 16, right: 24, bottom: 56, left: 64 };
+      // Measure before clearing so loading overlay (if present) contributes correct size
+      const rect = container.getBoundingClientRect();
+      if (!hadLoading) container.innerHTML = '';
+      const width = rect.width,
+        height = rect.height;
+      const w = width - m.left - m.right,
+        h = height - m.top - m.bottom;
+      const {
+        axis: axisColor,
+        grid: gridColor,
+        text: textColor,
+        border: borderColor,
+        tooltipBg,
+      } = chartColors();
+      function shortLabel(raw) {
+        const m = raw.match(/-M(\d{2})/i);
+        if (m) {
+          const idx = parseInt(m[1], 10);
+          return [
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'May',
+            'Jun',
+            'Jul',
+            'Aug',
+            'Sep',
+            'Oct',
+            'Nov',
+            'Dec',
+          ][idx - 1];
+        }
+        return raw;
+      }
+      const monthData = monthLabels.map((ml) => {
+        const row = { label: ml };
+        catSeries.forEach((s) => {
+          row[s.id] = s.points.find((p) => p.xLabel === ml)?.y || 0;
+        });
+        return row;
+      });
+      const keys = catSeries.map((s) => s.id);
+      function stackFiltered(sign) {
+        const filtered = monthData.map((r) => {
+          const c = { label: r.label };
+          keys.forEach((k) => {
+            const v = r[k];
+            c[k] = sign * v > 0 ? v : 0;
+          });
+          return c;
+        });
+        return d3.stack().keys(keys)(filtered);
+      }
+      const posLayers = stackFiltered(1);
+      const negLayers = stackFiltered(-1);
+      const maxPos = d3.max(posLayers, (l) => d3.max(l, (d) => d[1])) || 0;
+      const maxNeg = d3.min(negLayers, (l) => d3.min(l, (d) => d[0])) || 0;
+      const y = d3.scaleLinear().domain([maxNeg, maxPos]).nice().range([h, 0]);
+      const x = d3.scaleBand().domain(monthLabels).range([0, w]).padding(0.15);
+      if (hadLoading) container.innerHTML = '';
+      const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
+      const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+      g.append('g')
+        .attr('class', 'grid')
+        .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(''))
+        .selectAll('line')
+        .attr('stroke', gridColor)
+        .attr('stroke-opacity', 0.35);
+      g.select('.grid').select('.domain').remove();
+      const gx = g
+        .append('g')
+        .attr('transform', `translate(0,${h})`)
+        .call(d3.axisBottom(x).tickFormat(shortLabel));
+      const gy = g.append('g').call(d3.axisLeft(y).ticks(6));
+      gx.selectAll('path,line').attr('stroke', axisColor);
+      gy.selectAll('path,line').attr('stroke', axisColor);
+      gx.selectAll('text').attr('fill', axisColor);
+      gy.selectAll('text').attr('fill', axisColor);
+      g.append('line')
+        .attr('x1', 0)
+        .attr('x2', w)
+        .attr('y1', y(0))
+        .attr('y2', y(0))
+        .attr('stroke', axisColor)
+        .attr('stroke-width', 1.2);
+      function drawLayers(layers) {
+        layers.forEach((layer) => {
+          const color = catSeries.find((s) => s.id === layer.key)?.color || '#999';
+          const grp = g.append('g').attr('fill', color);
+          grp
+            .selectAll('rect')
+            .data(layer)
+            .enter()
+            .append('rect')
+            .attr('x', (d) => x(d.data.label))
+            .attr('width', x.bandwidth())
+            .attr('y', (d) => y(Math.max(d[0], d[1])))
+            .attr('height', (d) => Math.abs(y(d[0]) - y(d[1])))
+            .append('title')
+            .text((d) => {
+              const cs = catSeries.find((s) => s.id === layer.key);
+              const val = d.data[layer.key];
+              return `${shortLabel(d.data.label)}\n${cs?.meta.Name}: ${fmt(
+                val,
+              )} ${convertUnitLabel('J')}`;
+            });
+        });
+      }
+      drawLayers(posLayers);
+      drawLayers(negLayers);
+      // Track hidden state separately to avoid readonly property issues
+      const hiddenState = new Map();
+
+      // Interactive vertical guideline + percentage breakdown tooltip
+      let lbTooltip = d3.select(container).select('.lb-tooltip');
+      if (lbTooltip.empty()) {
+        lbTooltip = d3
+          .select(container)
+          .append('div')
+          .attr('class', 'lb-tooltip')
+          .style('position', 'absolute')
+          .style('pointer-events', 'none')
+          .style('background', tooltipBg)
+          .style('border', '1px solid ' + borderColor)
+          .style('color', textColor)
+          .style('padding', '6px 8px')
+          .style('border-radius', '6px')
+          .style('font-size', '12px')
+          .style('display', 'none');
+      }
+      const guide = g
+        .append('line')
+        .attr('class', 'lb-guide')
+        .attr('y1', 0)
+        .attr('y2', h)
+        .attr('stroke', axisColor)
+        .attr('stroke-width', 1)
+        .attr('stroke-dasharray', '3,3')
+        .style('display', 'none');
+      const overlay = g
+        .append('rect')
+        .attr('class', 'lb-overlay')
+        .attr('x', 0)
+        .attr('y', 0)
+        .attr('width', w)
+        .attr('height', h)
+        .attr('fill', 'transparent')
+        .style('cursor', 'crosshair')
+        .on('mousemove', function (ev) {
+          const [mx] = d3.pointer(ev, this);
+          // determine closest month band center
+          let closestLabel = null,
+            closestDist = Infinity,
+            cx = mx;
+          monthLabels.forEach((lbl) => {
+            const bx = x(lbl) + x.bandwidth() / 2;
+            const d = Math.abs(bx - mx);
+            if (d < closestDist) {
+              closestDist = d;
+              closestLabel = lbl;
+              cx = bx;
+            }
+          });
+          if (!closestLabel) {
+            lbTooltip.style('display', 'none');
+            guide.style('display', 'none');
+            return;
+          }
+          guide.style('display', 'block').attr('x1', cx).attr('x2', cx);
+          // collect active series (respect hidden toggles)
+          const active = catSeries.filter((s) => !hiddenState.get(s.id));
+          if (!active.length) {
+            lbTooltip.style('display', 'none');
+            return;
+          }
+          // values at this month
+          const vals = active.map((s) => ({
+            id: s.id,
+            name: s.meta.Name,
+            color: s.color,
+            v: s.points.find((p) => p.xLabel === closestLabel)?.y || 0,
+          }));
+          // Separate positive / negative totals (for meaningful % of each side)
+          const posTotal = d3.sum(
+            vals.filter((r) => r.v > 0),
+            (r) => r.v,
+          );
+          const negTotal = Math.abs(
+            d3.sum(
+              vals.filter((r) => r.v < 0),
+              (r) => r.v,
+            ),
+          );
+          // Build rows: show value + % of its sign group; also overall % of absolute sum
+          const absTotal = posTotal + negTotal;
+          const unitLabel = convertUnitLabel('J');
+          const rowsData = vals
+            .filter((r) => r.v !== 0)
+            .sort((a, b) => Math.abs(b.v) - Math.abs(a.v))
+            .map((r) => {
+              const base = r.v > 0 ? posTotal : negTotal;
+              const pctSide = base ? (Math.abs(r.v) / base) * 100 : 0;
+              const pctOverall = absTotal ? (Math.abs(r.v) / absTotal) * 100 : 0;
+              return { ...r, pctSide, pctOverall };
+            });
+          lbTooltip
+            .style('display', 'block')
+            .style('left', m.left + cx + 12 + 'px')
+            .style('top', m.top + 8 + 'px');
+          const tooltipNode = lbTooltip.node();
+          tooltipNode.replaceChildren();
+          const titleDiv = document.createElement('div');
+          const strong = document.createElement('strong');
+          strong.textContent = shortLabel(closestLabel);
+          titleDiv.appendChild(strong);
+          tooltipNode.appendChild(titleDiv);
+          if (!rowsData.length) {
+            const empty = document.createElement('div');
+            empty.className = 'text-muted dark:text-muted-dark';
+            empty.textContent = 'No values';
+            tooltipNode.appendChild(empty);
+          } else {
+            rowsData.forEach((r) => {
+              const row = document.createElement('div');
+              const name = document.createElement('span');
+              name.style.color = r.color;
+              name.textContent = r.name;
+              row.appendChild(name);
+              row.appendChild(
+                document.createTextNode(
+                  ` — ${fmt(r.v)} ${unitLabel} (${r.pctSide.toFixed(1)}% of ${
+                    r.v > 0 ? 'gains' : 'losses'
+                  }, ${r.pctOverall.toFixed(1)}% total)`,
+                ),
+              );
+              tooltipNode.appendChild(row);
+            });
+          }
+        })
+        .on('mouseleave', () => {
+          lbTooltip.style('display', 'none');
+          guide.style('display', 'none');
+        });
+      const leg = $('legend');
+      leg.innerHTML = '';
+      catSeries.forEach((s) => {
+        const btn = document.createElement('button');
+        btn.className =
+          'text-xs px-2 py-1 rounded border border-border dark:border-border-dark transition-colors bg-panel-2 dark:bg-panel-2-dark';
+        btn.innerHTML = `<span style="display:inline-block;width:10px;height:10px;background:${
+          s.color
+        };border-radius:2px;margin-right:6px;vertical-align:middle"></span>${escapeHtml(
+          s.meta.Name,
+        )}`;
+        btn.onclick = () => {
+          // toggle using separate hidden state map
+          const isHidden = hiddenState.get(s.id);
+          if (isHidden) {
+            hiddenState.set(s.id, false);
+            btn.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+          } else {
+            hiddenState.set(s.id, true);
+            btn.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+          }
+          // Recompute stacks with hidden series filtered
+          const active = catSeries.filter((x) => !hiddenState.get(x.id));
+          const keysA = active.map((x) => x.id);
+          const monthDataA = monthLabels.map((ml) => {
+            const row = { label: ml };
+            active.forEach((a) => {
+              row[a.id] = a.points.find((p) => p.xLabel === ml)?.y || 0;
+            });
+            return row;
+          });
+          function stack(sign) {
+            const filtered = monthDataA.map((r) => {
+              const c = { label: r.label };
+              keysA.forEach((k) => {
+                const v = r[k];
+                c[k] = sign * v > 0 ? v : 0;
+              });
+              return c;
+            });
+            return d3.stack().keys(keysA)(filtered);
+          }
+          const pos = stack(1),
+            neg = stack(-1);
+          const maxP = d3.max(pos, (l) => d3.max(l, (d) => d[1])) || 0;
+          const maxN = d3.min(neg, (l) => d3.min(l, (d) => d[0])) || 0;
+          y.domain([maxN, maxP]).nice();
+          g.selectAll('.layer').remove();
+          function draw(layers) {
+            layers.forEach((layer) => {
+              const color2 = active.find((a) => a.id === layer.key)?.color || '#999';
+              const grp = g.append('g').attr('fill', color2).attr('class', 'layer');
+              grp
+                .selectAll('rect')
+                .data(layer)
+                .enter()
+                .append('rect')
+                .attr('x', (d) => x(d.data.label))
+                .attr('width', x.bandwidth())
+                .attr('y', (d) => y(Math.max(d[0], d[1])))
+                .attr('height', (d) => Math.abs(y(d[0]) - y(d[1])))
+                .append('title')
+                .text((d) => {
+                  const cs2 = active.find((a) => a.id === layer.key);
+                  const val = d.data[layer.key];
+                  return `${shortLabel(d.data.label)}\n${cs2?.meta.Name}: ${fmt(
+                    val,
+                  )} ${convertUnitLabel('J')}`;
+                });
+            });
+          }
+          draw(pos);
+          draw(neg);
+          g.selectAll('g.grid')
+            .call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(''))
+            .selectAll('line')
+            .attr('stroke', gridColor)
+            .attr('stroke-opacity', 0.35);
+          g.select('g.grid').select('.domain').remove();
+          gy.call(d3.axisLeft(y).ticks(6));
+          gy.selectAll('path,line').attr('stroke', axisColor);
+          gy.selectAll('text').attr('fill', axisColor);
+          // Hide tooltip/guide on restack to avoid stale position referencing removed bars
+          lbTooltip.style('display', 'none');
+          guide.style('display', 'none');
+        };
+        leg.appendChild(btn);
+      });
+      $('insights').innerHTML = `${
+        missing.length
+          ? '<span class="text-warning dark:text-warning-dark">Partial data; missing: ' +
+            missing.join(', ') +
+            '</span><br>'
+          : ''
+      }Load balance (aggregated from available Hourly/Monthly data)`;
+      $('units').textContent = convertUnitLabel('J');
+    }
+
+    // Signals inputs
+    ['search', 'filter-freq', 'filter-meter', 'filter-group', 'fav-only'].forEach((id) =>
+      $(id).addEventListener('input', populateDictionaryList),
+    );
+
+    function showOpen() {
+      $('open-modal')?.classList.remove('hidden');
+      $('open-backdrop')?.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      $('main-grid')?.setAttribute('inert', '');
+      // Ensure dropzone is initialized (id: open-drop)
+      enableDropZone($('open-drop'));
+    }
+    function hideOpen() {
+      $('open-modal')?.classList.add('hidden');
+      $('open-backdrop')?.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+      $('main-grid')?.removeAttribute('inert');
+    }
+    $('btn-open')?.addEventListener('click', showOpen);
+    $('open-close')?.addEventListener('click', hideOpen);
+    $('open-backdrop')?.addEventListener('click', hideOpen);
+    $('file-input').addEventListener('click', (e) => {
+      // Ensure same-file re-selection triggers change on all browsers
+      try {
+        e.target.value = '';
+      } catch (error) {
+        logger.debug('Ignored recoverable error', { error });
+      }
+    });
+    $('file-input').addEventListener('change', async (e) => {
+      try {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return; // cancelled
+        await handleFile(f);
+        hideOpen();
+      } catch (err) {
+        console.warn('File load failed', err);
+        alert('Failed to open database: ' + (err && err.message ? err.message : String(err)));
+      }
+    });
+    $('btn-load-sample')?.addEventListener('click', async () => {
+      try {
+        await readDbUrl(SAMPLE_DB_URL);
+        try {
+          await ensureD3();
+        } catch (e) {
+          console.warn('d3 preload failed', e);
+        }
+        const list = queryDictionary();
+        populateFilters(list);
+        populateDictionaryList();
+        populateZoneQuick();
+        restoreSelection();
+        const btnHtmlReport = $('btn-html-report');
+        if (btnHtmlReport) btnHtmlReport.disabled = false;
+        if (selected.size === 0 && list.length) {
+          const firstMeter = list.find((d) => d.IsMeter == 1) || list[0];
+          if (firstMeter) {
+            const sel = $('dictionary');
+            for (const option of sel.options) {
+              option.selected = Number(option.value) === firstMeter.id;
+            }
+            handleSelectionChange();
+          }
+        }
+      } catch (e) {
+        console.warn('Sample load failed', e);
+        alert(
+          'Could not load sample database. Run `npm run sample:generate` and ensure public/assets/eplusout.sql exists.',
+        );
+      }
+    });
+
+    function enableDropZone(el) {
+      if (!el) return;
+      const highlight = () =>
+        el.classList.add(
+          'ring-2',
+          'ring-accent dark:ring-accent-dark',
+          'ring-offset-2',
+          'ring-offset-panel dark:ring-offset-panel-dark',
+        );
+      const unhighlight = () =>
+        el.classList.remove(
+          'ring-2',
+          'ring-accent dark:ring-accent-dark',
+          'ring-offset-2',
+          'ring-offset-panel dark:ring-offset-panel-dark',
+        );
+      ['dragenter', 'dragover'].forEach((evt) =>
+        el.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          highlight();
+        }),
+      );
+      ['dragleave', 'drop'].forEach((evt) =>
+        el.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          unhighlight();
+        }),
+      );
+      el.addEventListener('drop', async (e) => {
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) {
+          await handleFile(f);
+        }
+      });
+      // Clicking handled by <label for="file-input">; no JS click needed here
+    }
+    // Initialize modal dropzone (no-op if element not yet in DOM)
+    enableDropZone($('open-drop'));
+
+    // Signals section always visible; collapse feature removed.
+
+    async function handleFile(file) {
+      await readDbFile(file);
+      // Preload D3 early to avoid race when first render triggers before script loads
+      try {
+        await ensureD3();
+      } catch (e) {
+        console.warn('d3 preload failed', e);
+      }
+      const list = queryDictionary();
+      populateFilters(list);
+      populateDictionaryList();
+      populateZoneQuick();
+      restoreSelection();
+      // Enable HTML report button now that database is loaded
+      const btnHtmlReport = $('btn-html-report');
+      if (btnHtmlReport) btnHtmlReport.disabled = false;
+      // If nothing selected from previous session, auto-select the first meter
+      if (selected.size === 0) {
+        const firstMeter = list.find((d) => d.IsMeter == 1);
+        if (firstMeter) {
+          const sel = $('dictionary');
+          for (const option of sel.options) {
+            if (Number(option.value) === firstMeter.id) {
+              option.selected = true;
+              break;
+            }
+          }
+          handleSelectionChange();
+        }
+      }
+    }
+    // Load Sample from modal button
+    $('open-load-sample')?.addEventListener('click', async () => {
+      try {
+        await readDbUrl(SAMPLE_DB_URL);
+        try {
+          await ensureD3();
+        } catch (e) {
+          console.warn('d3 preload failed', e);
+        }
+        const list = queryDictionary();
+        populateFilters(list);
+        populateDictionaryList();
+        populateZoneQuick();
+        restoreSelection();
+        const btnHtmlReport = $('btn-html-report');
+        if (btnHtmlReport) btnHtmlReport.disabled = false;
+        if (selected.size === 0 && list.length) {
+          const firstMeter = list.find((d) => d.IsMeter == 1) || list[0];
+          if (firstMeter) {
+            const sel = $('dictionary');
+            for (const option of sel.options) {
+              option.selected = Number(option.value) === firstMeter.id;
+            }
+            handleSelectionChange();
+          }
+        }
+        hideOpen();
+      } catch (e) {
+        console.warn('Sample load failed', e);
+        alert(
+          'Could not load sample database. Run `npm run sample:generate` and ensure public/assets/eplusout.sql exists.',
+        );
+      }
+    });
+    // Build quick-pick buttons for zones to load Temp + Heating/Cooling setpoints
+    function populateZoneQuick() {
+      try {
+        const wrap = $('zones-quick-wrap');
+        const cont = $('zones-quick');
+        const cnt = $('zones-quick-count');
+        if (!wrap || !cont) return;
+        // Target variable names
+        const N_TEMP = 'Zone Mean Air Temperature';
+        const N_HEAT = 'Zone Thermostat Heating Setpoint Temperature';
+        const N_COOL = 'Zone Thermostat Cooling Setpoint Temperature';
+        // Index by zone key
+        const byZone = new Map(); // zone -> { temp: id, heat: id, cool: id, freq: 'Hourly'|'Monthly' }
+        for (const d of dict) {
+          if (d.freq !== 'Hourly') continue; // prefer Hourly for this feature
+          if (!d.key) continue; // need zone key
+          if (d.Name !== N_TEMP && d.Name !== N_HEAT && d.Name !== N_COOL) continue;
+          const z = d.key;
+          const rec = byZone.get(z) || {};
+          if (d.Name === N_TEMP) rec.temp = d.id;
+          if (d.Name === N_HEAT) rec.heat = d.id;
+          if (d.Name === N_COOL) rec.cool = d.id;
+          rec.freq = d.freq;
+          byZone.set(z, rec);
+        }
+        const zones = [...byZone.entries()]
+          .filter(([, r]) => r.temp || r.heat || r.cool)
+          .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+        if (!zones.length) {
+          wrap.classList.add('hidden');
+          cont.innerHTML = '';
+          cnt.textContent = '';
+          return;
+        }
+        wrap.classList.remove('hidden');
+        cnt.textContent = `${zones.length}`;
+        cont.innerHTML = '';
+        zones.forEach(([zone, rec]) => {
+          const haveAll = !!(rec.temp && rec.heat && rec.cool);
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className =
+            'px-2 py-1 text-[11px] rounded border border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark hover:bg-panel dark:hover:bg-panel-dark';
+          btn.title = haveAll
+            ? 'Load Temp + Heat/Cool setpoints'
+            : `Missing: ${['temp', 'heat', 'cool']
+                .filter((k) => !rec[k])
+                .map((k) => (k === 'temp' ? 'Temp' : k === 'heat' ? 'Heat SP' : 'Cool SP'))
+                .join(', ')}`;
+          btn.textContent = zone;
+          btn.addEventListener('click', () => {
+            try {
+              const ids = [rec.temp, rec.heat, rec.cool].filter((x) => Number.isFinite(x));
+              if (!ids.length) return;
+              const selEl = $('dictionary');
+              // Clear current selection and set only these ids
+              for (const opt of selEl.options) {
+                opt.selected = ids.includes(Number(opt.value));
+              }
+              // Ensure base view to time for this workflow
+              if (typeof viewMode !== 'undefined' && viewMode !== 'time') {
+                viewMode = 'time';
+                $('view-time')?.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+                $('view-ldc')?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+                $('view-balance')?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+                $('view-scatter')?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+              }
+              // Reset zoom domain so full-year visible
+              currentXDomain = null;
+              handleSelectionChange();
+            } catch (e) {
+              console.warn('Zone quick-pick failed', e);
+            }
+          });
+          cont.appendChild(btn);
+        });
+      } catch (e) {
+        console.warn('populateZoneQuick failed', e);
+      }
+    }
+    function populateFilters(list) {
+      const groups = Array.from(new Set(list.map((d) => d.IndexGroup).filter(Boolean))).sort();
+      const gSel = $('filter-group');
+      gSel.replaceChildren();
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.textContent = 'Any index group';
+      gSel.appendChild(defaultOpt);
+      groups.forEach((g) => {
+        const opt = document.createElement('option');
+        opt.textContent = g;
+        gSel.appendChild(opt);
+      });
+      ['search', 'filter-freq', 'filter-meter', 'filter-group', 'dictionary', 'fav-only'].forEach(
+        (id) => ($(id).disabled = false),
+      );
+      $('meta-count').textContent = `${list.length} entries`;
+    }
+    function populateDictionaryList() {
+      const q = $('search').value.trim().toLowerCase();
+      const fFreq = $('filter-freq').value;
+      const fMeter = $('filter-meter').value;
+      const fGroup = $('filter-group').value;
+      const onlyFav = $('fav-only')?.checked;
+      const filtered = dict.filter((d) => {
+        if (fFreq && d.freq !== fFreq) return false;
+        if (fMeter !== '' && String(d.IsMeter) !== fMeter) return false;
+        if (fGroup && d.IndexGroup !== fGroup) return false;
+        if (onlyFav && !favs.has(d.id)) return false;
+        const hay = `${d.Name} ${d.IndexGroup || ''} ${d.key || ''} ${d.Units || ''}`.toLowerCase();
+        return !q || hay.includes(q);
+      });
+      const sel = $('dictionary');
+      sel.replaceChildren();
+      filtered.forEach((d) => {
+        const star = favs.has(d.id) ? '★ ' : '';
+        const tag = d.IsMeter ? 'M' : 'V';
+        const units = d.Units ? ` [${convertUnitLabel(d.Units)}]` : '';
+        const key = d.key ? ` (${d.key})` : '';
+        const label = `${star}${d.freq} | ${d.IndexGroup || '—'} | [${tag}] ${d.Name}${key}${units}`;
+        const opt = document.createElement('option');
+        opt.value = String(d.id);
+        opt.textContent = label;
+        sel.appendChild(opt);
+      });
+      $('meta-count').textContent = `${filtered.length} / ${dict.length}`;
+    }
+    function escapeHtml(s) {
+      return String(s).replace(
+        /[&<>"']/g,
+        (m) =>
+          ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;',
+          })[m],
+      );
+    }
+
+    $('dictionary').addEventListener('change', handleSelectionChange);
+    $('dictionary').addEventListener('dblclick', () => {
+      const sel = $('dictionary');
+      const opt = sel.selectedOptions[0];
+      if (!opt) return;
+      const id = Number(opt.value);
+      if (favs.has(id)) favs.delete(id);
+      else favs.add(id);
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favs]));
+      populateDictionaryList();
+    });
+
+    $('btn-export').addEventListener('click', () => {
+      if (selected.size === 0) return;
+      downloadFile('series.csv', exportCSV(selected));
+    });
+    // Zoom button removed; zoom always enabled
+
+    const btnTime = $('view-time'),
+      btnLdc = $('view-ldc'),
+      btnBalance = $('view-balance'),
+      btnScatter = $('view-scatter'),
+      chkNorm = $('ldc-normalize');
+    btnTime?.addEventListener('click', () => {
+      viewMode = 'time';
+      btnTime.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+      btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+      btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+      $('zoom-hint').classList.add('hidden'); // LDC view (no time zoom)
+      renderAll();
+    });
+    btnLdc?.addEventListener('click', () => {
+      viewMode = 'ldc';
+      btnLdc.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+      btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+      btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+      $('zoom-hint').classList.add('hidden');
+      renderAll();
+    });
+    btnBalance?.addEventListener('click', () => {
+      viewMode = 'balance';
+      btnBalance.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+      btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+      btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+      btnScatter?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+      $('zoom-hint').classList.add('hidden');
+      renderAll();
+    });
+    btnScatter?.addEventListener('click', () => {
+      viewMode = 'scatter';
+      btnScatter.classList.add('bg-panel-2', 'dark:bg-panel-2-dark');
+      btnTime?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+      btnLdc?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+      btnBalance?.classList.remove('bg-panel-2', 'dark:bg-panel-2-dark');
+      $('zoom-hint').classList.add('hidden');
+      renderAll();
+    });
+    chkNorm?.addEventListener('change', () => {
+      // Always re-render; normalization now applies to both time & LDC views
+      renderAll();
+    });
+
+    // Resampling mode event listener
+    const resampleSelect = $('resample-mode');
+    const resampleAggSelect = $('resample-agg');
+    function updateResampleAggEnabled() {
+      if (!resampleAggSelect) return;
+      resampleAggSelect.disabled = resampleMode === 'original';
+    }
+    resampleSelect?.addEventListener('change', () => {
+      resampleMode = resampleSelect.value;
+      updateResampleAggEnabled();
+      renderAll();
+    });
+    resampleAggSelect?.addEventListener('change', () => {
+      resampleAgg = resampleAggSelect.value;
+      renderAll();
+    });
+    updateResampleAggEnabled();
+
+    function restoreSelection() {
+      try {
+        const raw = localStorage.getItem(SELECT_KEY);
+        if (!raw) return;
+        const ids = JSON.parse(raw);
+        const sel = $('dictionary');
+        for (const option of sel.options) {
+          if (ids.includes(Number(option.value))) option.selected = true;
+        }
+        handleSelectionChange();
+      } catch (error) {
+        logger.debug('Ignored recoverable error', { error });
+      }
+    }
+    // Responsive resize: observe chart container; throttle with rAF for smooth live resizing
+    (function () {
+      const chartEl = document.getElementById('chart');
+      if (!chartEl || typeof ResizeObserver === 'undefined') return;
+      let frame = null;
+      let lastW = 0,
+        lastH = 0;
+      const ro = new ResizeObserver((entries) => {
+        const cr = entries[0].contentRect;
+        if (Math.abs(cr.width - lastW) < 1 && Math.abs(cr.height - lastH) < 1) return;
+        lastW = cr.width;
+        lastH = cr.height;
+        if (frame) return; // already scheduled
+        frame = requestAnimationFrame(() => {
+          frame = null;
+          if (selected.size) {
+            renderAll();
+          }
+        });
+      });
+      ro.observe(chartEl);
+      // also listen to window resize for layout shifts affecting chart width indirectly (e.g., sidebar collapse)
+      window.addEventListener('resize', () => {
+        if (frame) return;
+        frame = requestAnimationFrame(() => {
+          frame = null;
+          if (selected.size) {
+            renderAll();
+          }
+        });
+      });
+    })();
+
+    (function () {
+      // Sidebar horizontal resizer (Signals panel)
+      const KEY = 'eplus_signals_width_px';
+      const mainEl = document.getElementById('main-grid');
+      const leftEl = document.getElementById('signals-panel');
+      const handle = document.getElementById('signals-resizer');
+      if (!mainEl || !leftEl || !handle) return;
+
+      function isLg() {
+        // Tailwind lg breakpoint: 1024px
+        return window.innerWidth >= 1024;
+      }
+
+      function clamp(n, a, b) {
+        return Math.min(b, Math.max(a, n));
+      }
+
+      let stored = parseInt(localStorage.getItem(KEY) || '360', 10);
+      if (!Number.isFinite(stored) || stored < 100) stored = 360;
+
+      function applyColumns(w) {
+        if (!isLg()) {
+          mainEl.style.removeProperty('grid-template-columns');
+          return;
+        }
+        const gutter = 12; // px width for the draggable column visual (thin line centered)
+        mainEl.style.gridTemplateColumns = `${Math.round(w)}px ${gutter}px 1fr`;
+      }
+
+      function maxWidth() {
+        // Leave at least 360px for the chart side on large screens
+        return Math.max(260, window.innerWidth - 360 - 32); // subtract paddings a bit
+      }
+
+      function minWidth() {
+        return 220;
+      }
+
+      // Initialize
+      applyColumns(stored);
+
+      // Drag logic
+      let startX = 0;
+      let startW = 0;
+      let dragging = false;
+
+      function onMove(ev) {
+        if (!dragging) return;
+        const isTouch = !!ev.touches;
+        const x = isTouch ? ev.touches[0].clientX : ev.clientX;
+        if (isTouch && typeof ev.preventDefault === 'function') ev.preventDefault();
+        const dx = x - startX;
+        const w = clamp(startW + dx, minWidth(), maxWidth());
+        applyColumns(w);
+      }
+
+      function onUp() {
+        if (!dragging) return;
+        dragging = false;
+        document.body.classList.remove('select-none', 'cursor-col-resize');
+        // Persist current width by reading computed from left panel rect
+        const rect = leftEl.getBoundingClientRect();
+        const w = Math.round(rect.width);
+        localStorage.setItem(KEY, String(w));
+        stored = w;
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onUp);
+        window.removeEventListener('touchcancel', onUp);
+      }
+
+      handle.addEventListener('mousedown', (e) => {
+        if (!isLg()) return;
+        dragging = true;
+        startX = e.clientX;
+        startW = leftEl.getBoundingClientRect().width;
+        document.body.classList.add('select-none', 'cursor-col-resize');
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+      handle.addEventListener('touchstart', (e) => {
+        if (!isLg()) return;
+        dragging = true;
+        startX = e.touches[0].clientX;
+        startW = leftEl.getBoundingClientRect().width;
+        document.body.classList.add('select-none', 'cursor-col-resize');
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('touchend', onUp);
+        window.addEventListener('touchcancel', onUp);
+      });
+
+      // Re-apply when viewport changes
+      window.addEventListener('resize', () => {
+        applyColumns(stored);
+      });
+    })();
+
+    (function () {
+      try {
+        console.assert(fmt(1000) === '1.00k', 'fmt k');
+        const st = computeStats([1, 2, 3, 4]);
+        console.assert(
+          st.count === 4 && st.min === 1 && st.max === 4 && Math.abs(st.mean - 2.5) < 1e-9,
+          'stats',
+        );
+        const ptsH = toHourlyPoints([{ value: 1, env: 1, month: 1, day: 1, hour: 0, minute: 0 }]);
+        console.assert(ptsH.length === 1 && typeof ptsH[0].x === 'number', 'hourly points');
+        const ptsM = toMonthlyPoints([{ value: 5, env: 2, month: 7 }]);
+        console.assert(ptsM.length === 1 && ptsM[0].xLabel.startsWith('E2-'), 'monthly points');
+        const m = new Map([[1, { meta: { Units: 'W' }, points: [{ xLabel: 'L', y: 3 }] }]]);
+        const csv = exportCSV(m);
+        console.assert(/label,value,series_id/.test(csv) || /datetime_utc/.test(csv), 'csv header');
+        console.assert(escapeHtml('<tag>') === '&lt;tag&gt;', 'escapeHtml');
+        console.assert(typeof zoomEnabled === 'boolean', 'zoom flag exists');
+        const ldc = toLDC([{ y: 1 }, { y: 3 }, { y: 2 }], 'W', false);
+        console.assert(ldc.length === 3 && ldc[0].y >= ldc[1].y, 'ldc sorted');
+        console.assert(viewMode === 'time', 'default view mode time');
+        const normEl = document.getElementById('ldc-normalize');
+        console.assert(normEl && normEl.checked === false, 'ldc normalize default OFF');
+        const _oldIP = isIP,
+          _esi = prefEnergySI,
+          _eip = prefEnergyIP,
+          _pip = prefPowerIP;
+        isIP = false;
+        prefEnergySI = 'kWh';
+        console.assert(Math.abs(convertUnits(3.6e6, 'J') - 1) < 1e-9, 'SI kWh scaling');
+        isIP = true;
+        prefEnergyIP = 'kBTU';
+        console.assert(Math.abs(convertUnits(1055.06, 'J') - 1) < 5e-3, 'IP kBTU scaling');
+        prefPowerIP = 'Tons';
+        console.assert(Math.abs(convertUnits(12000, 'Btu/h') - 1) < 1e-9, 'IP Tons scaling');
+        isIP = _oldIP;
+        prefEnergySI = _esi;
+        prefEnergyIP = _eip;
+        prefPowerIP = _pip;
+        console.info('Self-tests passed');
+      } catch (e) {
+        console.warn('Self-tests failed', e);
+      }
+    })();
+  })();
+}

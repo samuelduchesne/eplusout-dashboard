@@ -1,0 +1,28 @@
+name: Weekly Dependency Refresh
+
+on:
+  schedule:
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm update
+      - run: npm run version:inject && npm run sample:generate
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          branch: feature/deps-weekly-refresh
+          title: 'chore: weekly dependency refresh'
+          commit-message: 'chore: weekly dependency refresh'
+          body: 'Automated weekly dependency refresh and lockfile update.'

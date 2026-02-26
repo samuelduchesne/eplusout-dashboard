@@ -7,6 +7,19 @@ All notable changes to this project will be documented here.
 ### Changed (Unreleased)
 
 - Improved Load Balance chart color palette with semantic color mapping: heating uses intuitive warm red colors, cooling uses cool blues, window solar uses bright orange, internal gains use amber/yellow, and infiltration/ventilation/conduction categories use appropriate warm/cool color distinctions. Colors automatically adapt for light and dark mode themes.
+- Migrated the dashboard build/runtime to Vite + TypeScript and moved application logic out of inline HTML scripts into source modules.
+- Runtime target is now HTTP(S) hosting (including GitHub Pages); direct `file://` loading is no longer supported.
+
+### Fixed (Unreleased)
+
+- Hardened multiple data-driven rendering paths against XSS by replacing unsafe string-based rendering in dictionary options, legends, and chart tooltips with DOM text-node rendering.
+- Replaced silent empty catch blocks with explicit error handling/logging paths in runtime code.
+
+### Added (Unreleased)
+
+- Added CI quality gates (`lint`, `typecheck`, `unit tests`, `build`) and Playwright smoke tests.
+- Added Node-native contributor workflow with Husky + lint-staged.
+- Added typed domain/service utilities and architecture/contribution documentation.
 
 ## [0.4.0] - 2025-08-22
 
@@ -74,7 +87,7 @@ All notable changes to this project will be documented here.
 
 ## [0.1.1] - 2025-08-18
 
-*No user-facing changes (deployment-only adjustments).*
+_No user-facing changes (deployment-only adjustments)._
 
 ## [0.1.0] - 2025-08-18
 

@@ -2,6 +2,20 @@
 node_modules/
 npm-debug.log*
 
+# Build outputs
+dist/
+build/
+coverage/
+
+# Vite / caches
+.vite/
+public/version.js
+public/assets/eplusout.sql
+
+# Playwright
+playwright-report/
+test-results/
+
 # Python virtual envs (if any future scripts)
 .env
 .venv
@@ -13,10 +27,8 @@ venv/
 # Logs
 *.log
 
-# Prettier cache (if enabled later)
+# Prettier cache
 .prettier-cache
 
-# Coverage / build (future placeholders)
-dist/
-build/
-coverage/
+# Migration backups
+index.legacy.html
