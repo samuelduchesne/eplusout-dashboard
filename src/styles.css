@@ -1,3 +1,182 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Geist variable fonts (copied to public/fonts/) */
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Class-based dark mode (matches legacy .dark class on <html>) */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * shadcn/ui CSS variables — used by new React components.
+ * These define the canonical design tokens for the modernized UI.
+ */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 215 55% 9%;
+  --card: 0 0% 100%;
+  --card-foreground: 215 55% 9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 215 55% 9%;
+  --primary: 217 91% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 213 30% 96%;
+  --secondary-foreground: 215 55% 9%;
+  --muted-bg: 213 17% 93%;
+  --muted-fg: 213 18% 42%;
+  --accent-bg: 213 17% 93%;
+  --accent-fg: 215 55% 9%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border-color: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 217 91% 53%;
+  --chart-1: 217 91% 53%;
+  --chart-2: 142 72% 29%;
+  --chart-3: 271 81% 56%;
+  --chart-4: 0 72% 51%;
+  --chart-5: 38 92% 50%;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 210 22% 8%;
+  --foreground: 210 50% 93%;
+  --card: 210 18% 10%;
+  --card-foreground: 210 50% 93%;
+  --popover: 210 18% 10%;
+  --popover-foreground: 210 50% 93%;
+  --primary: 210 100% 67%;
+  --primary-foreground: 210 22% 8%;
+  --secondary: 210 30% 8%;
+  --secondary-foreground: 210 50% 93%;
+  --muted-bg: 210 30% 8%;
+  --muted-fg: 209 27% 69%;
+  --accent-bg: 210 30% 8%;
+  --accent-fg: 210 50% 93%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border-color: 210 32% 20%;
+  --input: 210 32% 20%;
+  --ring: 210 100% 67%;
+  --chart-1: 210 100% 67%;
+  --chart-2: 142 53% 53%;
+  --chart-3: 271 81% 56%;
+  --chart-4: 0 72% 70%;
+  --chart-5: 38 92% 50%;
+}
+
+@theme inline {
+  /*
+   * Legacy color tokens — backward compat with existing HTML/App.ts.
+   * These map directly to the Tailwind v3 custom colors in the old config.
+   * Usage: bg-bg, dark:bg-bg-dark, text-text, dark:text-text-dark, etc.
+   */
+  --color-bg: #ffffff;
+  --color-bg-dark: #0f1418;
+  --color-panel: #ffffff;
+  --color-panel-dark: #151a20;
+  --color-panel-2: #f3f6fb;
+  --color-panel-2-dark: #0f141a;
+  --color-text: #0b1220;
+  --color-text-dark: #e6eef7;
+  --color-muted: #5b6b7f;
+  --color-muted-dark: #9fb0c3;
+  --color-accent: #2563eb;
+  --color-accent-dark: #5aa5ff;
+  --color-accent-strong: #1d4ed8;
+  --color-accent-strong-dark: #377df5;
+  --color-accent-2: #16a34a;
+  --color-accent-2-dark: #7bd389;
+  --color-danger: #dc2626;
+  --color-danger-dark: #ff6b6b;
+  --color-border: #e2e8f0;
+  --color-border-dark: #223042;
+  --color-code: #eef2f7;
+  --color-code-dark: #0b0f14;
+
+  /*
+   * shadcn/ui semantic tokens — for new React components.
+   * Uses non-conflicting names to coexist with legacy tokens above.
+   */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border, currentColor);
+  }
+
+  /* Smooth theme transitions on key elements */
+  body {
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
+  }
+
+  /* Better focus ring for keyboard navigation */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+}
+
+/* Polish legacy chart panels to blend with new React UI */
+#single-chart-panel,
+#multi-charts {
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

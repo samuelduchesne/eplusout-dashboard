@@ -1723,6 +1723,23 @@ export function bootstrapApp(): void {
             visible: v.visible !== false,
           };
         });
+        // Push series colors and view mode to React so legend/toolbar stay in sync
+        if (window.__eplusBridge?.updateSeriesColors) {
+          const colorMap = {};
+          for (const s of series) colorMap[s.id] = s.color;
+          // Also include hidden series that aren't in `series` (which only has visible ones)
+          let hiddenIdx = series.length;
+          for (const [id, v] of selected.entries()) {
+            if (v.visible === false) {
+              colorMap[id] = palette[hiddenIdx % palette.length];
+              hiddenIdx++;
+            }
+          }
+          window.__eplusBridge.updateSeriesColors(colorMap);
+        }
+        if (window.__eplusBridge?.setViewMode) {
+          window.__eplusBridge.setViewMode(viewMode);
+        }
         if (viewMode === 'ldc') {
           if (baseFreq !== 'Hourly') {
             $('legend').innerHTML = '';
@@ -1863,6 +1880,11 @@ export function bootstrapApp(): void {
         }
         for (const id of [...selected.keys()]) {
           if (!chosen.includes(id)) selected.delete(id);
+        }
+        // Bridge: notify React of selection change BEFORE renderAll so that
+        // when renderAll() pushes series colors, the Zustand entries already exist.
+        if (window.__eplusBridge?.onSelectionChange) {
+          window.__eplusBridge.onSelectionChange(chosen, baseFreq);
         }
         renderAll();
       } catch (e) {
@@ -5121,6 +5143,8 @@ export function bootstrapApp(): void {
         (id) => ($(id).disabled = false),
       );
       $('meta-count').textContent = `${list.length} entries`;
+      // Bridge: push dictionary data to Zustand store for React components
+      if (window.__eplusBridge?.setDictionary) window.__eplusBridge.setDictionary(list);
     }
     function populateDictionaryList() {
       const q = $('search').value.trim().toLowerCase();

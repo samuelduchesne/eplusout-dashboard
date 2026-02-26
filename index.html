@@ -26,8 +26,13 @@
   <body
     class="h-screen flex flex-col bg-bg text-text dark:bg-bg-dark dark:text-text-dark transition-colors"
   >
+    <!-- React root: renders the new header + dialogs -->
+    <div id="react-root"></div>
+
+    <!-- Legacy header: hidden, kept in DOM so legacy event handlers still fire -->
     <header
       class="px-4 py-3 border-b border-border dark:border-border-dark sticky top-0 z-10 backdrop-blur-sm bg-white/95 dark:bg-[#121821]/90"
+      style="display: none"
     >
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div class="flex flex-col flex-1 min-w-0">
@@ -332,7 +337,7 @@
         <div
           class="flex justify-between items-center px-3 py-2 border-b border-border dark:border-border-dark bg-panel-2 dark:bg-panel-2-dark"
         >
-          <strong id="series-title">Series</strong
+          <strong id="series-title" class="text-sm">Series</strong
           ><span id="units" class="text-muted dark:text-muted-dark"></span>
         </div>
         <div class="p-3 flex flex-col gap-3 overflow-auto">
@@ -611,6 +616,6 @@
         <span>Press Esc to close</span>
       </div>
     </div>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
