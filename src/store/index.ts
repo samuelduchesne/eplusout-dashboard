@@ -73,7 +73,7 @@ export interface AppState {
 
   // Selection
   selected: Map<number, SelectedSeries>;
-  baseFrequency: 'Hourly' | 'Monthly' | null;
+  baseFrequency: 'Timestep' | 'Hourly' | 'Monthly' | null;
   favorites: Set<number>;
 
   // View
@@ -108,7 +108,7 @@ export interface AppState {
   addSeries: (id: number, series: SelectedSeries) => void;
   removeSeries: (id: number) => void;
   clearSelection: () => void;
-  setBaseFrequency: (freq: 'Hourly' | 'Monthly' | null) => void;
+  setBaseFrequency: (freq: 'Timestep' | 'Hourly' | 'Monthly' | null) => void;
   toggleFavorite: (id: number) => void;
   setFavorites: (favs: Set<number>) => void;
   toggleVisibility: (id: number) => void;

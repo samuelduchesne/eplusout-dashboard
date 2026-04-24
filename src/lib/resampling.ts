@@ -41,6 +41,42 @@ export function aggregateValues(values: number[], mode: string): number {
   }
 }
 
+const HOUR_MS = 3600000;
+
+export function resampleTimestepToHourly(points: TimePoint[], aggregateFunc: string): TimePoint[] {
+  // EnergyPlus timestamps mark the END of each interval, so the 6th timestep
+  // of "hour 0" shows up as hour=1, minute=0. Subtracting 1ms before flooring
+  // moves the exact hour boundary into the preceding hour, so all timesteps
+  // ending between 00:00+ε and 01:00 inclusive bucket together.
+  const groups = new Map<number, { values: number[]; env: number; endX: number }>();
+  for (const p of points) {
+    const x = p.x ?? 0;
+    const hourStartMs = Math.floor((x - 1) / HOUR_MS) * HOUR_MS;
+    let g = groups.get(hourStartMs);
+    if (!g) {
+      g = { values: [], env: p.env || 1, endX: hourStartMs + HOUR_MS };
+      groups.set(hourStartMs, g);
+    }
+    g.values.push(p.y);
+  }
+  const entries = [...groups.values()].sort((a, b) => a.endX - b.endX);
+  return entries.map((g) => {
+    // Derive month/day from a moment safely inside the bucket so the last hour
+    // of a day stays attributed to that day. Hour is reported as 1..24 to match
+    // EnergyPlus's end-of-interval convention used by resampleHourlyToMonthly.
+    const dInside = new Date(g.endX - 1);
+    return {
+      x: g.endX,
+      y: aggregateValues(g.values, aggregateFunc),
+      env: g.env,
+      month: dInside.getUTCMonth() + 1,
+      day: dInside.getUTCDate(),
+      hour: dInside.getUTCHours() + 1,
+      minute: 0,
+    };
+  });
+}
+
 export function resampleHourlyToMonthly(points: TimePoint[], aggregateFunc: string): TimePoint[] {
   const groups = new Map<string, { values: number[]; ord: number; firstX: number }>();
   for (const p of points) {
@@ -134,7 +170,14 @@ export function resamplePoints(
     aggregateFunc = isEnergy ? 'sum' : 'avg';
   }
 
-  if (fromFreq === 'Hourly') {
+  if (fromFreq === 'Timestep') {
+    // Cascade through Hourly so the end-of-interval correction applied in
+    // resampleTimestepToHourly also fixes month/day boundaries for coarser targets.
+    const hourly = resampleTimestepToHourly(points, aggregateFunc);
+    if (toFreq === 'hourly') return hourly;
+    if (toFreq === 'monthly') return resampleHourlyToMonthly(hourly, aggregateFunc);
+    if (toFreq === 'annual') return resampleHourlyToAnnual(hourly, aggregateFunc);
+  } else if (fromFreq === 'Hourly') {
     if (toFreq === 'monthly') return resampleHourlyToMonthly(points, aggregateFunc);
     if (toFreq === 'annual') return resampleHourlyToAnnual(points, aggregateFunc);
   } else if (fromFreq === 'Monthly') {

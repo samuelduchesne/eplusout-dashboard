@@ -72,7 +72,7 @@ export function LegacyApp() {
           }
         }
         state.setSelected(next);
-        state.setBaseFrequency((baseFreq as 'Hourly' | 'Monthly') || null);
+        state.setBaseFrequency((baseFreq as 'Timestep' | 'Hourly' | 'Monthly') || null);
       },
       updateSeriesColors: (colorMap) => {
         const state = useAppStore.getState();

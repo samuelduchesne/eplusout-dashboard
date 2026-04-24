@@ -12,9 +12,13 @@ export class SqlRepository {
     try {
       const sql = `
 SELECT ReportDataDictionaryIndex AS id, IsMeter, Type, IndexGroup, KeyValue AS key,
-       Name, ReportingFrequency AS freq, Units
+       Name,
+       CASE WHEN ReportingFrequency LIKE '%Timestep'
+            THEN 'Timestep'
+            ELSE ReportingFrequency END AS freq,
+       Units
 FROM ReportDataDictionary
-WHERE ReportingFrequency IN ('Hourly','Monthly')
+WHERE ReportingFrequency IN ('Zone Timestep','HVAC System Timestep','Hourly','Monthly')
 ORDER BY IsMeter DESC, IndexGroup, Name, key;`;
       const result = this.db.exec(sql);
       const first = result[0];

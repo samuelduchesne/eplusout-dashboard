@@ -4,6 +4,7 @@
 
 import type { SeriesMeta } from '../types/domain';
 import { toJoules } from './units';
+import { resampleTimestepToHourly } from './resampling';
 
 export interface TariffRates {
   rateElec: number;
@@ -42,12 +43,21 @@ export function getFuelKind(meta: SeriesMeta | undefined | null): FuelKind {
 
 export interface SeriesForTariff {
   meta: SeriesMeta;
-  points: Array<{ x?: number; y: number }>;
+  points: Array<{
+    x?: number;
+    y: number;
+    env?: number;
+    month?: number;
+    day?: number;
+    hour?: number;
+    minute?: number;
+  }>;
 }
 
 /**
  * Compute tariff cost for a series. Returns null if computation is not possible
- * (e.g., non-hourly data, non-energy units, or unknown fuel kind).
+ * (e.g., coarser-than-hourly data, non-energy units, or unknown fuel kind).
+ * Timestep data is pre-aggregated to hourly so demand peaks remain hourly-averaged kW.
  */
 export function computeTariffCost(
   series: SeriesForTariff,
@@ -55,8 +65,13 @@ export function computeTariffCost(
   baseFreq: string | null,
 ): TariffCost | null {
   try {
-    const pts = series.points;
-    if (!pts.length || baseFreq !== 'Hourly') return null;
+    let pts = series.points;
+    if (!pts.length) return null;
+    if (baseFreq === 'Timestep') {
+      pts = resampleTimestepToHourly(pts, 'sum');
+    } else if (baseFreq !== 'Hourly') {
+      return null;
+    }
 
     const unit = series.meta.Units;
     const kind = getFuelKind(series.meta);

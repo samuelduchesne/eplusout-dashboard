@@ -67,6 +67,9 @@ export function FilterBar({
             <SelectItem value="_all" className="text-xs">
               Any frequency
             </SelectItem>
+            <SelectItem value="Timestep" className="text-xs">
+              Timestep
+            </SelectItem>
             <SelectItem value="Hourly" className="text-xs">
               Hourly
             </SelectItem>

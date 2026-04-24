@@ -8,7 +8,7 @@ export interface SeriesMeta {
   Units?: string;
   IsMeter?: number;
   key?: string;
-  freq?: 'Hourly' | 'Monthly' | string;
+  freq?: 'Timestep' | 'Hourly' | 'Monthly' | string;
 }
 
 export interface TimePoint {

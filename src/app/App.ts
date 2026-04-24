@@ -1441,9 +1441,13 @@ export function bootstrapApp(): void {
       try {
         const sql = `
           SELECT ReportDataDictionaryIndex AS id, IsMeter, Type, IndexGroup, KeyValue AS key,
-                 Name, ReportingFrequency AS freq, Units
+                 Name,
+                 CASE WHEN ReportingFrequency LIKE '%Timestep'
+                      THEN 'Timestep'
+                      ELSE ReportingFrequency END AS freq,
+                 Units
           FROM ReportDataDictionary
-          WHERE ReportingFrequency IN ('Hourly','Monthly')
+          WHERE ReportingFrequency IN ('Zone Timestep','HVAC System Timestep','Hourly','Monthly')
           ORDER BY IsMeter DESC, IndexGroup, Name, key;`;
         dict = toObjects(db.exec(sql));
         // Invalidate load balance cache (new DB or changed dict)
@@ -1522,7 +1526,14 @@ export function bootstrapApp(): void {
         aggregateFunc = isEnergy ? 'sum' : 'avg';
       }
 
-      if (fromFreq === 'Hourly') {
+      if (fromFreq === 'Timestep') {
+        // Cascade through Hourly so the end-of-interval correction in
+        // resampleTimestepToHourly also fixes month/day boundaries for coarser targets.
+        const hourly = resampleTimestepToHourly(points, aggregateFunc);
+        if (toFreq === 'hourly') return hourly;
+        if (toFreq === 'monthly') return resampleHourlyToMonthly(hourly, aggregateFunc);
+        if (toFreq === 'annual') return resampleHourlyToAnnual(hourly, aggregateFunc);
+      } else if (fromFreq === 'Hourly') {
         if (toFreq === 'monthly') return resampleHourlyToMonthly(points, aggregateFunc);
         if (toFreq === 'annual') return resampleHourlyToAnnual(points, aggregateFunc);
       } else if (fromFreq === 'Monthly') {
@@ -1530,6 +1541,41 @@ export function bootstrapApp(): void {
       }
 
       return points; // No resampling needed/supported
+    }
+
+    function resampleTimestepToHourly(points, aggregateFunc) {
+      // EnergyPlus timestamps mark the END of each interval, so the 6th timestep
+      // of "hour 0" shows up as hour=1, minute=0. Subtracting 1ms before flooring
+      // moves the exact hour boundary into the preceding hour, so all timesteps
+      // ending between 00:00+ε and 01:00 inclusive bucket together.
+      const HOUR_MS = 3600000;
+      const groups = new Map();
+      for (const p of points) {
+        const x = p.x ?? 0;
+        const hourStartMs = Math.floor((x - 1) / HOUR_MS) * HOUR_MS;
+        let g = groups.get(hourStartMs);
+        if (!g) {
+          g = { values: [], env: p.env || 1, endX: hourStartMs + HOUR_MS };
+          groups.set(hourStartMs, g);
+        }
+        g.values.push(p.y);
+      }
+      const entries = [...groups.values()].sort((a, b) => a.endX - b.endX);
+      return entries.map((g) => {
+        // Derive month/day from a moment safely inside the bucket so the last hour
+        // of a day stays attributed to that day. Hour is reported as 1..24 to match
+        // EnergyPlus's end-of-interval convention used by resampleHourlyToMonthly.
+        const dInside = new Date(g.endX - 1);
+        return {
+          x: g.endX,
+          y: aggregateValues(g.values, aggregateFunc),
+          env: g.env,
+          month: dInside.getUTCMonth() + 1,
+          day: dInside.getUTCDate(),
+          hour: dInside.getUTCHours() + 1,
+          minute: 0,
+        };
+      });
     }
 
     function resampleHourlyToMonthly(points, aggregateFunc) {
@@ -1741,10 +1787,10 @@ export function bootstrapApp(): void {
           window.__eplusBridge.setViewMode(viewMode);
         }
         if (viewMode === 'ldc') {
-          if (baseFreq !== 'Hourly') {
+          if (baseFreq !== 'Hourly' && baseFreq !== 'Timestep') {
             $('legend').innerHTML = '';
             $('chart').innerHTML = '';
-            $('insights').innerHTML = 'Load duration curves require Hourly data.';
+            $('insights').innerHTML = 'Load duration curves require Hourly or Timestep data.';
             $('units').textContent = '(n/a)';
           } else {
             renderLDC(series);
@@ -1874,7 +1920,10 @@ export function bootstrapApp(): void {
           if (!meta || meta.freq !== baseFreq) continue;
           if (!selected.has(id)) {
             const rows = queryTimeSeries(id);
-            const pts = baseFreq === 'Hourly' ? toHourlyPoints(rows) : toMonthlyPoints(rows);
+            const pts =
+              baseFreq === 'Hourly' || baseFreq === 'Timestep'
+                ? toHourlyPoints(rows)
+                : toMonthlyPoints(rows);
             selected.set(id, { meta, points: pts, visible: true });
           }
         }
@@ -2385,8 +2434,14 @@ export function bootstrapApp(): void {
     }
     function computeTariffCost(seriesObj) {
       try {
-        const pts = seriesObj.points;
-        if (!pts.length || baseFreq !== 'Hourly') return null; // annual energy J sum to kWh
+        let pts = seriesObj.points;
+        if (!pts.length) return null;
+        if (baseFreq === 'Timestep') {
+          // Aggregate to hourly so demand peaks remain hourly-averaged kW.
+          pts = resampleTimestepToHourly(pts, 'sum');
+        } else if (baseFreq !== 'Hourly') {
+          return null;
+        }
         const unit = seriesObj.meta.Units;
         const kind = getFuelKind(seriesObj.meta);
         let totalJ = 0;
