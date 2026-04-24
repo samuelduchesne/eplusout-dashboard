@@ -4,22 +4,30 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
-### Changed (Unreleased)
+## [0.5.0] - 2026-04-24
 
-- Improved Load Balance chart color palette with semantic color mapping: heating uses intuitive warm red colors, cooling uses cool blues, window solar uses bright orange, internal gains use amber/yellow, and infiltration/ventilation/conduction categories use appropriate warm/cool color distinctions. Colors automatically adapt for light and dark mode themes.
+### Added (0.5.0)
+
+- Support for the Timestep reporting frequency end-to-end. Sub-hourly variables (`Zone Timestep` / `HVAC System Timestep` in EnergyPlus) now appear in the Signals dictionary, can be filtered via the new "Timestep" frequency option, and render as fine-grained line charts.
+- Resampling now handles Timestep as a source frequency: Timestep → Hourly buckets by end-of-interval timestamp (correctly grouping the 6th timestep of each hour, which EnergyPlus stamps at the next hour boundary), and Timestep → Monthly/Annual cascade through Hourly so day/month boundary timesteps are attributed to the correct period.
+- Tariff cost computation accepts Timestep series by pre-aggregating to Hourly with sum, so monthly demand peaks remain hourly-averaged kW rather than per-timestep spikes.
+- Load Duration Curves accept Timestep data natively (the LDC is percentile-based, so finer data simply yields a smoother curve).
+- Modernized UI built on React 19 + shadcn/ui + Tailwind v4 + Zustand.
+- CI quality gates (`lint`, `typecheck`, `unit tests`, `build`) and Playwright smoke tests.
+- Node-native contributor workflow with Husky + lint-staged.
+- Typed domain/service utilities and architecture/contribution documentation.
+
+### Changed (0.5.0)
+
 - Migrated the dashboard build/runtime to Vite + TypeScript and moved application logic out of inline HTML scripts into source modules.
 - Runtime target is now HTTP(S) hosting (including GitHub Pages); direct `file://` loading is no longer supported.
+- Improved Load Balance chart color palette with semantic color mapping: heating uses intuitive warm red colors, cooling uses cool blues, window solar uses bright orange, internal gains use amber/yellow, and infiltration/ventilation/conduction categories use appropriate warm/cool color distinctions. Colors automatically adapt for light and dark mode themes.
 
-### Fixed (Unreleased)
+### Fixed (0.5.0)
 
 - Hardened multiple data-driven rendering paths against XSS by replacing unsafe string-based rendering in dictionary options, legends, and chart tooltips with DOM text-node rendering.
 - Replaced silent empty catch blocks with explicit error handling/logging paths in runtime code.
-
-### Added (Unreleased)
-
-- Added CI quality gates (`lint`, `typecheck`, `unit tests`, `build`) and Playwright smoke tests.
-- Added Node-native contributor workflow with Husky + lint-staged.
-- Added typed domain/service utilities and architecture/contribution documentation.
+- E2E smoke test updated for the new dual-header DOM structure.
 
 ## [0.4.0] - 2025-08-22
 

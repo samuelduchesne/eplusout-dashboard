@@ -1,7 +1,7 @@
 {
   "name": "eplusout-dashboard",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "scripts": {
     "dev": "npm run version:inject && npm run sample:generate && vite",
     "dev:host": "npm run version:inject && npm run sample:generate && vite --host",
